@@ -44,6 +44,7 @@ def get_org_team(
     return [
         {
             "id": user.id,
+            "member_id":member.id,
             "full_name": user.full_name,
             "email": user.email,
             "role": member.role,

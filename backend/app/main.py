@@ -25,6 +25,7 @@ from app.routers import exams
 from app.routers import exam_papers
 from app.routers import exams_results
 from app.routers import dmc
+from app.routers import payroll
 
 app = FastAPI()
 
@@ -57,3 +58,4 @@ app.include_router(exams.router)
 app.include_router(exam_papers.router)
 app.include_router(exams_results.router)
 app.include_router(dmc.router)
+app.include_router(payroll.router)

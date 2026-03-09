@@ -58,5 +58,5 @@ class Classroom(Base):
 )
 
 
-    def __repr__(self):
-        return f"<Classroom {self.name}>"
+def __repr__(self):
+    return f"<Classroom id={self.id} section={self.section}>"

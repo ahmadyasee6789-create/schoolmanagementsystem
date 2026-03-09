@@ -337,7 +337,69 @@ def get_students_by_class(
         }
         for s, grade_name, section, roll_number, discount_percent in rows
     ]
+#it is for  class page
+@router.get("/by-class/{classroom_id}", response_model=List[StudentWithEnrollment])
+def get_students_by_classroom_id(
+    classroom_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    classroom = (
+        db.query(Classroom)
+        .filter(
+            Classroom.id == classroom_id,
+            Classroom.organization_id == current_user.org_id,
+        )
+        .first()
+    )
+    
+   
+    
+    if not classroom:
+        raise HTTPException(status_code=404, detail="Class not found")
 
+    # ── Step 1: check raw enrollments for this classroom ──
+    enrollments = (
+        db.query(StudentEnrollment)
+        .filter(StudentEnrollment.classroom_id == classroom_id)
+        .all()
+    )
+    if not enrollments:
+        raise HTTPException(status_code=404,detail="Enrollments not found")
+    
+    
+    rows = (
+        db.query(
+            Student,
+            Grade.name.label("grade_name"),
+            Classroom.section.label("section"),
+            StudentEnrollment.roll_number.label("roll_number"),
+            StudentEnrollment.discount_percent.label("discount_percent"),
+        )
+        .join(StudentEnrollment, Student.id == StudentEnrollment.student_id)
+        .join(Classroom, StudentEnrollment.classroom_id == Classroom.id)
+        .join(Grade, Classroom.grade_id == Grade.id)
+        .filter(
+            Student.organization_id == current_user.org_id,
+            StudentEnrollment.classroom_id == classroom_id,
+            StudentEnrollment.is_active == True,
+        )
+        .all()
+    )
+   
+    if not rows:
+        return []
+
+    return [
+        StudentWithEnrollment(
+            **row.Student.__dict__,
+            grade_name=row.grade_name,
+            section=row.section,
+            roll_number=row.roll_number,
+            discount_percent=row.discount_percent,
+        )
+        for row in rows
+    ]
 # -------------------------------------------------------------------
 # GET STUDENT ENROLLMENT HISTORY
 # -------------------------------------------------------------------

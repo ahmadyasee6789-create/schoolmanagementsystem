@@ -10,6 +10,7 @@ from app.models.classroom import Classroom, Grade
 from app.models.fee_transection import FeeTransaction
 from app.models.expenses import Expense
 from app.models.student_enrollment import StudentEnrollment
+from app.models.salary_payments import SalaryPayment
 from app.routers.auth import get_current_user
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
@@ -20,13 +21,10 @@ def get_dashboard_stats(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # ------------------------------------
-    # Validate Organization Membership
-    # ------------------------------------
+    # ── Validate membership ───────────────────────────────────────────
     membership = db.query(OrganizationMember).filter(
         OrganizationMember.user_id == current_user.id
     ).first()
-    
 
     if not membership:
         raise HTTPException(status_code=403, detail="User does not belong to any school")
@@ -34,9 +32,7 @@ def get_dashboard_stats(
     org_id = membership.organization_id
     current_year = datetime.utcnow().year
 
-    # ------------------------------------
-    # SCHOOL OVERVIEW
-    # ------------------------------------
+    # ── School overview ───────────────────────────────────────────────
     total_students = db.query(Student).filter(
         Student.organization_id == org_id
     ).count()
@@ -50,7 +46,6 @@ def get_dashboard_stats(
         OrganizationMember.organization_id == org_id,
         OrganizationMember.role == "teacher"
     ).count()
-    
 
     total_classes = db.query(Classroom).filter(
         Classroom.organization_id == org_id
@@ -68,9 +63,8 @@ def get_dashboard_stats(
         .group_by(Grade.id, Grade.name)
         .all()
     )
-    # ------------------------------------
-    # REVENUE (Current Year)
-    # ------------------------------------
+
+    # ── Revenue — fee transactions (current year) ─────────────────────
     revenue_query = (
         db.query(
             extract("month", FeeTransaction.payment_date).label("month"),
@@ -84,12 +78,9 @@ def get_dashboard_stats(
         .order_by("month")
         .all()
     )
+    revenue_dict = {int(m): float(a) for m, a in revenue_query}
 
-    revenue_dict = {int(month): float(amount) for month, amount in revenue_query}
-
-    # ------------------------------------
-    # EXPENSES (Current Year)
-    # ------------------------------------
+    # ── Operational expenses (current year) ───────────────────────────
     expense_query = (
         db.query(
             extract("month", cast(Expense.expense_date, Date)).label("month"),
@@ -103,46 +94,75 @@ def get_dashboard_stats(
         .order_by("month")
         .all()
     )
+    expense_dict = {int(m): float(a) for m, a in expense_query}
 
-    expense_dict = {int(month): float(amount) for month, amount in expense_query}
+    # ── Salary payments — paid only (current year) ────────────────────
+    salary_query = (
+        db.query(
+            SalaryPayment.month.label("month"),
+            func.coalesce(func.sum(SalaryPayment.net_amount), 0).label("salary")
+        )
+        .filter(
+            SalaryPayment.organization_id == org_id,
+            SalaryPayment.status == "paid",
+            SalaryPayment.year == current_year
+        )
+        .group_by(SalaryPayment.month)
+        .order_by(SalaryPayment.month)
+        .all()
+    )
+    salary_dict = {int(m): float(a) for m, a in salary_query}
 
-    # ------------------------------------
-    # NORMALIZED 12-MONTH STRUCTURE
-    # (Important for Charts)
-    # ------------------------------------
+    # ── Total paid salaries this year ─────────────────────────────────
+    total_year_salary = sum(salary_dict.values())
+
+    # ── Pending salaries this year (generated but not yet paid) ───────
+    pending_salary_total = db.query(
+        func.coalesce(func.sum(SalaryPayment.net_amount), 0)
+    ).filter(
+        SalaryPayment.organization_id == org_id,
+        SalaryPayment.status == "pending",
+        SalaryPayment.year == current_year
+    ).scalar() or 0
+
+    # ── Normalized 12-month structure ─────────────────────────────────
     monthly_comparison = []
     total_year_revenue = 0
-    total_year_expense = 0
+    total_year_expense = 0  # operational only
+    total_year_total_expense = 0  # operational + salaries
 
     for month in range(1, 13):
         revenue = revenue_dict.get(month, 0)
         expense = expense_dict.get(month, 0)
-        net = revenue - expense
+        salary  = salary_dict.get(month, 0)
+        total_exp = expense + salary
+        net = revenue - total_exp
 
-        total_year_revenue += revenue
-        total_year_expense += expense
+        total_year_revenue       += revenue
+        total_year_expense       += expense
+        total_year_total_expense += total_exp
 
         monthly_comparison.append({
-            "month": month,
+            "month":   month,
             "revenue": revenue,
-            "expense": expense,
-            "net": net
+            "expense": expense,           # operational expenses only
+            "salary":  salary,            # salary payouts
+            "total_expense": total_exp,   # expense + salary combined
+            "net":     net                # revenue - (expense + salary)
         })
 
-    net_year_total = total_year_revenue - total_year_expense
+    net_year_total = total_year_revenue - total_year_total_expense
 
-    # ------------------------------------
-    # RESPONSE (Professional Structure)
-    # ------------------------------------
+    # ── Response ──────────────────────────────────────────────────────
     return {
         "overview": {
             "students": {
-                "total": total_students,
-                "active": active_students,
-                "inactive": total_students - active_students
+                "total":    total_students,
+                "active":   active_students,
+                "inactive": total_students - active_students,
             },
-            "faculty": total_teachers,
-            "classes": total_classes,
+            "faculty":  total_teachers,
+            "classes":  total_classes,
             "studentsPerClass": [
                 {"class": name, "students": count}
                 for name, count in students_per_class
@@ -157,13 +177,16 @@ def get_dashboard_stats(
             },
 
             "expenses": {
-                "yearTotal": round(total_year_expense, 2),
+                "yearTotal":          round(total_year_expense, 2),        # operational
+                "salaryYearTotal":    round(total_year_salary, 2),         # paid salaries
+                "pendingSalaryTotal": round(float(pending_salary_total), 2), # unpaid
+                "combinedYearTotal":  round(total_year_total_expense, 2),  # both combined
             },
 
             "net": {
-                "yearTotal": round(net_year_total, 2),
+                "yearTotal": round(net_year_total, 2),  # revenue - (expenses + salaries)
             },
 
-            "monthlyComparison": monthly_comparison
-        }
+            "monthlyComparison": monthly_comparison,
+        },
     }
