@@ -9,6 +9,7 @@ class Expense(Base):
     id = Column(Integer,primary_key=True)
     organization_id=Column(Integer,ForeignKey("organizations.id"),nullable=False)
     category_id=Column(Integer,ForeignKey("expense_categories.id"),nullable=False)
+    academic_year_id=Column(Integer,ForeignKey("academic_sessions.id"),nullable=False)
     description=Column(String,nullable=True)
     amount=Column(Numeric(10,2),nullable=False)
     expense_date=Column(String,nullable=False)  
@@ -16,4 +17,5 @@ class Expense(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     organization=relationship("Organization",back_populates="expenses")
     category=relationship("ExpenseCategory",back_populates="expenses")
+    academic_year=relationship("AcademicSession",back_populates="expenses")
 

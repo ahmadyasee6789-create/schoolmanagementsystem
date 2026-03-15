@@ -20,14 +20,17 @@ class AcademicSession(Base):
 
     is_active = Column(Boolean, default=False)
 
-    organization = relationship("Organization", back_populates="sessions")
-    classrooms = relationship("Classroom", back_populates="session")
+    organization = relationship("Organization", back_populates="session")
+    attendances = relationship("Attendance", back_populates="session")
     enrollments = relationship("StudentEnrollment", back_populates="session")
+    salary_payments=relationship("SalaryPayment",back_populates="session")
     terms = relationship(
             "Term",
             back_populates="academic_year",
             cascade="all, delete-orphan"
         )
+    subject=relationship("Subject",back_populates="session")
+    expenses=relationship("Expense",back_populates="academic_year")
     __table_args__=(UniqueConstraint(
         "name",
         "organization_id",

@@ -23,7 +23,7 @@ class Classroom(Base):
     id = Column(Integer, primary_key=True, index=True)
 
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False)
-    academic_year_id = Column(Integer, ForeignKey("academic_sessions.id"), nullable=True)
+    
 
 
     grade_id = Column(Integer, ForeignKey("grades.id"), nullable=False)       # e.g. "5"
@@ -46,7 +46,7 @@ class Classroom(Base):
     )
     student_fees = relationship("StudentFee", back_populates="classroom")
     grade = relationship("Grade", back_populates="classrooms")
-    session = relationship("AcademicSession", back_populates="classrooms")
+    
     class_teacher = relationship("OrganizationMember", back_populates="classroom")
     enrollments = relationship("StudentEnrollment", back_populates="classroom")
     organization = relationship("Organization", back_populates="classrooms")

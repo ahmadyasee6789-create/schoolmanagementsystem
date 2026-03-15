@@ -9,6 +9,7 @@ from app.models.exams import Subject, ClassSubject
 from app.schemas.subjects import SubjectCreate, SubjectUpdate, SubjectResponse, ClassSubjectCreate, ClassSubjectResponse
 from app.routers.auth import get_current_user
 from app.models.classroom import Classroom
+from app.dependencies import get_active_session
 
 router = APIRouter(prefix="/subjects", tags=["Subjects"])
 
@@ -17,6 +18,7 @@ def create_subject(
     subject_data: SubjectCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    active_session=Depends(get_active_session)
 ):
     """Create a new subject (admin/manager only)"""
     # Check permission
@@ -27,7 +29,8 @@ def create_subject(
     existing = db.query(Subject).filter(
         and_(
             Subject.organization_id == current_user.org_id,
-            Subject.name == subject_data.name
+            Subject.name == subject_data.name,
+            Subject.session_id==active_session.id
         )
     ).first()
     
@@ -37,7 +40,10 @@ def create_subject(
     # Create subject
     subject = Subject(
         name=subject_data.name,
-        organization_id=current_user.org_id
+        organization_id=current_user.org_id,
+        session_id=active_session.id,
+        
+
     )
     
     db.add(subject)
@@ -49,6 +55,7 @@ def create_subject(
 def get_all_assignments(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    active_session=Depends(get_active_session)
 ):
     
     membership = (
@@ -61,7 +68,9 @@ def get_all_assignments(
     assignments = (
         db.query(ClassSubject)
         .join(Classroom)
-        .filter(Classroom.organization_id == membership.organization_id)
+        .join(Subject)
+        .filter(Classroom.organization_id == membership.organization_id,
+                Subject.session_id==active_session.id)
         .all()
     )
 
@@ -87,10 +96,12 @@ def get_subjects(
     limit: int = 100,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    active_session=Depends(get_active_session)
 ):
     """Get all subjects for the current organization"""
     subjects = db.query(Subject).filter(
-        Subject.organization_id == current_user.org_id
+        Subject.organization_id == current_user.org_id,
+        Subject.session_id==active_session.id
     ).offset(skip).limit(limit).all()
     
     return subjects
@@ -100,12 +111,14 @@ def get_subject(
     subject_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    active_session=Depends(get_active_session)
 ):
     """Get a specific subject by ID"""
     subject = db.query(Subject).filter(
         and_(
             Subject.id == subject_id,
-            Subject.organization_id == current_user.org_id
+            Subject.organization_id == current_user.org_id,
+            Subject.session_id==active_session.id
         )
     ).first()
     
@@ -120,6 +133,7 @@ def update_subject(
     subject_data: SubjectUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    active_session=Depends(get_active_session)
 ):
     """Update a subject (admin/manager only)"""
     if current_user.org_role not in ["admin", "manager"]:
@@ -128,7 +142,8 @@ def update_subject(
     subject = db.query(Subject).filter(
         and_(
             Subject.id == subject_id,
-            Subject.organization_id == current_user.org_id
+            Subject.organization_id == current_user.org_id,
+            Subject.session_id==active_session.id
         )
     ).first()
     
@@ -140,6 +155,7 @@ def update_subject(
         existing = db.query(Subject).filter(
             and_(
                 Subject.organization_id == current_user.org_id,
+                Subject.session_id == active_session.id,
                 Subject.name == subject_data.name,
                 Subject.id != subject_id
             )
@@ -160,6 +176,7 @@ def delete_subject(
     subject_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    active_session=Depends(get_active_session)
 ):
     """Delete a subject (admin only)"""
     if current_user.org_role != "admin":
@@ -168,7 +185,8 @@ def delete_subject(
     subject = db.query(Subject).filter(
         and_(
             Subject.id == subject_id,
-            Subject.organization_id == current_user.org_id
+            Subject.organization_id == current_user.org_id,
+            Subject.session_id == active_session.id,
         )
     ).first()
     
@@ -197,6 +215,7 @@ def assign_subject_to_class(
     assignment: ClassSubjectCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    active_session=Depends(get_active_session)
 ):
     """Assign a subject to a class with optional teacher (admin/manager only)"""
     if current_user.org_role not in ["admin", "manager"]:
@@ -206,7 +225,8 @@ def assign_subject_to_class(
     subject = db.query(Subject).filter(
         and_(
             Subject.id == assignment.subject_id,
-            Subject.organization_id == current_user.org_id
+            Subject.organization_id == current_user.org_id,
+            Subject.session_id == active_session.id
         )
     ).first()
     

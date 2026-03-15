@@ -16,5 +16,5 @@ from app.models.exams import Subject
 from app.models.exams import ClassSubject
 from app.models.exams import ExamPaper
 from app.models.exams import ExamResult
-from app.models.teacher_salaries import TeacherSalary
+from app.models.staff_salary import StaffSalary
 from app.models.salary_payments import SalaryPayment

@@ -17,6 +17,7 @@ from app.models.students import Student
 from app.routers.auth import get_current_user
 from app.routers.receptTemp import create_fee_receipt
 from app.schemas.student_fee import PaymentCreate
+from app.dependencies import get_active_session
 
 router = APIRouter(prefix="/fees", tags=["Fees"])
 
@@ -28,17 +29,7 @@ MONTH_TO_NUMBER = {
 NUMBER_TO_MONTH = {v: k for k, v in MONTH_TO_NUMBER.items()}
 
 
-# -------------------------------------------------------------------
-# HELPERS
-# -------------------------------------------------------------------
-def get_active_session(org_id: int, db: Session) -> AcademicSession:
-    session = db.query(AcademicSession).filter(
-        AcademicSession.organization_id == org_id,
-        AcademicSession.is_active == True,
-    ).first()
-    if not session:
-        raise HTTPException(400, "No active academic session found")
-    return session
+
 
 
 def generate_receipt_number(db: Session, organization_id: int) -> str:
@@ -56,7 +47,8 @@ def generate_receipt_number(db: Session, organization_id: int) -> str:
     return f"REC-{year}-{str(last_number + 1).zfill(4)}"
 
 
-def get_enrolled_students(class_id: int, org_id: int, db: Session):
+def get_enrolled_students(class_id: int, org_id: int, db: Session,
+                          active_session):
     """Return list of (Student, StudentEnrollment) for a class."""
     return (
         db.query(Student, StudentEnrollment)
@@ -64,6 +56,7 @@ def get_enrolled_students(class_id: int, org_id: int, db: Session):
         .filter(
             StudentEnrollment.classroom_id == class_id,
             StudentEnrollment.is_active == True,
+            StudentEnrollment.session_id == active_session.id,   
             Student.organization_id == org_id,
         )
         .all()
@@ -80,16 +73,16 @@ def generate_monthly_fees(
     include_exam_fee: bool = False,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
+    active_session=Depends(get_active_session)
 ):
     org_id = current_user.org_id
-    session = get_active_session(org_id, db)
 
     month_number = MONTH_TO_NUMBER.get(month)
     if not month_number:
         raise HTTPException(400, "Invalid month name")
 
     # Get students via enrollments
-    enrolled = get_enrolled_students(class_id, org_id, db)
+    enrolled = get_enrolled_students(class_id, org_id, db,active_session)
     if not enrolled:
         raise HTTPException(404, "No enrolled students found for this class")
 
@@ -97,7 +90,7 @@ def generate_monthly_fees(
     structure = db.query(FeeStructure).filter(
         FeeStructure.class_id == class_id,
         FeeStructure.organization_id == org_id,
-        FeeStructure.session_id == session.id,
+        FeeStructure.session_id == active_session.id,
     ).first()
     if not structure:
         raise HTTPException(404, "Fee structure not found for this class and session")
@@ -109,7 +102,7 @@ def generate_monthly_fees(
         existing = db.query(StudentFee).filter(
             StudentFee.student_id == student.id,
             StudentFee.month == month,
-            StudentFee.session_id == session.id,
+            StudentFee.session_id == active_session.id,
             StudentFee.organization_id == org_id,
         ).first()
         if existing:
@@ -118,7 +111,7 @@ def generate_monthly_fees(
         # Admission fee only once per session per student
         already_has_admission = db.query(StudentFee).filter(
             StudentFee.student_id == student.id,
-            StudentFee.session_id == session.id,
+            StudentFee.session_id == active_session.id,
             StudentFee.admission_fee > 0,
             StudentFee.organization_id == org_id,
         ).first()
@@ -146,13 +139,13 @@ def generate_monthly_fees(
             final_amount=final_amount,
             paid_amount=Decimal(0),
             status="unpaid",
-            session_id=session.id,
+            session_id=active_session.id,
         )
         db.add(fee)
         created += 1
 
     db.commit()
-    return {"message": f"{created} fees generated for {month} in session {session.name}"}
+    return {"message": f"{created} fees generated for {month} in session {active_session.name}"}
 
 
 # -------------------------------------------------------------------
@@ -164,6 +157,7 @@ def collect_payment(
     payment: PaymentCreate,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
+
 ):
     fee = db.query(StudentFee).filter(
         StudentFee.id == fee_id,
@@ -232,6 +226,7 @@ def get_fee_ledger(
     limit: int = Query(10, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
+    active_session=Depends(get_active_session)
 ):
     query = (
         db.query(StudentFee)
@@ -242,6 +237,7 @@ def get_fee_ledger(
             StudentEnrollment.is_active == True,
             StudentFee.month == month,
             StudentFee.organization_id == current_user.org_id,
+            StudentFee.session_id==active_session.id
         )
     )
 

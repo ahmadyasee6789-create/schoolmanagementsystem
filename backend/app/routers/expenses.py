@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.models.expenses import Expense
 from app.schemas.expenses import ExpenseCategoryCreate, ExpenseCategoryOut, ExpenseCreate, ExpenseOut
 from app.models.expensecategory import ExpenseCategory
+from app.dependencies import get_active_session
 
 router=APIRouter(prefix="/expenses",tags=["expenses"])
 @router.post("/")
@@ -16,10 +17,12 @@ def add_expenses(
         expense: ExpenseCreate,
         db:Session=Depends(get_db),
         current_user=Depends(get_current_user),
+        active_session=Depends(get_active_session)
 ):
     new_expense=Expense(
         organization_id=current_user.org_id,
         category_id=expense.category_id,
+        academic_year_id=active_session.id,
         description=expense.description,
         amount=expense.amount,
         expense_date=date.today(),
@@ -36,9 +39,12 @@ def list_expenses(
     search: str | None = None,
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
+    active_session=Depends(get_active_session)
+    
 ):
     query = db.query(Expense).filter(
-        Expense.organization_id == current_user.org_id
+        Expense.organization_id == current_user.org_id,
+        Expense.academic_year_id==active_session.id
     )
 
     if search:

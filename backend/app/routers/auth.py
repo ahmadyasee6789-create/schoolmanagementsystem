@@ -192,7 +192,7 @@ def signup(payload: UserCreate, db: Session = Depends(get_db)):
 
         # Create organization
         new_org = Organization(
-            name=f"{payload.full_name}"
+            name=payload.organization_name
         )
         db.add(new_org)
         db.flush()

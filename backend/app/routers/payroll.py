@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from datetime import date
 
 from app.db.session import get_db
-from app.models.teacher_salaries import TeacherSalary
+from app.models.staff_salary import StaffSalary
 from app.models.salary_payments import SalaryPayment
 from app.models.users import OrganizationMember
 from app.routers.auth import get_current_user
@@ -16,6 +16,7 @@ from app.schemas.payroll import (
     SalaryPay,
     SalaryPaymentResponse
 )
+from app.dependencies import get_active_session
 
 router = APIRouter(prefix="/payroll", tags=["Payroll"])
 @router.get(
@@ -26,29 +27,20 @@ def get_all_salaries(
     month: int,
     year: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    active_session=Depends(get_active_session)
 ):
     payments = db.query(SalaryPayment).filter(
         SalaryPayment.organization_id == current_user.org_id,
         SalaryPayment.month == month,
-        SalaryPayment.year == year
+        SalaryPayment.year == year,
+        SalaryPayment.session_id==active_session.id
     ).all()
     return payments
 
-@router.get(
-    "/teacher-salaries",
-    response_model=list[TeacherSalaryResponse]
-)
-def get_teacher_salaries(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    salaries = db.query(TeacherSalary).filter(
-        TeacherSalary.organization_id == current_user.org_id
-    ).all()
-    return salaries
+
 @router.post(
-    "/teacher-salary",
+    "/staff-salary",
     response_model=TeacherSalaryResponse,
     status_code=status.HTTP_201_CREATED
 )
@@ -59,16 +51,16 @@ def create_teacher_salary(
 ):
 
     teacher = db.query(OrganizationMember).filter(
-        OrganizationMember.id == payload.teacher_member_id,
+        OrganizationMember.id == payload.member_id,
         OrganizationMember.organization_id == current_user.org_id
     ).first()
 
     if not teacher:
         raise HTTPException(status_code=404, detail="Teacher not found")
 
-    salary = TeacherSalary(
+    salary = StaffSalary(
         organization_id=current_user.org_id,
-        teacher_member_id=payload.teacher_member_id,
+        member_id=payload.member_id,
         base_salary=payload.base_salary,
         pay_frequency=payload.pay_frequency,
         effective_from=payload.effective_from,
@@ -82,19 +74,19 @@ def create_teacher_salary(
     return salary
 
 @router.get(
-    "/teacher-salaries",
+    "/staff-salaries",
     response_model=list[TeacherSalaryResponse]
 )
 def get_all_teacher_salaries(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    salaries = db.query(TeacherSalary).filter(
-        TeacherSalary.organization_id == current_user.org_id
+    salaries = db.query(StaffSalary).filter(
+        StaffSalary.organization_id == current_user.org_id
     ).all()
     return salaries
 @router.put(
-    "/teacher-salary/{salary_id}",
+    "/staff-salary/{salary_id}",
     response_model=TeacherSalaryResponse
 )
 def update_teacher_salary(
@@ -104,9 +96,9 @@ def update_teacher_salary(
     current_user: User = Depends(get_current_user)
 ):
 
-    salary = db.query(TeacherSalary).filter(
-        TeacherSalary.id == salary_id,
-        TeacherSalary.organization_id == current_user.org_id
+    salary = db.query(StaffSalary).filter(
+        StaffSalary.id == salary_id,
+        StaffSalary.organization_id == current_user.org_id
     ).first()
 
     if not salary:
@@ -127,21 +119,23 @@ def update_teacher_salary(
 def generate_salary(
     payload: SalaryGenerate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    active_session=Depends(get_active_session)
 ):
 
-    salary = db.query(TeacherSalary).filter(
-        TeacherSalary.teacher_member_id == payload.teacher_member_id,
-        TeacherSalary.organization_id == current_user.org_id
+    salary = db.query(StaffSalary).filter(
+        StaffSalary.member_id == payload.member_id,
+        StaffSalary.organization_id == current_user.org_id
     ).first()
 
     if not salary:
         raise HTTPException(status_code=404, detail="Salary structure not found")
 
     exists = db.query(SalaryPayment).filter(
-        SalaryPayment.teacher_member_id == payload.teacher_member_id,
+        SalaryPayment.member_id == payload.member_id,
         SalaryPayment.month == payload.month,
-        SalaryPayment.year == payload.year
+        SalaryPayment.year == payload.year,
+        SalaryPayment.session_id==active_session.id
     ).first()
 
     if exists:
@@ -154,10 +148,11 @@ def generate_salary(
 
     payment = SalaryPayment(
         organization_id=current_user.org_id,
-        teacher_member_id=payload.teacher_member_id,
+        member_id=payload.member_id,
         salary_id=salary.id,
         month=payload.month,
         year=payload.year,
+        session_id=active_session.id,
         gross_amount=gross,
         deductions=deductions,
         bonus=bonus,
@@ -175,11 +170,12 @@ def generate_all_salaries(
     month: int,
     year: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    active_session=Depends(get_active_session)
 ):
 
-    salaries = db.query(TeacherSalary).filter(
-        TeacherSalary.organization_id == current_user.org_id
+    salaries = db.query(StaffSalary).filter(
+        StaffSalary.organization_id == current_user.org_id
     ).all()
 
     created = []
@@ -187,9 +183,10 @@ def generate_all_salaries(
     for salary in salaries:
 
         exists = db.query(SalaryPayment).filter(
-            SalaryPayment.teacher_member_id == salary.teacher_member_id,
+            SalaryPayment.member_id == salary.member_id,
             SalaryPayment.month == month,
-            SalaryPayment.year == year
+            SalaryPayment.year == year,
+            SalaryPayment.salary_id==active_session.id
         ).first()
 
         if exists:
@@ -202,10 +199,11 @@ def generate_all_salaries(
 
         payment = SalaryPayment(
             organization_id=current_user.org_id,
-            teacher_member_id=salary.teacher_member_id,
+            member_id=salary.member_id,
             salary_id=salary.id,
             month=month,
             year=year,
+            session_id=active_session.id,
             gross_amount=gross,
             deductions=deductions,
             bonus=bonus,
@@ -230,12 +228,14 @@ def pay_salary(
     payment_id: int,
     payload: SalaryPay,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    active_session=Depends(get_active_session)
 ):
 
     payment = db.query(SalaryPayment).filter(
         SalaryPayment.id == payment_id,
-        SalaryPayment.organization_id == current_user.org_id
+        SalaryPayment.organization_id == current_user.org_id,
+        SalaryPayment.session_id==active_session.id
     ).first()
 
     if not payment:
@@ -263,18 +263,20 @@ def pay_salary(
 
     return payment
 @router.get(
-    "/teacher/{teacher_member_id}",
+    "/staff/{member_id}",
     response_model=list[SalaryPaymentResponse]
 )
 def teacher_salary_history(
-    teacher_member_id: int,
+    member_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    active_session=Depends(get_active_session)
 ):
 
     payments = db.query(SalaryPayment).filter(
-        SalaryPayment.teacher_member_id == teacher_member_id,
-        SalaryPayment.organization_id == current_user.org_id
+        SalaryPayment.member_id == member_id,
+        SalaryPayment.organization_id == current_user.org_id,
+        SalaryPayment.session_id==active_session.id
     ).order_by(
         SalaryPayment.year.desc(),
         SalaryPayment.month.desc()

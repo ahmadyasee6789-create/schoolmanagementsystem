@@ -17,7 +17,8 @@ from app.models import (
     Student, Classroom, OrganizationMember
 )
 from app.models.exams import GradeScale
-from app.services.dmc_generator import generate_bulk_dmc   
+from app.services.dmc_generator import generate_bulk_dmc  
+from app.dependencies import get_active_session 
 
 router = APIRouter(prefix="/dmc", tags=["DMC"])
 
@@ -28,6 +29,7 @@ def bulk_dmc(
     classroom_id: int,
     db: Session = Depends(get_db),
     current_user: OrganizationMember = Depends(get_current_user),
+    active_session=Depends(get_active_session)
 ):
     # ── 1. Validate exam belongs to org ──────────────────────────────
     exam = db.query(Exam).filter(
@@ -48,10 +50,18 @@ def bulk_dmc(
     paper_ids = [p.id for p in papers]
 
     # ── 3. Get all active enrollments for this classroom ─────────────
-    enrollments = db.query(StudentEnrollment).filter(
+    enrollments = (
+    db.query(StudentEnrollment)
+    .join(Student)
+    .filter(
         StudentEnrollment.classroom_id == classroom_id,
-        StudentEnrollment.is_active == True,
-    ).all()
+        StudentEnrollment.session_id == active_session.id,
+        StudentEnrollment.is_active == True,   # active in this classroom/session
+        Student.is_active == True              # globally active
+    )
+    .order_by(StudentEnrollment.roll_number)
+    .all()
+)
     if not enrollments:
         raise HTTPException(404, "No students enrolled in this class")
 
@@ -66,11 +76,14 @@ def bulk_dmc(
 
     # ── 6. Build per-student data ─────────────────────────────────────
     # Sort enrollments by roll_number
-    enrollments.sort(key=lambda e: (e.roll_number or 999))
+    enrollments.sort(key=lambda e: int(e.roll_number) if e.roll_number and str(e.roll_number).isdigit() else 999)
 
     students_data = []
     for enrollment in enrollments:
-        student = db.query(Student).filter(Student.id == enrollment.student_id).first()
+        student = db.query(Student).filter(
+            Student.id == enrollment.student_id,
+            
+            ).first()
         if not student:
             continue
 

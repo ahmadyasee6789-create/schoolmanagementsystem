@@ -9,9 +9,10 @@ from app.models.users import OrganizationMember
 from app.models.students import Student
 from app.models.student_enrollment import StudentEnrollment
 from app.models.exams import Exam, ExamPaper
-from app.models.exams import ExamResult
+from app.models.exams import ExamResult,Term
 from app.models.exams import GradeScale
 from app.schemas.exam_result import ExamResultCreate, ExamResultUpdate, ExamResultOut
+from app.dependencies import get_active_session
 
 router = APIRouter(prefix="/exam-results", tags=["Exam Results"])
 
@@ -37,45 +38,62 @@ def calculate_grade_gpa(marks: int, total_marks: int, db: Session, org_id: int):
 def create_exam_result(
     result_in: ExamResultCreate,
     db: Session = Depends(get_db),
-    current_user: OrganizationMember = Depends(get_current_user)
+    current_user: OrganizationMember = Depends(get_current_user),
+    active_session=Depends(get_active_session)
 ):
-    # 1️⃣ Validate exam paper exists and belongs to org
-    exam_paper = db.query(ExamPaper).join(Exam).filter(
-        ExamPaper.id == result_in.exam_paper_id,
-        Exam.organization_id == current_user.org_id
-    ).first()
+
+    exam_paper = (
+        db.query(ExamPaper)
+        .join(Exam)
+        .join(Term)
+        .filter(
+            ExamPaper.id == result_in.exam_paper_id,
+            Exam.organization_id == current_user.org_id,
+            Term.academic_year_id == active_session.id
+        )
+        .first()
+    )
+
     if not exam_paper:
         raise HTTPException(status_code=404, detail="Exam paper not found")
 
-    # 2️⃣ Validate student exists
-    student = db.query(Student).filter(
-        Student.id == result_in.student_enrollment_id,
-        Student.organization_id == current_user.org_id
-    ).first()
-    if not student:
-        raise HTTPException(status_code=404, detail="Student not found")
+    print("Incoming enrollment ID:", result_in.student_enrollment_id)
+    print("Exam classroom:", exam_paper.classroom_id)
+    print("Active session:", active_session.id)
 
-    # 3️⃣ Get the student enrollment in that classroom
-    enrollment = db.query(StudentEnrollment).filter(
-        StudentEnrollment.id == result_in.student_enrollment_id,
-        StudentEnrollment.classroom_id == exam_paper.classroom_id,
-        StudentEnrollment.is_active == True
-    ).first()
+    enrollment = (
+        db.query(StudentEnrollment)
+        .join(Student)
+        .filter(
+            StudentEnrollment.id == result_in.student_enrollment_id,
+            StudentEnrollment.classroom_id == exam_paper.classroom_id,
+            StudentEnrollment.session_id == active_session.id,
+            StudentEnrollment.is_active == True,
+            Student.organization_id == current_user.org_id
+        )
+        .first()
+    )
+
     if not enrollment:
-        raise HTTPException(status_code=404, detail="Student is not enrolled in this classroom")
+        raise HTTPException(
+            status_code=404,
+            detail="Student is not enrolled in this classroom"
+        )
 
-    # 4️⃣ Validate marks
     if result_in.obtained_marks > exam_paper.total_marks:
         raise HTTPException(
             status_code=400,
             detail=f"Marks obtained ({result_in.obtained_marks}) cannot exceed total marks ({exam_paper.total_marks})"
         )
 
-    # 5️⃣ Upsert: check if result exists
-    result = db.query(ExamResult).filter(
-        ExamResult.exam_paper_id == exam_paper.id,
-        ExamResult.student_enrollment_id == enrollment.id
-    ).first()
+    result = (
+        db.query(ExamResult)
+        .filter(
+            ExamResult.exam_paper_id == exam_paper.id,
+            ExamResult.student_enrollment_id == enrollment.id
+        )
+        .first()
+    )
 
     if result:
         result.obtained_marks = result_in.obtained_marks
@@ -90,8 +108,12 @@ def create_exam_result(
     db.commit()
     db.refresh(result)
 
-    # 6️⃣ Compute grade & GPA dynamically for response
-    grade, gpa = calculate_grade_gpa(result.obtained_marks, exam_paper.total_marks, db, current_user.org_id)
+    grade, gpa = calculate_grade_gpa(
+        result.obtained_marks,
+        exam_paper.total_marks,
+        db,
+        current_user.org_id
+    )
 
     return {
         "id": result.id,
@@ -101,19 +123,21 @@ def create_exam_result(
         "grade": grade,
         "gpa": gpa
     }
-
-# -------------------------
-# GET results by exam — returns [] if none, never 404
-# -------------------------
 @router.get("/exam/{exam_id}", response_model=List[ExamResultOut])
-def get_exam_results(exam_id: int, db: Session = Depends(get_db)):
+def get_exam_results(exam_id: int, db: Session = Depends(get_db),
+                     active_session=Depends(get_active_session)):
 
     results = (
-        db.query(ExamResult)
-        .join(ExamPaper)
-        .filter(ExamPaper.exam_id == exam_id)
-        .all()
+    db.query(ExamResult)
+    .join(ExamPaper, ExamResult.exam_paper_id == ExamPaper.id)
+    .join(Exam, ExamPaper.exam_id == Exam.id)
+    .join(Term, Exam.term_id == Term.id)
+    .filter(
+        ExamPaper.exam_id == exam_id,
+        Term.academic_year_id == active_session.id
     )
+    .all()
+)
 
     grade_scales = db.query(GradeScale).all()
 
@@ -152,7 +176,8 @@ def get_exam_results(exam_id: int, db: Session = Depends(get_db)):
 def get_student_results(
     student_id: int,
     db: Session = Depends(get_db),
-    current_user: OrganizationMember = Depends(get_current_user)
+    current_user: OrganizationMember = Depends(get_current_user),
+    active_session=Depends(get_active_session)
 ):
     # 1️⃣ Validate student exists and belongs to org
     student = db.query(Student).filter(
@@ -165,16 +190,18 @@ def get_student_results(
     # 2️⃣ Get all active enrollments for this student
     enrollments = db.query(StudentEnrollment).filter(
         StudentEnrollment.student_id == student.id,
-        StudentEnrollment.is_active == True
+        StudentEnrollment.is_active == True,
+        StudentEnrollment.session_id == active_session.id 
     ).all()
     enrollment_ids = [e.id for e in enrollments]
     if not enrollment_ids:
         return []
 
     # 3️⃣ Fetch results for all enrollments
-    results = db.query(ExamResult).join(ExamPaper).join(Exam).filter(
+    results = db.query(ExamResult).join(ExamPaper).join(Exam).join(Term).filter(
         ExamResult.student_enrollment_id.in_(enrollment_ids),
-        Exam.organization_id == current_user.org_id
+        Exam.organization_id == current_user.org_id,
+        Term.academic_year_id==active_session.id
     ).all()
 
     # 4️⃣ Compute grade & GPA dynamically
@@ -227,17 +254,6 @@ def delete_exam_result(
     db.delete(result)
     db.commit()
     return None
-@router.get("/exam/{exam_id}/debug")
-def debug_exam_results(exam_id: int, db: Session = Depends(get_db), current_user: OrganizationMember = Depends(get_current_user)):
-    exam = db.query(Exam).filter(Exam.id == exam_id).first()
-    return {
-        "exam_exists": bool(exam),
-        "exam": {
-            "id": exam.id if exam else None,
-            "name": exam.name if exam else None,
-            "organization_id": exam.organization_id if exam else None
-        },
-        "current_user_org": current_user.org_id
-    }
+
 
 

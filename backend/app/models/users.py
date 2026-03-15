@@ -46,7 +46,7 @@ class OrganizationMember(Base):
 
  
     id:Mapped[int] = mapped_column( primary_key=True, index=True)
-    user_id:Mapped[int] = mapped_column( ForeignKey("users.id"), nullable=False)
+    user_id:Mapped[int] = mapped_column( ForeignKey("users.id"), nullable=True)
     organization_id:Mapped[int] = mapped_column( ForeignKey("organizations.id"), nullable=False)
     role:Mapped[str] = mapped_column( String, nullable=False)
 
@@ -103,7 +103,7 @@ class Organization(Base):
         back_populates="organization",
         cascade="all, delete-orphan"
     )
-    sessions=relationship(
+    session=relationship(
         "AcademicSession",
         back_populates="organization",
         cascade="all, delete-orphan")

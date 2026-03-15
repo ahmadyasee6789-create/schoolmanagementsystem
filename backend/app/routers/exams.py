@@ -8,6 +8,7 @@ from app.models.exams import Exam, Term
 from app.models.users import OrganizationMember
 from app.db.session import get_db
 from app.routers.auth import get_current_user
+from app.dependencies import get_active_session
 
 router = APIRouter(prefix="/exams", tags=["Exams"])
 
@@ -18,8 +19,16 @@ router = APIRouter(prefix="/exams", tags=["Exams"])
 def get_exams(
     db: Session = Depends(get_db),
     current_user: OrganizationMember = Depends(get_current_user),
+    active_session = Depends(get_active_session)
 ):
-    exams = db.query(Exam).filter(Exam.organization_id == current_user.org_id).all()
+    
+    exams = (
+    db.query(Exam)
+    .join(Term,Exam.term_id==Term.id)
+    .filter(
+        Exam.organization_id == current_user.org_id,
+        Term.academic_year_id==active_session.id 
+        ).all())
     return exams
 
 

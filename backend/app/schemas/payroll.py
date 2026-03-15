@@ -2,7 +2,7 @@ from pydantic import BaseModel,Field
 from datetime import date, datetime
 from typing import Optional
 class TeacherSalaryCreate(BaseModel):
-    teacher_member_id: int
+    member_id: int
     base_salary: float
     pay_frequency: str = "monthly"
     effective_from: date
@@ -14,7 +14,7 @@ class TeacherSalaryUpdate(BaseModel):
 class TeacherSalaryResponse(BaseModel):
     id: int
     organization_id: int
-    teacher_member_id: int
+    member_id: int
     base_salary: float
     pay_frequency: str
     effective_from: date
@@ -25,7 +25,7 @@ class TeacherSalaryResponse(BaseModel):
     class Config:
         from_attributes = True
 class SalaryGenerate(BaseModel):
-    teacher_member_id: int
+    member_id: int
     month: int = Field(..., ge=1,le=12)
     year: int
 class SalaryPay(BaseModel):
@@ -35,8 +35,8 @@ class SalaryPay(BaseModel):
 class SalaryPaymentResponse(BaseModel):
     id: int
     organization_id: int
-    teacher_member_id: int
-    salary_id: int
+    member_id: int
+    salary_id: Optional[int]
     month: int
     year: int
     gross_amount: float

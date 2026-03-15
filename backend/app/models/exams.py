@@ -34,9 +34,11 @@ class Subject(Base):
     id=Column(Integer, primary_key=True, index=True)
     name=Column(String, nullable=False)
     organization_id=Column(Integer, ForeignKey("organizations.id"), nullable=False)
+    session_id=Column(Integer,ForeignKey("academic_sessions.id"),nullable=False)
     organization = relationship("Organization", back_populates="subjects")
     class_subjects = relationship("ClassSubject", back_populates="subject")
     exam_papers = relationship("ExamPaper", back_populates="subject")
+    session=relationship("AcademicSession",back_populates="subject")
 
 class ClassSubject(Base):
     __tablename__="class_subjects"

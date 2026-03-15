@@ -7,9 +7,10 @@ from app.db.session import get_db
 from app.models.users import OrganizationMember
 from app.models.exams import Exam, ExamPaper
 from app.models.classroom import Classroom
-from app.models.exams import Subject, ClassSubject
+from app.models.exams import Subject, ClassSubject,Term
 from app.routers.auth import get_current_user
 from app.schemas.exam_paper import ExamPaperCreate, ExamPaperUpdate, ExamPaperOut
+from app.dependencies import get_active_session
 
 router = APIRouter(prefix="/exam-papers", tags=["Exam Papers"])
 
@@ -19,14 +20,17 @@ router = APIRouter(prefix="/exam-papers", tags=["Exam Papers"])
 @router.get("/", response_model=List[ExamPaperOut])
 def get_exam_papers(
     db: Session = Depends(get_db),
-    current_user: OrganizationMember = Depends(get_current_user)
+    current_user: OrganizationMember = Depends(get_current_user),
+    active_session=Depends(get_active_session)
 ):
     papers = (
         db.query(ExamPaper)
         .join(Exam)
         .join(Classroom)
         .join(Subject)
-        .filter(Exam.organization_id == current_user.org_id)
+        .join(Term)
+        .filter(Exam.organization_id == current_user.org_id,
+                Term.academic_year_id==active_session.id)
         .all()
     )
 
@@ -72,13 +76,17 @@ def get_exam_paper(
 def create_exam_paper(
     paper_in: ExamPaperCreate,
     db: Session = Depends(get_db),
-    current_user: OrganizationMember = Depends(get_current_user)
+    current_user: OrganizationMember = Depends(get_current_user),
+    active_session=Depends(get_active_session)
 ):
     # Check if exam exists and belongs to org
-    exam = db.query(Exam).filter(
+    exam = (
+        db.query(Exam).join(Term)
+        .filter(
         Exam.id == paper_in.exam_id,
-        Exam.organization_id == current_user.org_id
-    ).first()
+        Exam.organization_id == current_user.org_id,
+        Term.academic_year_id==active_session.id
+    ).first())
     if not exam:
         raise HTTPException(status_code=404, detail="Exam not found")
 

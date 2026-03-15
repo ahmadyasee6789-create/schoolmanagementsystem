@@ -60,14 +60,12 @@ def invite_user(
     current_user: User = Depends(get_current_user),
 ):
     membership = get_user_organization(current_user, db)
-
-    # 1️⃣ Only admin can invite
+   
     if membership.role != "admin":
         raise HTTPException(status_code=403, detail="Only admins can invite users")
-
     # 2️⃣ Check if user already exists
     invited_user = db.query(User).filter(User.email == data.email).first()
-
+    
     if invited_user:
         existing_membership = db.query(OrganizationMember).filter(
             OrganizationMember.user_id == invited_user.id
@@ -78,7 +76,7 @@ def invite_user(
                 status_code=400,
                 detail="User already belongs to an organization"
             )
-
+   
     # 3️⃣ Check existing invite
     existing_invite = db.query(Invitation).filter(
         Invitation.email == data.email,

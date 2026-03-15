@@ -21,6 +21,8 @@ from app.models.student_enrollment import StudentEnrollment
 from app.models.students import Student
 from app.models.academic_session import AcademicSession
 from app.routers.auth import get_current_user
+from app.dependencies import get_active_session
+
 import logging
 
 logger = logging.getLogger(__name__)
@@ -120,7 +122,7 @@ def create_student_with_enrollment(
             classroom_id=data.classroom_id,
             session_id=data.session_id,
             enrollment_date=data.enrollment_date,
-            roll_number=data.roll_number,
+            
             discount_percent=data.discount_percent,
         )
 
@@ -146,7 +148,16 @@ def create_student_with_enrollment(
 # -------------------------------------------------------------------
 # LIST STUDENTS
 # -------------------------------------------------------------------
-@router.get("/", response_model=List[StudentWithEnrollment])
+from pydantic import BaseModel
+
+class PaginatedStudents(BaseModel):
+    items: List[StudentWithEnrollment]
+    total: int
+    page: int
+    total_pages: int
+
+
+@router.get("/", response_model=PaginatedStudents)
 def list_students(
     page: int = Query(1, ge=1),
     limit: int = Query(10, ge=1, le=100),
@@ -154,17 +165,25 @@ def list_students(
     grade_name: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
+    active_session=Depends(get_active_session),
 ):
-    """List students with their current enrollment info."""
     try:
-        return student_crud.get_students(
+        students, total = student_crud.get_students(
             db=db,
             org_id=current_user.org_id,
+            active_session=active_session,
+
             page=page,
             limit=limit,
             search=search,
             grade_name=grade_name,
         )
+        return {
+            "items": students,
+            "total": total,
+            "page": page,
+            "total_pages": max(1, -(-total // limit)),  # ceiling division
+        }
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -269,108 +288,30 @@ def enroll_student(
 # -------------------------------------------------------------------
 # GET STUDENTS BY CLASS
 # -------------------------------------------------------------------
-@router.get("/by-class/{grade_name}/{section}", response_model=List[StudentWithEnrollment])
-def get_students_by_class(
-    grade_name: str,
-    section: str,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
-):
-    """Get all students for a given grade name and section."""
-    # Get the classroom
-    classroom = (
-        db.query(Classroom)
-        .join(Grade)
-        .filter(
-            Grade.name == grade_name,
-            Classroom.section == section,
-            Classroom.organization_id == current_user.org_id,
-        )
-        .first()
-    )
-
-    if not classroom:
-        raise HTTPException(status_code=404, detail="Class not found")
-
-    # Query students and enrollment info
-    rows = (
-        db.query(
-            Student,
-            Grade.name.label("grade_name"),
-            Classroom.section.label("section"),
-            StudentEnrollment.roll_number.label("roll_number"),
-            StudentEnrollment.discount_percent.label("discount_percent"),
-        )
-        .join(StudentEnrollment, Student.id == StudentEnrollment.student_id)
-        .join(Classroom, StudentEnrollment.classroom_id == Classroom.id)
-        .join(Grade, Classroom.grade_id == Grade.id)
-        .filter(
-            Student.organization_id == current_user.org_id,
-            StudentEnrollment.classroom_id == classroom.id,
-            StudentEnrollment.is_active == True,
-        )
-        .all()
-    )
-
-    # Build the response
-    return [
-        {
-            "id": s.id,
-            "organization_id": s.organization_id,
-            "first_name": s.first_name,
-            "last_name": s.last_name,
-            "admission_no": s.admission_no,
-            "gender": s.gender,
-            "date_of_birth": s.date_of_birth,
-            "phone": s.phone,
-            "email": s.email,
-            "father_name": s.father_name,
-            "father_phone": s.father_phone,
-            "mother_name": s.mother_name,
-            "guardian_name": s.guardian_name,
-            "guardian_phone": s.guardian_phone,
-            "is_active": s.is_active,
-            "grade_name": grade_name,
-            "section": section,
-            "roll_number": roll_number,
-            "discount_percent": discount_percent,
-        }
-        for s, grade_name, section, roll_number, discount_percent in rows
-    ]
-#it is for  class page
 @router.get("/by-class/{classroom_id}", response_model=List[StudentWithEnrollment])
 def get_students_by_classroom_id(
     classroom_id: int,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
+    active_session=Depends(get_active_session)
 ):
+
     classroom = (
         db.query(Classroom)
         .filter(
             Classroom.id == classroom_id,
-            Classroom.organization_id == current_user.org_id,
+            Classroom.organization_id == current_user.org_id
         )
         .first()
     )
-    
-   
-    
+
     if not classroom:
         raise HTTPException(status_code=404, detail="Class not found")
 
-    # ── Step 1: check raw enrollments for this classroom ──
-    enrollments = (
-        db.query(StudentEnrollment)
-        .filter(StudentEnrollment.classroom_id == classroom_id)
-        .all()
-    )
-    if not enrollments:
-        raise HTTPException(status_code=404,detail="Enrollments not found")
-    
-    
     rows = (
         db.query(
             Student,
+             StudentEnrollment.id.label("enrollment_id"),
             Grade.name.label("grade_name"),
             Classroom.section.label("section"),
             StudentEnrollment.roll_number.label("roll_number"),
@@ -382,24 +323,30 @@ def get_students_by_classroom_id(
         .filter(
             Student.organization_id == current_user.org_id,
             StudentEnrollment.classroom_id == classroom_id,
+            StudentEnrollment.session_id == active_session.id,
             StudentEnrollment.is_active == True,
         )
+        .order_by(StudentEnrollment.roll_number)
         .all()
     )
-   
-    if not rows:
-        return []
 
-    return [
-        StudentWithEnrollment(
-            **row.Student.__dict__,
-            grade_name=row.grade_name,
-            section=row.section,
-            roll_number=row.roll_number,
-            discount_percent=row.discount_percent,
+    students = []
+    for row in rows:
+        student_data = row.Student.__dict__.copy()
+        student_data.pop("_sa_instance_state", None)
+
+        students.append(
+            StudentWithEnrollment(
+                **student_data,
+                enrollment_id=row.enrollment_id,
+                grade_name=row.grade_name,
+                section=row.section,
+                roll_number=row.roll_number,
+                discount_percent=row.discount_percent,
+            )
         )
-        for row in rows
-    ]
+
+    return students
 # -------------------------------------------------------------------
 # GET STUDENT ENROLLMENT HISTORY
 # -------------------------------------------------------------------
@@ -408,6 +355,7 @@ def get_student_enrollments(
     student_id: int,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
+    active_session=Depends(get_active_session)
 ):
     """Get all enrollments for a student."""
     student = student_crud.get_student_by_id(
@@ -417,5 +365,6 @@ def get_student_enrollments(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found")
 
     return db.query(StudentEnrollment).filter(
-        StudentEnrollment.student_id == student_id
+        StudentEnrollment.student_id == student_id,
+        StudentEnrollment.session_id==active_session.id
     ).all()

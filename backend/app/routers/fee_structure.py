@@ -9,6 +9,7 @@ from app.routers.auth import get_current_user
 from app.models.fee_structure import FeeStructure
 from app.models.classroom import Classroom, Grade
 from app.schemas.fee_structure import FeeStructureCreate, FeeStructureUpdate, FeeStructureOut
+from app.dependencies import get_active_session
 
 router = APIRouter(prefix="/fee-structure", tags=["Fee Structure"])
 
@@ -60,6 +61,7 @@ def to_response(structure: FeeStructure, db: Session) -> dict:
 def get_all_fee_structures(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
+    active_session=Depends(get_active_session)
 ):
     require_admin(current_user)
 
@@ -67,7 +69,8 @@ def get_all_fee_structures(
         db.query(FeeStructure, Grade.name.label("grade_name"), Classroom.section)
         .join(Classroom, FeeStructure.class_id == Classroom.id)
         .join(Grade, Classroom.grade_id == Grade.id)
-        .filter(FeeStructure.organization_id == current_user.org_id)
+        .filter(FeeStructure.organization_id == current_user.org_id,
+                FeeStructure.session_id==active_session.id)
         .all()
     )
 

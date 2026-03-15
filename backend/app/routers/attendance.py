@@ -13,6 +13,7 @@ from app.models.students import Student
 from app.models.student_enrollment import StudentEnrollment
 from app.schemas.attendence import AttendanceCreate
 from app.models.users import OrganizationMember
+from app.dependencies import get_active_session
 router = APIRouter(prefix="/attendance", tags=["Attendance"])
 
 
@@ -55,6 +56,7 @@ def mark_attendance(
     data: List[AttendanceCreate],
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
+    active_session=Depends(get_active_session)
 ):
     if not data:
         raise HTTPException(status_code=400, detail="No attendance data provided")
@@ -70,6 +72,7 @@ def mark_attendance(
             Attendance.student_id == record.student_id,
             Attendance.class_id == class_id,
             Attendance.date == attendance_date,
+            Attendance.session_id==active_session.id
         ).first()
 
         if existing:
@@ -95,6 +98,7 @@ def get_attendance(
     attendance_date: date,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
+    active_session=Depends(get_active_session)
 ):
     if current_user.org_role == "teacher" :
         validate_teacher_class(current_user.id, class_id, db)
@@ -105,6 +109,7 @@ def get_attendance(
         .filter(
             Attendance.class_id == class_id,
             Attendance.date == attendance_date,
+            Attendance.session_id==active_session.id
         )
         .all()
     )

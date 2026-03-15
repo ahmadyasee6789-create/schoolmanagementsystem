@@ -11,7 +11,9 @@ from app.models.fee_transection import FeeTransaction
 from app.models.expenses import Expense
 from app.models.student_enrollment import StudentEnrollment
 from app.models.salary_payments import SalaryPayment
+from app.models.student_fee import StudentFee
 from app.routers.auth import get_current_user
+from app.dependencies import get_active_session
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
@@ -20,6 +22,7 @@ router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 def get_dashboard_stats(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    active_session=Depends(get_active_session)
 ):
     # ── Validate membership ───────────────────────────────────────────
     membership = db.query(OrganizationMember).filter(
@@ -33,14 +36,16 @@ def get_dashboard_stats(
     current_year = datetime.utcnow().year
 
     # ── School overview ───────────────────────────────────────────────
-    total_students = db.query(Student).filter(
-        Student.organization_id == org_id
-    ).count()
+    total_students = db.query(StudentEnrollment).join(Student).filter(
+    Student.organization_id == org_id,
+    StudentEnrollment.session_id == active_session.id
+).count()
 
-    active_students = db.query(Student).filter(
-        Student.organization_id == org_id,
-        Student.is_active.is_(True)
-    ).count()
+    active_students = db.query(StudentEnrollment).join(Student).filter(
+    Student.organization_id == org_id,
+    StudentEnrollment.session_id == active_session.id,
+    Student.is_active.is_(True)
+).count()
 
     total_teachers = db.query(OrganizationMember).filter(
         OrganizationMember.organization_id == org_id,
@@ -52,32 +57,39 @@ def get_dashboard_stats(
     ).count()
 
     students_per_class = (
-        db.query(
-            Grade.name.label("grade_name"),
-            func.count(StudentEnrollment.student_id).label("student_count")
-        )
-        .select_from(Classroom)
-        .join(Grade, Classroom.grade_id == Grade.id)
-        .outerjoin(StudentEnrollment, Classroom.id == StudentEnrollment.classroom_id)
-        .filter(Classroom.organization_id == org_id)
-        .group_by(Grade.id, Grade.name)
-        .all()
+    db.query(
+        Grade.name.label("grade_name"),
+        func.count(StudentEnrollment.student_id).label("student_count")
     )
+    .select_from(Classroom)
+    .join(Grade, Classroom.grade_id == Grade.id)
+    .outerjoin(
+        StudentEnrollment,
+        (Classroom.id == StudentEnrollment.classroom_id) &
+        (StudentEnrollment.session_id == active_session.id)
+    )
+    .filter(Classroom.organization_id == org_id)
+    .group_by(Grade.id, Grade.name)
+    .all()
+)
 
     # ── Revenue — fee transactions (current year) ─────────────────────
     revenue_query = (
-        db.query(
-            extract("month", FeeTransaction.payment_date).label("month"),
-            func.coalesce(func.sum(FeeTransaction.amount), 0).label("revenue")
-        )
-        .filter(
-            FeeTransaction.organization_id == org_id,
-            extract("year", FeeTransaction.payment_date) == current_year
-        )
-        .group_by("month")
-        .order_by("month")
-        .all()
+    db.query(
+        extract("month", FeeTransaction.payment_date).label("month"),
+        func.coalesce(func.sum(FeeTransaction.amount), 0).label("revenue")
     )
+    .join(StudentFee, FeeTransaction.student_fee_id == StudentFee.id)
+    .filter(
+        FeeTransaction.organization_id == org_id,
+        StudentFee.session_id == active_session.id,
+        extract("year", FeeTransaction.payment_date) == current_year
+    )
+    .group_by(extract("month", FeeTransaction.payment_date))
+    .order_by(extract("month", FeeTransaction.payment_date))
+
+    .all()
+)
     revenue_dict = {int(m): float(a) for m, a in revenue_query}
 
     # ── Operational expenses (current year) ───────────────────────────
@@ -173,7 +185,7 @@ def get_dashboard_stats(
             "year": current_year,
 
             "revenue": {
-                "yearTotal": round(total_year_revenue, 2),
+                "yearTotal": (total_year_revenue, 2),
             },
 
             "expenses": {

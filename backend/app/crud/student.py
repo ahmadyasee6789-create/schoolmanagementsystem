@@ -3,33 +3,42 @@ from typing import Optional
 
 from sqlalchemy.orm import Session, aliased
 from sqlalchemy import or_
-from fastapi import HTTPException
-
+from fastapi import Depends, HTTPException
+from datetime import datetime
 from app.models.students import Student
 from app.models.student_enrollment import StudentEnrollment
 from app.models.classroom import Classroom, Grade
 from app.schemas.student import StudentCreate, StudentUpdate
 
 
+
 # --------------------------------------------------
 # CREATE STUDENT
 # --------------------------------------------------
+from sqlalchemy import func
+
 def create_student(db: Session, student: StudentCreate, org_id: int) -> Student:
-    """Create a student record. Does NOT commit — caller owns the transaction."""
-    exists = (
+    """Create a student record with auto-generated admission number."""
+    current_year=datetime.now().year
+    last_student = (
         db.query(Student)
-        .filter(
-            Student.organization_id == org_id,
-            Student.admission_no == student.admission_no,
-        )
+        .filter(Student.organization_id == org_id,
+                Student.admission_no.ilike(f"ADM-{current_year}-%"))
+        .order_by(Student.id.desc())
         .first()
     )
-    if exists:
-        raise HTTPException(status_code=400, detail="Admission number already exists")
+
+    if last_student and last_student.admission_no:
+        last_number = int(last_student.admission_no.split("-")[-1])
+        next_number = last_number + 1
+    else:
+        next_number = 1
+
+    admission_no = f"ADM-{current_year}-{next_number:05d}"
 
     db_student = Student(
         organization_id=org_id,
-        admission_no=student.admission_no,
+        admission_no=admission_no,
         first_name=student.first_name,
         last_name=student.last_name,
         gender=student.gender,
@@ -43,25 +52,39 @@ def create_student(db: Session, student: StudentCreate, org_id: int) -> Student:
         guardian_phone=student.guardian_phone,
         is_active=True,
     )
-    db.add(db_student)
-    db.flush()  # assigns db_student.id; caller is responsible for commit
-    db.refresh(db_student)
-    return db_student
 
+    db.add(db_student)
+    db.flush()
+    db.refresh(db_student)
+
+    return db_student
 
 # --------------------------------------------------
 # ENROLL STUDENT
 # --------------------------------------------------
+from sqlalchemy import func
+
 def enroll_student(
     db: Session,
     student_id: int,
     classroom_id: int,
     session_id: int,
     enrollment_date,
-    roll_number: Optional[str] = None,
     discount_percent: float = 0.0,
 ) -> StudentEnrollment:
-    """Create an enrollment record. Does NOT commit — caller owns the transaction."""
+
+    # Get highest roll number in this class for this session
+    last_roll = (
+        db.query(func.max(StudentEnrollment.roll_number))
+        .filter(
+            StudentEnrollment.classroom_id == classroom_id,
+            StudentEnrollment.session_id == session_id
+        )
+        .scalar()
+    )
+
+    roll_number = (last_roll or 0) + 1
+
     enrollment = StudentEnrollment(
         student_id=student_id,
         classroom_id=classroom_id,
@@ -71,9 +94,11 @@ def enroll_student(
         roll_number=roll_number,
         discount_percent=discount_percent,
     )
+
     db.add(enrollment)
     db.flush()
     db.refresh(enrollment)
+
     return enrollment
 
 
@@ -83,18 +108,20 @@ def enroll_student(
 def get_students(
     db: Session,
     org_id: int,
+    active_session,
     page: int = 1,
     limit: int = 10,
     search: Optional[str] = None,
     grade_name: Optional[str] = None,
 ):
     """Return a page of students enriched with their current active enrollment."""
-    # Build subquery for the latest active enrollment per student
+
     active_enrollment = (
         db.query(
             StudentEnrollment.student_id,
             StudentEnrollment.roll_number,
             StudentEnrollment.discount_percent,
+            StudentEnrollment.session_id,
             Classroom.section.label("section"),
             Grade.name.label("grade_name"),
         )
@@ -112,7 +139,11 @@ def get_students(
             active_enrollment.c.roll_number,
             active_enrollment.c.discount_percent,
         )
-        .outerjoin(active_enrollment, Student.id == active_enrollment.c.student_id)
+        .join(
+            active_enrollment,
+            (Student.id == active_enrollment.c.student_id) &
+            (active_enrollment.c.session_id == active_session.id)
+        )
         .filter(Student.organization_id == org_id)
     )
 
@@ -128,6 +159,7 @@ def get_students(
     if grade_name:
         query = query.filter(active_enrollment.c.grade_name == grade_name)
 
+    total = query.count()
     rows = query.offset((page - 1) * limit).limit(limit).all()
 
     return [
@@ -153,7 +185,7 @@ def get_students(
             "discount_percent": discount_percent,
         }
         for s, grade_name_val, section, roll_number, discount_percent in rows
-    ]
+    ], total
 
 
 # --------------------------------------------------

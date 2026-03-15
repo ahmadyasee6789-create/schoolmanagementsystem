@@ -10,7 +10,7 @@ from typing import Optional
 class StudentBase(BaseModel):
     first_name: str
     last_name: str
-    admission_no: str
+    # admission_no: str
     gender: Optional[str] = None
     date_of_birth: Optional[date] = None
     phone: Optional[str] = None
@@ -38,7 +38,7 @@ class StudentCreate(StudentBase):
 class StudentUpdate(BaseModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
-    admission_no: Optional[str] = None
+    # admission_no: Optional[str] = None
     gender: Optional[str] = None
     date_of_birth: Optional[date] = None
     phone: Optional[str] = None
@@ -60,7 +60,7 @@ class StudentWithEnrollmentCreate(StudentBase):
     classroom_id: int
     session_id: int
     enrollment_date: date
-    roll_number: Optional[str] = None
+    # roll_number: Optional[str] = None
     discount_percent: float = 0.0
 
 
@@ -70,6 +70,8 @@ class StudentWithEnrollmentCreate(StudentBase):
 class StudentWithEnrollment(StudentBase):
     id: int
     organization_id: int
+    admission_no: str
+    enrollment_id: Optional[int]=None
     grade_name: Optional[str] = None
     section: Optional[str] = None
     roll_number: Optional[str] = None
@@ -95,7 +97,7 @@ class StudentEnrollmentBase(BaseModel):
     session_id: int
     enrollment_date: date
     is_active: bool = True
-    roll_number: Optional[str] = None
+    # roll_number: Optional[str] = None
     discount_percent: float = 0.0
 
 
@@ -103,7 +105,15 @@ class StudentEnrollmentCreate(StudentEnrollmentBase):
     pass
 
 
-class StudentEnrollmentOut(StudentEnrollmentBase):
+class StudentEnrollmentOut(BaseModel):
     id: int
+    student_id: int
+    
+    classroom_id: int
+    session_id: int
+    enrollment_date: date
+    roll_number: int
+    discount_percent: float = 0.0
+    is_active: bool = True
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
