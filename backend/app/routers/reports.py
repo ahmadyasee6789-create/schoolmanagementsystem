@@ -173,7 +173,7 @@ def get_fee_report(
             StudentFee.organization_id == current_user.org_id,
             StudentFee.session_id == active_session.id,
         )
-    )
+    ) 
 
     if grade_name: query = query.filter(Grade.name == grade_name)
     if month:      query = query.filter(StudentFee.month == month)
