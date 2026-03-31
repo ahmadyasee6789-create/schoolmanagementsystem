@@ -28,6 +28,7 @@ class Classroom(Base):
 
     grade_id = Column(Integer, ForeignKey("grades.id"), nullable=False)       # e.g. "5"
     section = Column(String, nullable=False)     # e.g. "A"
+    academic_year_id = Column(Integer, ForeignKey("academic_sessions.id"), nullable=False)  # new field for academic session
 
     class_teacher_member_id = Column(
     Integer,
@@ -52,6 +53,7 @@ class Classroom(Base):
     organization = relationship("Organization", back_populates="classrooms")
     class_subjects = relationship("ClassSubject", back_populates="classroom")
     exam_papers = relationship("ExamPaper", back_populates="classroom")
+    academic_year = relationship("AcademicSession", back_populates="classrooms")
     
     __table_args__ = (
     UniqueConstraint("grade_id", "organization_id", "section", name="unique_grade_section"),

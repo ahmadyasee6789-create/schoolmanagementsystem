@@ -15,7 +15,7 @@ from app.models.exams import ExamResult, ExamPaper, Exam, Term
 from app.dependencies import get_active_session
 from app.models.student_fee import StudentFee
 from app.models.fee_transection import FeeTransaction
-from app.schemas.reports import FeeReportItem,FeeReportResponse
+from app.schemas.reports import FeeReportItem,FeeReportResponse,ExamReport
 from app.models.classroom import Classroom,Grade
 
 
@@ -25,9 +25,10 @@ router = APIRouter(prefix="/reports", tags=["Reports"])
 # -------------------------
 # Student Exam Report
 # -------------------------
-@router.get("/student/{student_id}")
+@router.get("/exam-results" ,response_model=List[ExamReport])
 def student_report(
     student_id: int,
+   
     db: Session = Depends(get_db),
     current_user: OrganizationMember = Depends(get_current_user),
     active_session=Depends(get_active_session)

@@ -27,25 +27,47 @@ export default function SignInPage() {
   // ── Redirect if already logged in ─────────────────────────────────
   useEffect(() => {
     if (!hydrated) return;
-    if (user) router.replace("/");
+    if (user) {
+      if(user.is_superadmin){
+        router.replace("/superadmin");
+      }
+      else{
+        router.replace("/");
+      }
+    }
   }, [hydrated, user, router]);
 
-  // ── Submit ─────────────────────────────────────────────────────────
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email || !password)           return toast.error("All fields are required");
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return toast.error("Invalid email format");
+ 
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  if (!email || !password)
+    return toast.error("All fields are required");
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+    return toast.error("Invalid email format");
 
-    setLoading(true);
-    try {
-      await useAuthStore.getState().login(email, password);
-      router.replace("/");
-    } catch {
-      toast.error("Invalid email or password");
-    } finally {
-      setLoading(false);
+  setLoading(true);
+  try {
+    // login() now returns the redirect path
+    const redirect = await useAuthStore.getState().login(email, password);
+
+    // Use backend's redirect decision
+    router.replace(redirect ?? "/");
+
+  } catch (err: any) {
+    const msg = err.response?.data?.detail || "Invalid email or password";
+
+    // Show special message for trial/suspended
+    if (msg.includes("expired")) {
+      toast.error("⏳ " + msg, { duration: 6000 });
+    } else if (msg.includes("suspended")) {
+      toast.error("🚫 " + msg, { duration: 6000 });
+    } else {
+      toast.error(msg);
     }
-  };
+  } finally {
+    setLoading(false);
+  }
+};
 
   if (!hydrated) return null;
 

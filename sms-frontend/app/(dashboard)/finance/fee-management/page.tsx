@@ -4,9 +4,9 @@ import { useState, useEffect } from "react";
 import { api } from "@/app/lib/api";
 import {
   Box, Button, Chip, Dialog, DialogActions, DialogContent,
-  DialogTitle, Grid, IconButton, MenuItem, Pagination, Table,
+  DialogTitle, Grid, IconButton, MenuItem, Table,
   TableBody, TableCell, TableHead, TableRow, TextField,
-  Typography, Tooltip, useMediaQuery, useTheme,
+  Typography, Tooltip, useMediaQuery, useTheme, Pagination,
 } from "@mui/material";
 import {
   Close, ClassOutlined, PersonOutlined, ReceiptOutlined,
@@ -17,6 +17,7 @@ import toast from "react-hot-toast";
 import {
   C, FONT, EASE, inputSx, menuProps, thSx, tdSx,
   GlobalStyles, PageHeader, EmptyState, DataTable, StatCard,
+  FeeStatusChip, StudentCell, PayBar,
 } from "@/components/ui";
 
 // ─── Types ────────────────────────────────────────────────────────────────
@@ -50,25 +51,7 @@ const classLabel = (c: Classroom) => {
 const fmt = (n: number) =>
   new Intl.NumberFormat("en-PK", { minimumFractionDigits: 0 }).format(n);
 
-// ─── Status chip ──────────────────────────────────────────────────────────
-function StatusChip({ status }: { status: Fee["status"] }) {
-  const map = {
-    paid:    { label: "Paid",    color: C.green,  dim: C.greenDim,  icon: <CheckCircleOutlined  sx={{ fontSize: "13px !important", color: `${C.green}  !important` }} /> },
-    partial: { label: "Partial", color: C.accent, dim: C.accentDim, icon: <RemoveCircleOutlined sx={{ fontSize: "13px !important", color: `${C.accent} !important` }} /> },
-    unpaid:  { label: "Unpaid",  color: C.red,    dim: C.redDim,    icon: <CancelOutlined       sx={{ fontSize: "13px !important", color: `${C.red}    !important` }} /> },
-  };
-  const s = map[status] ?? map.unpaid;
-  return (
-    <Chip icon={s.icon} label={s.label} size="small" sx={{
-      backgroundColor: s.dim, color: s.color,
-      fontFamily: FONT, fontWeight: 600, fontSize: "0.7rem",
-      height: 22, border: `1px solid ${s.color}25`,
-      "& .MuiChip-icon": { ml: "6px" },
-    }} />
-  );
-}
-
-// ─── Mono cell value ─────────────────────────────────────────────────────
+// ─── Mono amount cell ─────────────────────────────────────────────────────
 function MonoAmt({ value, color }: { value: number; color?: string }) {
   return (
     <Typography sx={{
@@ -88,7 +71,6 @@ export default function FeeManagementPage() {
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
   const [classes,       setClasses]       = useState<Classroom[]>([]);
-  const [sessions,      setSessions]      = useState<AcademicSession[]>([]);
   const [classId,       setClassId]       = useState("");
   const [month,         setMonth]         = useState("");
   const [orderedMonths, setOrderedMonths] = useState(MONTH_NAMES);
@@ -100,16 +82,15 @@ export default function FeeManagementPage() {
   const [totalPages, setTotalPages] = useState(1);
 
   // Collect dialog
-  const [selectedFee,    setSelectedFee]    = useState<Fee | null>(null);
-  const [paymentAmount,  setPaymentAmount]  = useState("");
-  const [paying,         setPaying]         = useState(false);
+  const [selectedFee,   setSelectedFee]   = useState<Fee | null>(null);
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paying,        setPaying]        = useState(false);
 
   // ── Fetch lookups ──────────────────────────────────────────────────
   useEffect(() => {
     Promise.all([api.get("/classes"), api.get("/sessions")]).then(
       ([classesRes, sessionsRes]) => {
         setClasses(classesRes.data);
-        setSessions(sessionsRes.data);
         const active: AcademicSession = sessionsRes.data[0];
         if (active?.start_date) {
           const startIdx = new Date(active.start_date).getMonth();
@@ -153,8 +134,8 @@ export default function FeeManagementPage() {
   const handleCollect = async () => {
     if (!selectedFee) return;
     const amount = Number(paymentAmount);
-    if (!amount || amount <= 0)              return toast.error("Enter a valid amount");
-    if (amount > selectedFee.due_amount)     return toast.error(`Amount exceeds due of ${fmt(selectedFee.due_amount)}`);
+    if (!amount || amount <= 0)          return toast.error("Enter a valid amount");
+    if (amount > selectedFee.due_amount) return toast.error(`Amount exceeds due of ${fmt(selectedFee.due_amount)}`);
     setPaying(true);
     try {
       await api.post(`/fees/${selectedFee.id}/collect`, { amount });
@@ -167,7 +148,7 @@ export default function FeeManagementPage() {
     } finally { setPaying(false); }
   };
 
-  // ── Summary ────────────────────────────────────────────────────────
+  // ── Summary stats ──────────────────────────────────────────────────
   const totalCollected = fees.reduce((s, f) => s + f.paid_amount, 0);
   const totalDue       = fees.reduce((s, f) => s + f.due_amount,  0);
   const paidCount      = fees.filter(f => f.status === "paid").length;
@@ -177,17 +158,16 @@ export default function FeeManagementPage() {
   return (
     <>
       <GlobalStyles />
-
       <Box sx={{ p: { xs: 1.5, sm: 2.5, md: 3 }, backgroundColor: C.bg, minHeight: "100%" }}>
 
-        {/* ── Header ──────────────────────────────────────────── */}
+        {/* Header */}
         <PageHeader
           title="Fee Management"
           subtitle="Generate and collect student fee payments by class and month"
           isMobile={isMobile}
         />
 
-        {/* ── Filters ─────────────────────────────────────────── */}
+        {/* Filters + Generate */}
         <Grid container spacing={1.5} sx={{ mb: 2.5 }} alignItems="center">
           <Grid item xs={12} sm={4}>
             <TextField
@@ -243,31 +223,26 @@ export default function FeeManagementPage() {
           </Grid>
         </Grid>
 
-        {/* ── Stat cards ──────────────────────────────────────── */}
+        {/* Stat cards — using shared StatCard */}
         {fees.length > 0 && (
           <Grid container spacing={{ xs: 1.5, md: 2 }} sx={{ mb: { xs: 2.5, md: 3 } }}>
             {[
-              { label: "Total Collected", value: `PKR ${fmt(totalCollected)}`, rawValue: paidCount,   color: C.green,  dim: C.greenDim,  icon: CheckCircleOutlined,  delay: 0   },
-              { label: "Total Due",        value: `PKR ${fmt(totalDue)}`,       rawValue: unpaidCount, color: C.red,    dim: C.redDim,    icon: CancelOutlined,       delay: 60  },
-              { label: "Paid Students",    value: String(paidCount),            rawValue: paidCount,   color: C.accent, dim: C.accentDim, icon: PersonOutlined,       delay: 120 },
-              { label: "Pending",          value: String(unpaidCount),          rawValue: unpaidCount, color: C.purple, dim: C.purpleDim, icon: ReceiptOutlined,      delay: 180 },
+              { label: "Collected",     value: `₨${fmt(totalCollected)}`, color: C.green,  dim: C.greenDim,  icon: CheckCircleOutlined, delay: 0   },
+              { label: "Due",           value: `₨${fmt(totalDue)}`,       color: C.red,    dim: C.redDim,    icon: CancelOutlined,      delay: 60  },
+              { label: "Paid Students", value: paidCount,                  color: C.accent, dim: C.accentDim, icon: PersonOutlined,      delay: 120 },
+              { label: "Pending",       value: unpaidCount,                color: C.purple, dim: C.purpleDim, icon: ReceiptOutlined,     delay: 180 },
             ].map((s, i) => (
               <Grid item xs={6} md={3} key={i}>
-                <StatCard label={s.label} value={s.rawValue} color={s.color} dim={s.dim} icon={s.icon} delay={s.delay} />
+                <StatCard {...s} />
               </Grid>
             ))}
           </Grid>
         )}
 
-        {/* ── Table ────────────────────────────────────────────── */}
+        {/* Table */}
         {loading ? (
           <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
-            <Box sx={{
-              width: 32, height: 32, borderRadius: "50%",
-              border: `3px solid ${C.accentDim}`, borderTopColor: C.accent,
-              animation: "spin 0.7s linear infinite",
-              "@keyframes spin": { to: { transform: "rotate(360deg)" } },
-            }} />
+            <Box sx={{ width: 32, height: 32, borderRadius: "50%", border: `3px solid ${C.accentDim}`, borderTopColor: C.accent, animation: "spin 0.7s linear infinite", "@keyframes spin": { to: { transform: "rotate(360deg)" } } }} />
           </Box>
 
         ) : fees.length === 0 ? (
@@ -283,39 +258,18 @@ export default function FeeManagementPage() {
             <Table size="small">
               <TableHead>
                 <TableRow>
-                  {["Student","Admission","Monthly","Exam","Total","Disc%","Discount","Final","Paid","Due","Status",""].map(h => (
+                  {["Student", "Admission", "Monthly", "Exam", "Total", "Disc%", "Discount", "Final", "Payment", "Status", ""].map(h => (
                     <TableCell key={h} sx={thSx}>{h}</TableCell>
                   ))}
                 </TableRow>
               </TableHead>
               <TableBody>
                 {fees.map((fee, i) => (
-                  <TableRow
-                    key={fee.id}
-                    sx={{
-                      "&:hover": { backgroundColor: "rgba(255,255,255,0.02)" },
-                      transition: `background ${EASE}`,
-                      animation: `fadeUp 0.3s ${i * 20}ms ease both`,
-                      "@keyframes fadeUp": {
-                        from: { opacity: 0, transform: "translateY(6px)" },
-                        to:   { opacity: 1, transform: "translateY(0)" },
-                      },
-                    }}
-                  >
-                    {/* Student */}
+                  <TableRow key={fee.id} sx={{ "&:hover": { backgroundColor: "rgba(255,255,255,0.02)" }, transition: `background ${EASE}`, animation: `fadeUp 0.3s ${i * 20}ms ease both`, "@keyframes fadeUp": { from: { opacity: 0, transform: "translateY(6px)" }, to: { opacity: 1, transform: "translateY(0)" } } }}>
+
+                    {/* Student — using shared StudentCell */}
                     <TableCell sx={tdSx}>
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
-                        <Box sx={{
-                          width: 28, height: 28, borderRadius: "50%",
-                          backgroundColor: C.accentDim, border: `1px solid rgba(245,158,11,0.2)`,
-                          display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-                        }}>
-                          <PersonOutlined sx={{ fontSize: 13, color: C.accent }} />
-                        </Box>
-                        <Typography sx={{ fontFamily: FONT, fontWeight: 600, fontSize: "0.855rem", color: C.textPrimary, whiteSpace: "nowrap" }}>
-                          {fee.student_name}
-                        </Typography>
-                      </Box>
+                      <StudentCell name={fee.student_name} />
                     </TableCell>
 
                     <TableCell sx={tdSx}><MonoAmt value={fee.admission_fee} /></TableCell>
@@ -323,34 +277,31 @@ export default function FeeManagementPage() {
                     <TableCell sx={tdSx}><MonoAmt value={fee.exam_fee} /></TableCell>
                     <TableCell sx={tdSx}><MonoAmt value={fee.total_amount} /></TableCell>
 
-                    {/* Disc % */}
+                    {/* Discount % */}
                     <TableCell sx={tdSx}>
                       {fee.discount_percent > 0 ? (
-                        <Chip label={`${fee.discount_percent}%`} size="small" sx={{
-                          backgroundColor: C.purpleDim, color: C.purple,
-                          fontFamily: '"DM Mono", monospace', fontWeight: 700,
-                          fontSize: "0.68rem", height: 20, border: `1px solid ${C.purple}25`,
-                        }} />
+                        <Chip label={`${fee.discount_percent}%`} size="small" sx={{ backgroundColor: C.purpleDim, color: C.purple, fontFamily: FONT, fontWeight: 700, fontSize: "0.68rem", height: 20 }} />
                       ) : (
-                        <Typography sx={{ fontFamily: '"DM Mono", monospace', fontSize: "0.78rem", color: C.textSecondary }}>—</Typography>
+                        <Typography sx={{ fontFamily: FONT, fontSize: "0.78rem", color: C.textSecondary }}>—</Typography>
                       )}
                     </TableCell>
 
                     <TableCell sx={tdSx}><MonoAmt value={fee.discount_amount} color={C.textSecondary} /></TableCell>
-
-                    {/* Final */}
                     <TableCell sx={tdSx}>
-                      <Typography sx={{ fontFamily: '"DM Mono", monospace', fontSize: "0.82rem", fontWeight: 700, color: C.textPrimary }}>
-                        {fmt(fee.final_amount)}
-                      </Typography>
+                      <Typography sx={{ fontFamily: '"DM Mono", monospace', fontSize: "0.82rem", fontWeight: 700, color: C.textPrimary }}>{fmt(fee.final_amount)}</Typography>
                     </TableCell>
 
-                    <TableCell sx={tdSx}><MonoAmt value={fee.paid_amount} color={C.green} /></TableCell>
-                    <TableCell sx={tdSx}><MonoAmt value={fee.due_amount}  color={fee.due_amount > 0 ? C.red : C.textSecondary} /></TableCell>
+                    {/* Payment bar — using shared PayBar */}
+                    <TableCell sx={tdSx}>
+                      <PayBar paid={fee.paid_amount} total={fee.final_amount} />
+                    </TableCell>
 
-                    <TableCell sx={tdSx}><StatusChip status={fee.status} /></TableCell>
+                    {/* Status — using shared FeeStatusChip */}
+                    <TableCell sx={tdSx}>
+                      <FeeStatusChip status={fee.status} />
+                    </TableCell>
 
-                    {/* Collect action */}
+                    {/* Collect button */}
                     <TableCell sx={tdSx}>
                       {fee.status !== "paid" && (
                         <Tooltip title="Collect Payment" arrow>
@@ -364,8 +315,7 @@ export default function FeeManagementPage() {
                               textTransform: "none", borderRadius: "8px", px: 1.25,
                               border: `1px solid ${C.green}30`,
                               "&:hover": { backgroundColor: C.green, color: "#fff" },
-                              transition: `all ${EASE}`,
-                              whiteSpace: "nowrap",
+                              transition: `all ${EASE}`, whiteSpace: "nowrap",
                             }}
                           >
                             Collect
@@ -385,12 +335,8 @@ export default function FeeManagementPage() {
                   count={totalPages} page={page}
                   onChange={(_, v) => setPage(v)}
                   sx={{
-                    "& .MuiPaginationItem-root": {
-                      fontFamily: FONT, color: C.textSecondary, borderColor: C.border,
-                    },
-                    "& .Mui-selected": {
-                      backgroundColor: `${C.accent} !important`, color: "#111827 !important",
-                    },
+                    "& .MuiPaginationItem-root": { fontFamily: FONT, color: C.textSecondary, borderColor: C.border },
+                    "& .Mui-selected": { backgroundColor: `${C.accent} !important`, color: "#111827 !important" },
                   }}
                 />
               </Box>
@@ -398,67 +344,43 @@ export default function FeeManagementPage() {
           </DataTable>
         )}
 
-        {/* ── Collect Payment Dialog ────────────────────────── */}
+        {/* Collect Payment Dialog */}
         <Dialog
           open={!!selectedFee}
           onClose={() => !paying && setSelectedFee(null)}
-          fullWidth maxWidth="xs"
-          fullScreen={isMobile}
-          PaperProps={{
-            sx: {
-              backgroundColor: C.surface,
-              border: isMobile ? "none" : `1px solid ${C.border}`,
-              borderRadius: isMobile ? 0 : "16px",
-              boxShadow: "0 24px 64px rgba(0,0,0,0.5)",
-            },
-          }}
+          fullWidth maxWidth="xs" fullScreen={isMobile}
+          PaperProps={{ sx: { backgroundColor: C.surface, border: isMobile ? "none" : `1px solid ${C.border}`, borderRadius: isMobile ? 0 : "16px", boxShadow: "0 24px 64px rgba(0,0,0,0.5)" } }}
         >
-          <DialogTitle sx={{
-            fontFamily: FONT, fontWeight: 700, fontSize: "1.05rem",
-            color: C.textPrimary, borderBottom: `1px solid ${C.border}`,
-            display: "flex", alignItems: "center", justifyContent: "space-between",
-          }}>
+          <DialogTitle sx={{ fontFamily: FONT, fontWeight: 700, fontSize: "1.05rem", color: C.textPrimary, borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
               <AttachMoneyOutlined sx={{ fontSize: 18, color: C.accent }} />
               Collect Payment
             </Box>
-            {isMobile && (
-              <IconButton onClick={() => setSelectedFee(null)} sx={{ color: C.textSecondary }}>
-                <Close />
-              </IconButton>
-            )}
+            {isMobile && <IconButton onClick={() => setSelectedFee(null)} sx={{ color: C.textSecondary }}><Close /></IconButton>}
           </DialogTitle>
 
           <DialogContent sx={{ pt: 2.5 }}>
-            {/* Student info pill */}
-            <Box sx={{
-              p: 1.75, borderRadius: "10px",
-              backgroundColor: C.accentDim, border: `1px solid rgba(245,158,11,0.18)`,
-              display: "flex", alignItems: "center", gap: 1.5, mb: 2.5,
-            }}>
-              <PersonOutlined sx={{ fontSize: 18, color: C.accent }} />
-              <Box>
-                <Typography sx={{ fontSize: "0.68rem", color: C.accent, fontFamily: FONT, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }}>
-                  Student
-                </Typography>
-                <Typography sx={{ fontSize: "0.95rem", color: C.textPrimary, fontFamily: FONT, fontWeight: 700 }}>
-                  {selectedFee?.student_name}
-                </Typography>
-              </Box>
+            {/* Student info — using shared StudentCell */}
+            <Box sx={{ p: 1.75, borderRadius: "10px", backgroundColor: C.accentDim, border: `1px solid rgba(245,158,11,0.18)`, mb: 2.5 }}>
+              <Typography sx={{ fontSize: "0.65rem", color: C.accent, fontFamily: FONT, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", mb: 0.75 }}>Student</Typography>
+              <StudentCell name={selectedFee?.student_name ?? ''} />
             </Box>
 
-            {/* Due amount row */}
+            {/* Due amount */}
             <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
               <Typography sx={{ fontFamily: FONT, fontSize: "0.82rem", color: C.textSecondary }}>Due Amount</Typography>
               <Chip
-                label={`PKR ${fmt(selectedFee?.due_amount ?? 0)}`} size="small"
-                sx={{
-                  backgroundColor: C.redDim, color: C.red,
-                  fontFamily: '"DM Mono", monospace', fontWeight: 700,
-                  fontSize: "0.78rem", height: 24, border: `1px solid ${C.red}25`,
-                }}
+                label={`₨${fmt(selectedFee?.due_amount ?? 0)}`} size="small"
+                sx={{ backgroundColor: C.redDim, color: C.red, fontFamily: '"DM Mono", monospace', fontWeight: 700, fontSize: "0.78rem", height: 24 }}
               />
             </Box>
+
+            {/* Also show the PayBar for context */}
+            {selectedFee && (
+              <Box sx={{ mb: 2 }}>
+                <PayBar paid={selectedFee.paid_amount} total={selectedFee.final_amount} />
+              </Box>
+            )}
 
             <TextField
               fullWidth autoFocus required
@@ -472,25 +394,12 @@ export default function FeeManagementPage() {
           </DialogContent>
 
           <DialogActions sx={{ px: 3, pb: 2.5, gap: 1, borderTop: `1px solid ${C.border}` }}>
-            <Button
-              onClick={() => setSelectedFee(null)}
-              disabled={paying}
-              sx={{ color: C.textSecondary, fontFamily: FONT, textTransform: "none", borderRadius: "8px" }}
-            >
+            <Button onClick={() => setSelectedFee(null)} disabled={paying}
+              sx={{ color: C.textSecondary, fontFamily: FONT, textTransform: "none", borderRadius: "8px" }}>
               Cancel
             </Button>
-            <Button
-              variant="contained"
-              onClick={handleCollect}
-              disabled={paying || !paymentAmount}
-              sx={{
-                backgroundColor: C.accent, color: "#111827",
-                fontFamily: FONT, fontWeight: 600,
-                textTransform: "none", borderRadius: "10px", px: 3,
-                "&:hover": { backgroundColor: "#FBBF24" },
-                "&.Mui-disabled": { backgroundColor: "rgba(245,158,11,0.2)", color: "rgba(17,24,39,0.4)" },
-              }}
-            >
+            <Button variant="contained" onClick={handleCollect} disabled={paying || !paymentAmount}
+              sx={{ backgroundColor: C.accent, color: "#111827", fontFamily: FONT, fontWeight: 600, textTransform: "none", borderRadius: "10px", px: 3, "&:hover": { backgroundColor: "#FBBF24" }, "&.Mui-disabled": { backgroundColor: "rgba(245,158,11,0.2)", color: "rgba(17,24,39,0.4)" } }}>
               {paying ? "Processing…" : "Submit Payment"}
             </Button>
           </DialogActions>

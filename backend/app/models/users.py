@@ -17,7 +17,7 @@ class User(Base):
     full_name: Mapped[str] = mapped_column(String, nullable=False)
     email: Mapped[str] = mapped_column(String, unique=True, index=True, nullable=False)
     hashed_password: Mapped[Optional[str]] = mapped_column(String)
-
+    is_superadmin:   Mapped[bool]     = mapped_column(Boolean, default=False)
     
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(
@@ -61,6 +61,10 @@ class Organization(Base):
     __tablename__ = "organizations"
     id:Mapped[int] = mapped_column( primary_key=True, index=True)
     name:Mapped[str] = mapped_column(String, nullable=False)
+    status: Mapped[str] = mapped_column(String, default="trial")
+    plan: Mapped[str] = mapped_column(String, default="trial")
+    trial_ends_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+
     created_at:Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
@@ -111,7 +115,10 @@ class Organization(Base):
         "Term",
         back_populates="organization",
         cascade="all, delete-orphan"    )
-
+    employees=relationship(
+        "Employee",
+        back_populates="organization",
+        cascade="all, delete-orphan"    )
 
 
      #invitations

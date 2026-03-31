@@ -12,8 +12,8 @@ class StaffSalary(Base):
 
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False)
 
-    # 👈 generalized member_id instead of teacher_member_id
-    member_id = Column(Integer, ForeignKey("organization_members.id"), nullable=False)
+    
+    employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False)
 
     base_salary = Column(Numeric(10,2), nullable=False)
 
@@ -25,11 +25,11 @@ class StaffSalary(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    member = relationship("OrganizationMember")
+    employee = relationship("Employee")
 
     __table_args__ = (
         UniqueConstraint(
-            "member_id",
+            "employee_id",
             "effective_from",
             name="uq_member_salary_effective_from"
         ),

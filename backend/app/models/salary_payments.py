@@ -12,34 +12,29 @@ class SalaryPayment(Base):
 
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False)
 
-    member_id = Column(Integer, ForeignKey("organization_members.id"), nullable=False)
+
+    employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False)
 
     salary_id = Column(Integer, ForeignKey("staff_salaries.id"), nullable=True)
-    session_id=Column(Integer,ForeignKey("academic_sessions.id"),nullable=False)
+    session_id = Column(Integer, ForeignKey("academic_sessions.id"), nullable=False)
 
     month = Column(Integer, nullable=False)
     year = Column(Integer, nullable=False)
 
-    gross_amount = Column(Numeric(10,2), nullable=False)
-    deductions   = Column(Numeric(10,2), default=0)
-    bonus        = Column(Numeric(10,2), default=0)
-    net_amount   = Column(Numeric(10,2), nullable=False)
+    gross_amount = Column(Numeric(10, 2), nullable=False)
+    deductions = Column(Numeric(10, 2), default=0)
+    bonus = Column(Numeric(10, 2), default=0)
+    net_amount = Column(Numeric(10, 2), nullable=False)
 
-    paid_date      = Column(Date, nullable=True)
-    payment_method = Column(String, nullable=True)  # cash, bank, etc
-    status         = Column(String, default="pending")  # pending / paid
+    paid_date = Column(Date, nullable=True)
+    payment_method = Column(String, nullable=True)
+    status = Column(String, default="pending")
 
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    member = relationship("OrganizationMember")
+    # relationships
+    employee = relationship("Employee")
     salary = relationship("StaffSalary")
-    session=relationship("AcademicSession",back_populates="salary_payments")
+    session = relationship("AcademicSession", back_populates="salary_payments")
 
-    __table_args__ = (
-        UniqueConstraint(
-            "member_id",
-            "month",
-            "year",
-            name="uq_member_salary_month"
-        ),
-    )
+   

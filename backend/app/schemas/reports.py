@@ -30,3 +30,14 @@ class FeeReportResponse(BaseModel):
     total_billed: float
     total_paid: float
     total_pending: float
+
+  #for exam_reports
+class ExamReport(BaseModel):
+    stuudent_name:str
+    exam_name:str
+    grade_name:str
+    subject_name:str
+    marks:float
+    result:str
+    class confiq:
+        from_attributes=True

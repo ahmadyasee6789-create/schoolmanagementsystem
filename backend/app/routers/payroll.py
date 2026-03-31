@@ -1,17 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from datetime import date
-
 from app.db.session import get_db
 from app.models.staff_salary import StaffSalary
 from app.models.salary_payments import SalaryPayment
-from app.models.users import OrganizationMember
+from app.models.employee import Employee
 from app.routers.auth import get_current_user
-from app.models.users import User
+from app.models.users import User,OrganizationMember
 from app.schemas.payroll import (
-    TeacherSalaryCreate,
-    TeacherSalaryUpdate,
-    TeacherSalaryResponse,
+    StaffSalaryCreate,
+    StaffSalaryUpdate,
+    StaffSalaryResponse,
     SalaryGenerate,
     SalaryPay,
     SalaryPaymentResponse
@@ -41,26 +40,26 @@ def get_all_salaries(
 
 @router.post(
     "/staff-salary",
-    response_model=TeacherSalaryResponse,
+    response_model=StaffSalaryResponse,
     status_code=status.HTTP_201_CREATED
 )
-def create_teacher_salary(
-    payload: TeacherSalaryCreate,
+def create_staff_salary(
+    payload: StaffSalaryCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
 
-    teacher = db.query(OrganizationMember).filter(
-        OrganizationMember.id == payload.member_id,
-        OrganizationMember.organization_id == current_user.org_id
+    employee = db.query(Employee).filter(
+        Employee.id == payload.employee_id,
+        Employee.organization_id == current_user.org_id
     ).first()
 
-    if not teacher:
-        raise HTTPException(status_code=404, detail="Teacher not found")
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
 
     salary = StaffSalary(
         organization_id=current_user.org_id,
-        member_id=payload.member_id,
+        employee_id=payload.employee_id,
         base_salary=payload.base_salary,
         pay_frequency=payload.pay_frequency,
         effective_from=payload.effective_from,
@@ -75,9 +74,9 @@ def create_teacher_salary(
 
 @router.get(
     "/staff-salaries",
-    response_model=list[TeacherSalaryResponse]
+    response_model=list[StaffSalaryResponse]
 )
-def get_all_teacher_salaries(
+def get_all_staff_salaries(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -87,11 +86,11 @@ def get_all_teacher_salaries(
     return salaries
 @router.put(
     "/staff-salary/{salary_id}",
-    response_model=TeacherSalaryResponse
+    response_model=StaffSalaryResponse
 )
-def update_teacher_salary(
+def update_staff_salary(
     salary_id: int,
-    payload: TeacherSalaryUpdate,
+    payload: StaffSalaryUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -112,10 +111,7 @@ def update_teacher_salary(
 
     return salary
 
-@router.post(
-    "/generate",
-    response_model=SalaryPaymentResponse
-)
+@router.post("/generate", response_model=SalaryPaymentResponse)
 def generate_salary(
     payload: SalaryGenerate,
     db: Session = Depends(get_db),
@@ -123,24 +119,34 @@ def generate_salary(
     active_session=Depends(get_active_session)
 ):
 
+    # 1. Fetch employee
+    employee = db.query(Employee).filter(
+        Employee.id == payload.employee_id,
+        Employee.organization_id == current_user.org_id
+    ).first()
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+
+    # 2. Get salary structure
     salary = db.query(StaffSalary).filter(
-        StaffSalary.member_id == payload.member_id,
+        StaffSalary.employee_id == employee.id,
         StaffSalary.organization_id == current_user.org_id
     ).first()
-
     if not salary:
         raise HTTPException(status_code=404, detail="Salary structure not found")
 
+    # 3. Check if already generated
     exists = db.query(SalaryPayment).filter(
-        SalaryPayment.member_id == payload.member_id,
+        SalaryPayment.employee_id == employee.id,
+        SalaryPayment.organization_id == current_user.org_id,
         SalaryPayment.month == payload.month,
         SalaryPayment.year == payload.year,
-        SalaryPayment.session_id==active_session.id
+        SalaryPayment.session_id == active_session.id
     ).first()
-
     if exists:
         raise HTTPException(status_code=400, detail="Salary already generated")
 
+    # 4. Calculate salary
     gross = salary.base_salary
     deductions = 0
     bonus = 0
@@ -148,7 +154,7 @@ def generate_salary(
 
     payment = SalaryPayment(
         organization_id=current_user.org_id,
-        member_id=payload.member_id,
+        employee_id=employee.id,
         salary_id=salary.id,
         month=payload.month,
         year=payload.year,
@@ -163,7 +169,6 @@ def generate_salary(
     db.add(payment)
     db.commit()
     db.refresh(payment)
-
     return payment
 @router.post("/generate-all")
 def generate_all_salaries(
@@ -174,32 +179,48 @@ def generate_all_salaries(
     active_session=Depends(get_active_session)
 ):
 
-    salaries = db.query(StaffSalary).filter(
-        StaffSalary.organization_id == current_user.org_id
+    # Get all employees in the organization
+    employees = db.query(Employee).filter(
+        Employee.organization_id == current_user.org_id,
+        Employee.status == "active"
     ).all()
 
     created = []
 
-    for salary in salaries:
+    for employee in employees:
+        # Get salary structure
+        salary = db.query(StaffSalary).filter(
+            StaffSalary.employee_id == employee.id,
+            StaffSalary.organization_id == current_user.org_id
+        ).order_by(StaffSalary.effective_from.desc()).first()
 
+        if not salary:
+            continue  # skip employees without salary setup
+
+        # Skip if already generated
         exists = db.query(SalaryPayment).filter(
-            SalaryPayment.member_id == salary.member_id,
+            SalaryPayment.employee_id == employee.id,
+            SalaryPayment.organization_id==current_user.org_id,
             SalaryPayment.month == month,
             SalaryPayment.year == year,
-            SalaryPayment.salary_id==active_session.id
+            SalaryPayment.session_id == active_session.id
         ).first()
-
         if exists:
             continue
 
         gross = salary.base_salary
         deductions = 0
         bonus = 0
-        net = gross
+        net = gross - deductions + bonus
+        if month < 1 or month > 12:
+          raise HTTPException(status_code=400, detail="Invalid month")
+
+        if year < 2000:
+          raise HTTPException(status_code=400, detail="Invalid year")
 
         payment = SalaryPayment(
             organization_id=current_user.org_id,
-            member_id=salary.member_id,
+            employee_id=employee.id,
             salary_id=salary.id,
             month=month,
             year=year,
@@ -210,16 +231,11 @@ def generate_all_salaries(
             net_amount=net,
             status="pending"
         )
-
         db.add(payment)
         created.append(payment)
 
     db.commit()
-
-    return {
-        "message": "Payroll generated",
-        "count": len(created)
-    }
+    return {"message": "Payroll generated", "count": len(created)}
 @router.post(
     "/pay/{payment_id}",
     response_model=SalaryPaymentResponse
@@ -263,18 +279,18 @@ def pay_salary(
 
     return payment
 @router.get(
-    "/staff/{member_id}",
+    "/staff/{employee_id}",
     response_model=list[SalaryPaymentResponse]
 )
-def teacher_salary_history(
-    member_id: int,
+def Staff_salary_history(
+    employee_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     active_session=Depends(get_active_session)
 ):
 
     payments = db.query(SalaryPayment).filter(
-        SalaryPayment.member_id == member_id,
+        SalaryPayment.employee_id == employee_id,
         SalaryPayment.organization_id == current_user.org_id,
         SalaryPayment.session_id==active_session.id
     ).order_by(

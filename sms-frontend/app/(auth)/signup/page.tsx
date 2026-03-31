@@ -45,7 +45,7 @@ export default function SignUpPage() {
         organization_name:form.organization_name
       });
       toast.success("Account created! Redirecting…");
-      router.push("/");
+      router.push("/signin");
     } catch (err: any) {
       toast.error(err.response?.data?.detail || err.message || "Signup failed");
     } finally {

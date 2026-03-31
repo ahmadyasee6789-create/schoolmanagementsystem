@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status,Body
 from sqlalchemy.orm import Session
 from jose import jwt, JWTError, ExpiredSignatureError
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 import os
 from app.crud.classroom import seed_grades
 from  app.db.session import get_db
@@ -78,11 +78,11 @@ def login(data: UserLogin, db: Session = Depends(get_db)):
 
     if not user or not verify_password(data.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    
 
     # Default values
-    org_id = None
+    org_id   = None
     org_role = None
+    org      = None
 
     # Check organization membership
     org_member = db.query(OrganizationMember).filter(
@@ -90,17 +90,45 @@ def login(data: UserLogin, db: Session = Depends(get_db)):
     ).first()
 
     if org_member:
-        org_id = org_member.organization_id
+        org_id   = org_member.organization_id
         org_role = org_member.role
+        org      = db.query(Organization).filter(
+            Organization.id == org_id
+        ).first()
 
-    # Create access token
+        if org:
+            # ── Step 1: Auto-expire trial if time is up ──
+            if org.status == "trial" and org.trial_ends_at:
+                if datetime.utcnow() > org.trial_ends_at:
+                    org.status = "expired"
+                    db.commit()
+
+            # ── Step 2: Block if expired ──
+            if org.status == "expired":
+                raise HTTPException(
+                    status_code=403,
+                    detail="Your trial has expired. Please contact us to subscribe."
+                )
+
+            # ── Step 3: Block if suspended ──
+            if org.status == "suspended":
+                raise HTTPException(
+                    status_code=403,
+                    detail="Your account is suspended. Please contact support."
+                )
+
+    # Superadmin check
+    is_superadmin = getattr(user, "is_superadmin", False)
+
+    # Create tokens
     access_token = create_access_token(
         data={
-            "sub": user.email,
-            "user_id": user.id,
-            "type": "access",
-            "org_id": org_id,
-            "org_role": org_role,
+            "sub":           user.email,
+            "user_id":       user.id,
+            "type":          "access",
+            "org_id":        org_id,
+            "org_role":      org_role,
+            "is_superadmin": is_superadmin,
         },
         expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
     )
@@ -108,25 +136,43 @@ def login(data: UserLogin, db: Session = Depends(get_db)):
     refresh_token = create_refresh_token(
         data={
             "user_id": user.id,
-            "type": "refresh",
+            "type":    "refresh",
         },
         expires_delta=timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS),
     )
 
+    # Calculate days left
+    days_left = None
+    if org and org.trial_ends_at:
+        days_left = max(0, (org.trial_ends_at - datetime.utcnow()).days)
+
+    # Redirect logic
+    if is_superadmin:
+        redirect = "/superadmin"
+    elif org_member:
+        redirect = "/"
+    else:
+        redirect = "/signup"
+
     return {
         "access_token": access_token,
-        "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        "expires_in":   ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         "refresh_token": refresh_token,
         "user": {
-            "id": user.id,
-            "full_name": user.full_name,
-            "email": user.email,
-            "org_id": org_id,
-            "org_role": org_role,
+            "id":            user.id,
+            "full_name":     user.full_name,
+            "email":         user.email,
+            "org_id":        org_id,
+            "org_role":      org_role,
+            "is_superadmin": is_superadmin,
         },
-        # Redirect logic
-        "redirect": "/dashboard" if org_member else "/setup-school",
+        "trial": {
+            "days_left": days_left,
+            "is_trial":  org.status == "trial" if (org_member and org) else False,
+        },
+        "redirect": redirect,
     }
+
 
 
 
@@ -168,7 +214,7 @@ def me(db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
 # ---------------- LOGOUT ----------------
 @router.post("/logout")
 def logout():
-    # OAuth2 logout = frontend deletes token
+    
     return {"message": "Logged out"}
 
 
@@ -192,7 +238,10 @@ def signup(payload: UserCreate, db: Session = Depends(get_db)):
 
         # Create organization
         new_org = Organization(
-            name=payload.organization_name
+            name=payload.organization_name,
+            status=        "trial",          # instant access!
+           plan=          "trial",
+           trial_ends_at= datetime.utcnow() + timedelta(days=14),
         )
         db.add(new_org)
         db.flush()

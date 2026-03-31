@@ -26,7 +26,7 @@ type Member = {
   id: number;
   full_name: string;
   email: string;
-  role: "admin" | "manager" | "teacher";
+  role: "admin" | "manager" | "teacher"|"accountant";
 };
 
 // ─── Role config ─────────────────────────────────────────────────────────
@@ -34,6 +34,7 @@ const ROLE_CONFIG = {
   admin:   { label: "Admin",   color: C.red,    dim: C.redDim,    icon: AdminPanelSettingsOutlined  },
   manager: { label: "Manager", color: C.blue,   dim: C.blueDim,   icon: ManageAccountsOutlined      },
   teacher: { label: "Teacher", color: C.green,  dim: C.greenDim,  icon: SchoolOutlined              },
+  accountant:{label:"accountant",color:C.purple,dim:C.purpleDim,icon:ManageAccountsOutlined}
 
 };
 

@@ -28,6 +28,8 @@ from app.routers import dmc
 from app.routers import payroll
 from app.routers import promotion
 from app.routers import reports
+from app.routers import employees
+from app.routers  import superadmin
 
 app = FastAPI()
 
@@ -63,4 +65,5 @@ app.include_router(dmc.router)
 app.include_router(payroll.router)
 app.include_router(promotion.router)
 app.include_router(reports.router)
-
+app.include_router(employees.router)
+app.include_router(superadmin.router)

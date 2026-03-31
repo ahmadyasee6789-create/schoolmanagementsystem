@@ -83,7 +83,7 @@ def enroll_student(
         .scalar()
     )
 
-    roll_number = (last_roll or 0) + 1
+    roll_number = (int(last_roll) if last_roll is not None else 0) + 1
 
     enrollment = StudentEnrollment(
         student_id=student_id,

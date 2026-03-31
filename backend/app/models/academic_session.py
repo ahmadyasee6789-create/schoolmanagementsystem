@@ -31,6 +31,7 @@ class AcademicSession(Base):
         )
     subject=relationship("Subject",back_populates="session")
     expenses=relationship("Expense",back_populates="academic_year")
+    classrooms = relationship("Classroom", back_populates="academic_year")
     __table_args__=(UniqueConstraint(
         "name",
         "organization_id",

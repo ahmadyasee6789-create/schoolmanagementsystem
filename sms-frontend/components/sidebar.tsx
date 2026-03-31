@@ -112,7 +112,7 @@ const orgSection = {
   title: "Organization",
   icon: <Apartment sx={{ fontSize: 18 }} />,
   items: [
-    { text: "Team Members", href: "/organization/team" },
+    { text: " Organization Members", href: "/organization/team" },
     { text: "Invitations",  href: "/organization/invitations" },
   ],
 };
@@ -164,6 +164,13 @@ function DrawerContent({
   const router   = useRouter();
   const { user } = useAuthStore();
   const orgName  = useAuthStore((s) => s.user?.org_name);
+  const role = user?.org_role;
+  const roleAccess = {
+  admin: "all",
+  manager: "all",
+  teacher: [ "Classrooms", "Attendance"],
+  accountant: ["Finance"],
+};
 
   const hasAdminAccess = ["admin", "manager"].includes(user?.org_role ?? "");
 
@@ -228,7 +235,7 @@ function DrawerContent({
   });
 
   const expandIconSx = { color: C.textSecondary, fontSize: 18 };
-
+  
   return (
     <Box sx={{
       display: "flex",
@@ -292,6 +299,7 @@ function DrawerContent({
               </Tooltip>
             );
           })}
+          
 
           {menuSections.map((section) => {
             const sectionActive = section.items.some(i => isActive(i.href));

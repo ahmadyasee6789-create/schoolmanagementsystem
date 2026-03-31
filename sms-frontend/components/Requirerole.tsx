@@ -6,7 +6,7 @@ import { useAuthStore } from "@/app/store/authStore";
 
 interface RequireOrgRoleProps {
   children: ReactNode;
-  allowedRoles?: ("admin" | "manager" | "teacher"|"accountant")[];
+  allowedRoles?: ("admin" | "manager" | "teacher" | "accountant")[];
   redirectTo?: string;
 }
 
@@ -27,19 +27,23 @@ export default function RequireOrgRole({
       return;
     }
 
-    // Only check org role if user is an org member
-    if (
-      allowedRoles &&
-      user.org_role &&
-      !allowedRoles.includes(user.org_role as any)
-    ) {
-      router.replace(redirectTo);
-      return;
+    // Role check
+    if (allowedRoles) {
+      // Admin bypass
+      if (user.org_role === "admin") return;
+
+      if (!user.org_role || !allowedRoles.includes(user.org_role as any)) {
+        router.replace(redirectTo);
+        return;
+      }
     }
   }, [user, token, loading, allowedRoles, redirectTo, router]);
 
-  // Prevent rendering until auth/role check is done
-  if (loading || !user) return null;
+  // Loading state
+  if (loading) return <div>Loading...</div>;
+
+  // Prevent flicker
+  if (!user) return null;
 
   return <>{children}</>;
 }

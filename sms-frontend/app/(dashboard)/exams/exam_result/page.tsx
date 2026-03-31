@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   Box, Card, Chip, CircularProgress, Grid, IconButton, LinearProgress,
   MenuItem, Table, TableBody, TableCell, TableHead, TableRow,
@@ -20,9 +20,9 @@ import {
   DeleteDialog, DataTable,
 } from '@/components/ui';
 
-// ─── Types — matched exactly to backend schemas ───────────────────────
-
-// From ExamResultOut
+// ─────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────
 type ExamResult = {
   id: number;
   exam_paper_id: number;
@@ -32,7 +32,6 @@ type ExamResult = {
   gpa: number | null;
 };
 
-// From ExamsPage ExamOut
 type Exam = {
   id: number;
   name: string;
@@ -40,19 +39,17 @@ type Exam = {
   is_published: boolean;
 };
 
-// From ExamPapersPage ExamPaperOut
 type ExamPaper = {
   id: number;
   exam_id: number;
   exam_name: string;
   subject_name: string;
   classroom_id: number;
-  classroom_name: string;   // e.g. "Grade 1 – A"
+  classroom_name: string;
   total_marks: number;
   pass_marks: number;
 };
 
-// From StudentWithEnrollment schema — exact field names from students.py
 type Student = {
   id: number;
   first_name: string;
@@ -65,15 +62,15 @@ type Student = {
   enrollment_id: number;
 };
 
-// Classroom from /classes/ — needed to resolve classroom_id → grade_name + section
-// Matches the response shape from the /classes/ router
 type Classroom = {
   id: number;
-  grade_name: string | null;  // e.g. "Grade 1"
-  section: string;            // e.g. "A"
+  grade_name: string | null;
+  section: string;
 };
 
-// ─── Helpers ──────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// Small helpers
+// ─────────────────────────────────────────────
 const fullName  = (s: Student) => `${s.first_name} ${s.last_name}`.trim();
 const rollLabel = (s: Student) => s.roll_number ?? s.admission_no ?? null;
 
@@ -87,10 +84,12 @@ function gradeColor(grade: string | null) {
   return { color: C.red, dim: C.redDim };
 }
 
-// ─── Mark progress bar ────────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// MarkBar
+// ─────────────────────────────────────────────
 function MarkBar({ obtained, total, pass }: { obtained: number; total: number; pass: number }) {
-  const pct    = total > 0 ? Math.round((obtained / total) * 100) : 0;
-  const color  = obtained >= pass ? C.green : C.red;
+  const pct   = total > 0 ? Math.round((obtained / total) * 100) : 0;
+  const color = obtained >= pass ? C.green : C.red;
   return (
     <Box sx={{ minWidth: 110 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.4 }}>
@@ -106,11 +105,15 @@ function MarkBar({ obtained, total, pass }: { obtained: number; total: number; p
   );
 }
 
-// ─── Student avatar cell ──────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// StudentCell
+// ─────────────────────────────────────────────
 function StudentCell({ student }: { student: Student }) {
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-      <Box sx={{ width: 28, height: 28, borderRadius: '50%', backgroundColor: C.blueDim, border: `1px solid ${C.blue}25`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+      <Box sx={{ width: 28, height: 28, borderRadius: '50%', backgroundColor: C.blueDim,
+        border: `1px solid ${C.blue}25`, display: 'flex', alignItems: 'center',
+        justifyContent: 'center', flexShrink: 0 }}>
         <PersonOutlined sx={{ fontSize: 13, color: C.blue }} />
       </Box>
       <Box>
@@ -127,43 +130,48 @@ function StudentCell({ student }: { student: Student }) {
   );
 }
 
-// ─── Inline marks entry row ───────────────────────────────────────────
-function MarksEntryRow({ student, paper, existing, onSave }: {
+// ─────────────────────────────────────────────
+// MarksEntryRow — controlled, no internal save
+// ─────────────────────────────────────────────
+function MarksEntryRow({ student, paper, existing, onMarkChange }: {
   student: Student;
   paper: ExamPaper;
   existing?: ExamResult;
-  onSave: (studentId: number, marks: number) => Promise<void>;
+  onMarkChange: (enrollmentId: number, value: string) => void;
 }) {
-  const [marks, setMarks]   = useState<string>(existing != null ? String(existing.obtained_marks) : '');
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved]   = useState(existing != null);
+  const [marks, setMarks] = useState<string>(
+    existing != null ? String(existing.obtained_marks) : ''
+  );
 
-  // Sync if existing result loads after render
+  // Sync when existing result arrives after initial render
   useEffect(() => {
-    if (existing != null) { setMarks(String(existing.obtained_marks)); setSaved(true); }
+    if (existing != null) setMarks(String(existing.obtained_marks));
   }, [existing?.id]);
 
-  const val = Number(marks);
+  const val   = Number(marks);
   const valid = marks !== '' && val >= 0 && val <= paper.total_marks;
 
-  const handleSave = async () => {
-    if (!valid) return;
-    setSaving(true);
-    try { await onSave(student.id, val); setSaved(true); }
-    catch { /* error toasted in parent */ }
-    finally { setSaving(false); }
+  const handleChange = (value: string) => {
+    setMarks(value);
+    onMarkChange(student.enrollment_id, value);
   };
+
+  const gc = existing?.grade ? gradeColor(existing.grade) : null;
 
   return (
     <TableRow sx={{ '&:hover': { backgroundColor: 'rgba(255,255,255,0.02)' }, transition: `background ${EASE}` }}>
-      <TableCell sx={{ ...tdSx, fontWeight: 600 }}><StudentCell student={student} /></TableCell>
+      {/* Student */}
+      <TableCell sx={{ ...tdSx, fontWeight: 600 }}>
+        <StudentCell student={student} />
+      </TableCell>
 
       {/* Marks input */}
-      <TableCell sx={{ ...tdSx, width: 130 }}>
-        <TextField size="small" type="number"
+      <TableCell sx={{ ...tdSx, width: 140 }}>
+        <TextField
+          size="small" type="number"
           placeholder={`0–${paper.total_marks}`}
           value={marks}
-          onChange={e => { setMarks(e.target.value); setSaved(false); }}
+          onChange={e => handleChange(e.target.value)}
           inputProps={{ min: 0, max: paper.total_marks }}
           sx={{
             width: 110,
@@ -174,17 +182,17 @@ function MarksEntryRow({ student, paper, existing, onSave }: {
               '&.Mui-focused fieldset': { borderColor: valid ? C.accent : C.red },
             },
             '& input': { color: C.textPrimary, fontFamily: FONT, fontSize: '0.855rem', py: '7px' },
-          }} />
+          }}
+        />
       </TableCell>
 
       <TableCell sx={{ ...tdSx, color: C.textSecondary }}>{paper.total_marks}</TableCell>
       <TableCell sx={{ ...tdSx, color: C.textSecondary }}>{paper.pass_marks}</TableCell>
 
-      {/* Grade — returned by backend after save */}
+      {/* Grade */}
       <TableCell sx={tdSx}>
-        {existing?.grade
-          ? <Chip label={existing.grade} size="small"
-              sx={{ backgroundColor: gradeColor(existing.grade).dim, color: gradeColor(existing.grade).color, fontFamily: FONT, fontWeight: 700, fontSize: '0.72rem', height: 22, border: `1px solid ${gradeColor(existing.grade).color}30` }} />
+        {gc
+          ? <Chip label={existing!.grade} size="small" sx={{ backgroundColor: gc.dim, color: gc.color, fontFamily: FONT, fontWeight: 700, fontSize: '0.72rem', height: 22, border: `1px solid ${gc.color}30` }} />
           : <Typography sx={{ fontFamily: FONT, fontSize: '0.75rem', color: C.textSecondary }}>—</Typography>
         }
       </TableCell>
@@ -194,88 +202,92 @@ function MarksEntryRow({ student, paper, existing, onSave }: {
         {existing?.gpa != null ? existing.gpa.toFixed(2) : '—'}
       </TableCell>
 
-      {/* Save / saved */}
+      {/* Status */}
       <TableCell sx={tdSx}>
-        {saved ? (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            <CheckCircleOutlined sx={{ fontSize: 16, color: C.green }} />
-            <Typography sx={{ fontFamily: FONT, fontSize: '0.72rem', color: C.green }}>Saved</Typography>
-          </Box>
-        ) : (
-          <Tooltip title={!valid ? `Enter 0–${paper.total_marks}` : 'Save marks'} arrow>
-            <span>
-              <IconButton size="small" onClick={handleSave} disabled={saving || !valid}
-                sx={{ color: C.textSecondary, borderRadius: '8px', p: 0.75, '&:hover': { backgroundColor: C.accentDim, color: C.accent }, '&.Mui-disabled': { opacity: 0.3 }, transition: `all ${EASE}` }}>
-                {saving
-                  ? <CircularProgress size={13} sx={{ color: C.accent }} />
-                  : <SaveOutlined sx={{ fontSize: 15 }} />}
-              </IconButton>
-            </span>
-          </Tooltip>
-        )}
+        {existing
+          ? <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <CheckCircleOutlined sx={{ fontSize: 16, color: C.green }} />
+              <Typography sx={{ fontFamily: FONT, fontSize: '0.72rem', color: C.green }}>Saved</Typography>
+            </Box>
+          : <Typography sx={{ fontFamily: FONT, fontSize: '0.72rem', color: C.textSecondary }}>Pending</Typography>
+        }
       </TableCell>
     </TableRow>
   );
 }
 
-// ─── Mobile marks entry card ──────────────────────────────────────────
-function MobileEntryCard({ student, paper, existing, onSave }: {
-  student: Student; paper: ExamPaper;
+// ─────────────────────────────────────────────
+// MobileEntryCard — controlled, no internal save
+// ─────────────────────────────────────────────
+function MobileEntryCard({ student, paper, existing, onMarkChange }: {
+  student: Student;
+  paper: ExamPaper;
   existing?: ExamResult;
-  onSave: (id: number, marks: number) => Promise<void>;
+  onMarkChange: (enrollmentId: number, value: string) => void;
 }) {
-  const [marks, setMarks]   = useState(existing != null ? String(existing.obtained_marks) : '');
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved]   = useState(existing != null);
-  const val   = Number(marks);
-  const valid = marks !== '' && val >= 0 && val <= paper.total_marks;
+  const [marks, setMarks] = useState<string>(
+    existing != null ? String(existing.obtained_marks) : ''
+  );
 
   useEffect(() => {
-    if (existing != null) { setMarks(String(existing.obtained_marks)); setSaved(true); }
+    if (existing != null) setMarks(String(existing.obtained_marks));
   }, [existing?.id]);
+
+  const val   = Number(marks);
+  const valid = marks !== '' && val >= 0 && val <= paper.total_marks;
+  const gc    = existing?.grade ? gradeColor(existing.grade) : null;
+
+  const handleChange = (value: string) => {
+    setMarks(value);
+    onMarkChange(student.enrollment_id, value);
+  };
 
   return (
     <Card sx={{ backgroundColor: C.surface, border: `1px solid ${C.border}`, borderRadius: '12px', p: 2, mb: 1.5 }}>
-      {/* Header row */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.25 }}>
         <StudentCell student={student} />
-        {existing?.grade && (
-          <Chip label={existing.grade} size="small"
-            sx={{ backgroundColor: gradeColor(existing.grade).dim, color: gradeColor(existing.grade).color, fontFamily: FONT, fontWeight: 700, fontSize: '0.72rem', height: 22, ml: 1 }} />
-        )}
+        {gc && <Chip label={existing!.grade} size="small" sx={{ backgroundColor: gc.dim, color: gc.color, fontFamily: FONT, fontWeight: 700, fontSize: '0.72rem', height: 22, ml: 1 }} />}
       </Box>
 
-      {/* Progress bar if result exists */}
-      {existing && (
+      {existing && currentPaperRef && (
         <Box sx={{ mb: 1.5 }}>
           <MarkBar obtained={existing.obtained_marks} total={paper.total_marks} pass={paper.pass_marks} />
         </Box>
       )}
 
-      {/* Marks input */}
-      <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-        <TextField size="small" type="number" placeholder={`0–${paper.total_marks}`}
-          value={marks}
-          onChange={e => { setMarks(e.target.value); setSaved(false); }}
-          inputProps={{ min: 0, max: paper.total_marks }}
-          sx={{ flex: 1,
-            '& .MuiOutlinedInput-root': { backgroundColor: C.inputBg, borderRadius: '8px', '& fieldset': { borderColor: C.border }, '&:hover fieldset': { borderColor: C.accent }, '&.Mui-focused fieldset': { borderColor: C.accent } },
-            '& input': { color: C.textPrimary, fontFamily: FONT, fontSize: '0.855rem' },
-          }} />
-        {saved
-          ? <CheckCircleOutlined sx={{ fontSize: 20, color: C.green, flexShrink: 0 }} />
-          : <IconButton size="small" disabled={saving || !valid}
-              onClick={async () => { setSaving(true); try { await onSave(student.id, val); setSaved(true); } finally { setSaving(false); } }}
-              sx={{ color: C.accent, borderRadius: '8px', p: 0.75, border: `1px solid ${C.accent}30`, flexShrink: 0, '&.Mui-disabled': { opacity: 0.3 } }}>
-              {saving ? <CircularProgress size={14} sx={{ color: C.accent }} /> : <SaveOutlined sx={{ fontSize: 16 }} />}
-            </IconButton>
+      <TextField
+        fullWidth size="small" type="number"
+        placeholder={`0–${paper.total_marks}`}
+        value={marks}
+        onChange={e => handleChange(e.target.value)}
+        inputProps={{ min: 0, max: paper.total_marks }}
+        sx={{
+          '& .MuiOutlinedInput-root': {
+            backgroundColor: C.inputBg, borderRadius: '8px',
+            '& fieldset': { borderColor: marks !== '' && !valid ? C.red : C.border },
+            '&:hover fieldset': { borderColor: C.accent },
+            '&.Mui-focused fieldset': { borderColor: C.accent },
+          },
+          '& input': { color: C.textPrimary, fontFamily: FONT, fontSize: '0.855rem' },
+        }}
+      />
+
+      <Box sx={{ mt: 1, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+        {existing
+          ? <><CheckCircleOutlined sx={{ fontSize: 14, color: C.green }} /><Typography sx={{ fontFamily: FONT, fontSize: '0.7rem', color: C.green }}>Saved</Typography></>
+          : <Typography sx={{ fontFamily: FONT, fontSize: '0.7rem', color: C.textSecondary }}>Pending save</Typography>
         }
       </Box>
     </Card>
   );
 }
 
-// ─── Student picker ───────────────────────────────────────────────────
+// ref used by MobileEntryCard to show MarkBar without prop drilling
+let currentPaperRef: ExamPaper | null = null;
+
+// ─────────────────────────────────────────────
+// StudentPicker (by-student mode)
+// ─────────────────────────────────────────────
 function StudentPicker({ onSelect, selected }: { onSelect: (id: number) => void; selected: number }) {
   const [all, setAll]         = useState<Student[]>([]);
   const [search, setSearch]   = useState('');
@@ -283,9 +295,11 @@ function StudentPicker({ onSelect, selected }: { onSelect: (id: number) => void;
 
   useEffect(() => {
     setLoading(true);
-    // GET /students/ returns List[StudentWithEnrollment]
-    api.get('/students/', { params: { limit: 10 } })
-      .then(r => setAll(Array.isArray(r.data) ? r.data : []))
+    api.get('/students/', { params: { limit: 100 } })
+      .then(r => {
+        const data = Array.isArray(r.data) ? r.data : r.data?.items ?? [];
+        setAll(data);
+      })
       .catch(() => toast.error('Failed to load students'))
       .finally(() => setLoading(false));
   }, []);
@@ -297,8 +311,8 @@ function StudentPicker({ onSelect, selected }: { onSelect: (id: number) => void;
 
   return (
     <Box>
-      <TextField fullWidth placeholder="Search by name or admission no…" value={search} size="small"
-        onChange={e => setSearch(e.target.value)} sx={inputSx}
+      <TextField fullWidth placeholder="Search by name or admission no…" value={search}
+        size="small" onChange={e => setSearch(e.target.value)} sx={inputSx}
         InputProps={{ startAdornment: <Search sx={{ color: C.textSecondary, mr: 1, fontSize: 18 }} /> }} />
 
       {loading ? (
@@ -310,13 +324,15 @@ function StudentPicker({ onSelect, selected }: { onSelect: (id: number) => void;
           {filtered.slice(0, 30).map(s => (
             <Box key={s.id} onClick={() => onSelect(s.id)}
               sx={{
-                display: 'flex', alignItems: 'center', gap: 1.5, p: 1.25, borderRadius: '10px',
+                display: 'flex', alignItems: 'center', gap: 1.5, p: 1.25,
+                borderRadius: '10px', cursor: 'pointer', transition: `all ${EASE}`,
                 border: `1px solid ${selected === s.id ? C.accent : C.border}`,
                 backgroundColor: selected === s.id ? C.accentDim : C.surfaceHover,
-                cursor: 'pointer', transition: `all ${EASE}`,
                 '&:hover': { borderColor: C.accent, backgroundColor: C.accentDim },
               }}>
-              <Box sx={{ width: 28, height: 28, borderRadius: '50%', backgroundColor: C.blueDim, border: `1px solid ${C.blue}25`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Box sx={{ width: 28, height: 28, borderRadius: '50%', backgroundColor: C.blueDim,
+                border: `1px solid ${C.blue}25`, display: 'flex', alignItems: 'center',
+                justifyContent: 'center', flexShrink: 0 }}>
                 <PersonOutlined sx={{ fontSize: 13, color: C.blue }} />
               </Box>
               <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -325,11 +341,16 @@ function StudentPicker({ onSelect, selected }: { onSelect: (id: number) => void;
                 </Typography>
                 <Box sx={{ display: 'flex', gap: 0.75, mt: 0.3, flexWrap: 'wrap' }}>
                   {s.admission_no && (
-                    <Typography sx={{ fontFamily: FONT, fontSize: '0.68rem', color: C.textSecondary }}>{s.admission_no}</Typography>
+                    <Typography sx={{ fontFamily: FONT, fontSize: '0.68rem', color: C.textSecondary }}>
+                      {s.admission_no}
+                    </Typography>
                   )}
                   {s.grade_name && (
-                    <Chip label={`${s.grade_name}${s.section ? ` – ${s.section}` : ''}`} size="small"
-                      sx={{ backgroundColor: C.purpleDim, color: C.purple, fontFamily: FONT, fontWeight: 600, fontSize: '0.62rem', height: 16, border: 'none' }} />
+                    <Chip
+                      label={`${s.grade_name}${s.section ? ` – ${s.section}` : ''}`}
+                      size="small"
+                      sx={{ backgroundColor: C.purpleDim, color: C.purple, fontFamily: FONT, fontWeight: 600, fontSize: '0.62rem', height: 16 }}
+                    />
                   )}
                 </Box>
               </Box>
@@ -347,98 +368,100 @@ function StudentPicker({ onSelect, selected }: { onSelect: (id: number) => void;
   );
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// Main Page
+// ─────────────────────────────────────────────
 export default function ExamResultsPage() {
   const theme    = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const router   = useRouter();
   const { user, loading: authLoading } = useAuthStore();
 
+  // ── View mode ─────────────────────────────
   const [viewMode, setViewMode] = useState<'by-exam' | 'by-student'>('by-exam');
 
+  // ── Data ──────────────────────────────────
   const [exams, setExams]           = useState<Exam[]>([]);
   const [papers, setPapers]         = useState<ExamPaper[]>([]);
   const [classrooms, setClassrooms] = useState<Classroom[]>([]);
   const [students, setStudents]     = useState<Student[]>([]);
   const [results, setResults]       = useState<ExamResult[]>([]);
-  const [loading, setLoading]       = useState(true);
-  const [studentsLoading, setStudentsLoading] = useState(false);
 
-  const [selectedExam, setSelectedExam]       = useState<number>(0);
-  const [selectedPaper, setSelectedPaper]     = useState<number>(0);
+  // ── Selections ────────────────────────────
+  const [selectedExam,    setSelectedExam]    = useState<number>(0);
+  const [selectedPaper,   setSelectedPaper]   = useState<number>(0);
   const [selectedStudent, setSelectedStudent] = useState<number>(0);
-  const [search, setSearch]                   = useState('');
 
-  const [deleteId, setDeleteId] = useState<number | null>(null);
-  const [deleting, setDeleting] = useState(false);
+  // ── Bulk marks state ──────────────────────
+  // { [enrollment_id]: marks_string }
+  const [localMarks, setLocalMarks] = useState<Record<number, string>>({});
 
-  // ── Initial load ──────────────────────────────────────────────────
+  // ── UI state ──────────────────────────────
+  const [search,          setSearch]          = useState('');
+  const [pageLoading,     setPageLoading]     = useState(true);
+  const [studentsLoading, setStudentsLoading] = useState(false);
+  const [bulkSaving,      setBulkSaving]      = useState(false);
+  const [deleteId,        setDeleteId]        = useState<number | null>(null);
+  const [deleting,        setDeleting]        = useState(false);
+
+  // ─────────────────────────────────────────
+  // Initial load — exams, papers, classrooms
+  // ─────────────────────────────────────────
   useEffect(() => {
     if (authLoading) return;
     if (!user) { router.replace('/signin'); return; }
-    setLoading(true);
+
+    setPageLoading(true);
     Promise.all([
       api.get('/exams/'),
       api.get('/exam-papers/'),
       api.get('/classes/'),
-    ]).then(([examsRes, papersRes, classRes]) => {
-      setExams(Array.isArray(examsRes.data) ? examsRes.data : []);
-      setPapers(Array.isArray(papersRes.data) ? papersRes.data : []);
-      setClassrooms(Array.isArray(classRes.data) ? classRes.data : []);
-    }).catch(() => toast.error('Failed to load data'))
-      .finally(() => setLoading(false));
+    ])
+      .then(([examsRes, papersRes, classRes]) => {
+        setExams(Array.isArray(examsRes.data) ? examsRes.data : []);
+        setPapers(Array.isArray(papersRes.data) ? papersRes.data : []);
+        setClassrooms(Array.isArray(classRes.data) ? classRes.data : []);
+      })
+      .catch(() => toast.error('Failed to load data'))
+      .finally(() => setPageLoading(false));
   }, [user, authLoading]);
 
-  // ── Load results when exam changes ────────────────────────────────
-  // 404 here means the exam doesn't belong to this org — treat as empty, never show error
+  // ─────────────────────────────────────────
+  // Load results when exam changes
+  // ─────────────────────────────────────────
   useEffect(() => {
     if (!selectedExam) { setResults([]); return; }
     api.get(`/exam-results/exam/${selectedExam}`)
       .then(r => setResults(Array.isArray(r.data) ? r.data : []))
-      .catch(() => setResults([]));   // 404 or any error → just show empty
+      .catch(() => setResults([]));
   }, [selectedExam]);
 
-  // ── Load students when paper changes ─────────────────────────────
-  // Backend endpoint: GET /students/by-class/{grade_name}/{section}
-  // /classes/ returns: { id, grade_name: "Grade 1", section: "A" }
-  // These are already separate fields — just encode each one individually.
+  // ─────────────────────────────────────────
+  // Load students when paper changes
+  // ─────────────────────────────────────────
   useEffect(() => {
+    setLocalMarks({});
+    setSearch('');
     if (!selectedPaper) { setStudents([]); return; }
-    const paper = papers.find(p => p.id === selectedPaper);
-    if (!paper) return;
 
-    // Resolve classroom_id → { grade_name, section } from /classes/ response
-    const classroom = classrooms.find(c => c.id === paper.classroom_id);
+    const paper     = papers.find(p => p.id === selectedPaper);
+    const classroom = classrooms.find(c => c.id === paper?.classroom_id);
 
     setStudentsLoading(true);
     setStudents([]);
 
-    const fetchStudents = async () => {
-  try {
-    if (classroom?.id) {
-      const res = await api.get(`/students/by-class/${classroom.id}`);
-      setStudents(Array.isArray(res.data) ? res.data : []);
-    } else {
-      const res = await api.get('/students/', { params: { limit: 200 } });
-      setStudents(Array.isArray(res.data) ? res.data : []);
-    }
-  } catch (e) {
-    try {
-      const res = await api.get('/students/', { params: { limit: 200 } });
-      setStudents(Array.isArray(res.data) ? res.data : []);
-    } catch {
-      toast.error("Failed to load students");
-      setStudents([]);
-    }
-  } finally {
-    setStudentsLoading(false);
-  }
-};
+    const url    = classroom?.id ? `/students/by-class/${classroom.id}` : '/students/';
+    const params = classroom?.id ? {} : { limit: 200 };
 
-    fetchStudents();
+    api.get(url, { params })
+      .then(r => setStudents(Array.isArray(r.data) ? r.data : []))
+      .catch(() => toast.error('Failed to load students'))
+      .finally(() => setStudentsLoading(false));
   }, [selectedPaper, classrooms]);
 
-  // ── Load results for student (by-student mode) ────────────────────
+  // ─────────────────────────────────────────
+  // Load results when student changes (by-student mode)
+  // ─────────────────────────────────────────
   useEffect(() => {
     if (!selectedStudent || viewMode !== 'by-student') return;
     api.get(`/exam-results/student/${selectedStudent}`)
@@ -449,14 +472,22 @@ export default function ExamResultsPage() {
       });
   }, [selectedStudent, viewMode]);
 
-  // ── Derived ───────────────────────────────────────────────────────
-  const papersForExam   = papers.filter(p => p.exam_id === selectedExam);
-  const currentPaper    = papers.find(p => p.id === selectedPaper);
-  const currentExam     = exams.find(e => e.id === selectedExam);
-  const isLocked        = currentExam?.is_locked ?? false;
+  // ─────────────────────────────────────────
+  // Derived values
+  // ─────────────────────────────────────────
+  const papersForExam = papers.filter(p => p.exam_id === selectedExam);
+  const currentPaper  = papers.find(p => p.id === selectedPaper);
+  const currentExam   = exams.find(e => e.id === selectedExam);
+  const isLocked      = currentExam?.is_locked ?? false;
 
-  const paperResults    = results.filter(r => r.exam_paper_id === selectedPaper);
-  const resultFor       = (sid: number) => paperResults.find(r => r.student_enrollment_id === sid);
+  // Keep module-level ref in sync for MobileEntryCard
+  currentPaperRef = currentPaper ?? null;
+
+  const paperResults = results.filter(r => r.exam_paper_id === selectedPaper);
+
+  // Find a result by student — matches via enrollment_id
+  const resultFor = (student: Student) =>
+    paperResults.find(r => r.student_enrollment_id === student.enrollment_id);
 
   const filteredStudents = students.filter(s =>
     fullName(s).toLowerCase().includes(search.toLowerCase()) ||
@@ -468,35 +499,83 @@ export default function ExamResultsPage() {
     passing: currentPaper ? paperResults.filter(r => r.obtained_marks >= currentPaper.pass_marks).length : 0,
     graded:  paperResults.filter(r => r.grade).length,
     avgPct:  paperResults.length && currentPaper
-      ? Math.round(paperResults.reduce((s, r) => s + (r.obtained_marks / (currentPaper.total_marks || 1)) * 100, 0) / paperResults.length)
+      ? Math.round(
+          paperResults.reduce((sum, r) => sum + (r.obtained_marks / (currentPaper.total_marks || 1)) * 100, 0)
+          / paperResults.length
+        )
       : 0,
   };
 
-  
-  const saveResult = async (studentId: number, marksObtained: number) => {
-  const student = students.find(s => s.id === studentId);
-  if (!student?.enrollment_id) {
-    toast.error('Enrollment not found for this student');
-    throw new Error('No enrollment_id');
-  }
-  try {
-    await api.post('/exam-results/', {
-      exam_paper_id: selectedPaper,
-      student_enrollment_id: student.enrollment_id,  // ← correct
-      obtained_marks: marksObtained,
-    });
-    const res = await api.get(`/exam-results/exam/${selectedExam}`);
-    setResults(Array.isArray(res.data) ? res.data : []);
-  } catch (err: any) {
-    const detail = err.response?.data?.detail;
-    const status = err.response?.status;
-    if (status === 404) toast.error(detail ?? 'Student not enrolled in this class');
-    else if (status === 400) toast.error(detail ?? 'Invalid marks value');
-    else toast.error('Failed to save result');
-    throw err;
-  }
-};
-  // ── Delete ────────────────────────────────────────────────────────
+  const pendingCount = Object.values(localMarks).filter(v => v !== '').length;
+
+  // ─────────────────────────────────────────
+  // Handlers
+  // ─────────────────────────────────────────
+  const handleMarkChange = useCallback((enrollmentId: number, value: string) => {
+    setLocalMarks(prev => ({ ...prev, [enrollmentId]: value }));
+  }, []);
+
+  const handleExamChange = (examId: number) => {
+    setSelectedExam(examId);
+    setSelectedPaper(0);
+    setStudents([]);
+    setLocalMarks({});
+    setSearch('');
+  };
+
+  // ─────────────────────────────────────────
+  // Bulk save
+  // ─────────────────────────────────────────
+  const saveBulkResults = async () => {
+    if (!currentPaper) return;
+
+    const payload = Object.entries(localMarks)
+      .filter(([, val]) => val !== '' && Number(val) >= 0 && Number(val) <= currentPaper.total_marks)
+      .map(([enrollmentId, val]) => ({
+        exam_paper_id:          selectedPaper,
+        student_enrollment_id:  Number(enrollmentId),
+        obtained_marks:         Number(val),
+      }));
+
+    if (payload.length === 0) {
+      toast.error('No valid marks to save');
+      return;
+    }
+
+    setBulkSaving(true);
+    try {
+      const res = await api.post('/exam-results/bulk', payload);
+      const { succeeded, failed } = res.data as { succeeded: ExamResult[]; failed: any[] };
+
+      if (succeeded.length > 0) {
+        // Merge into results state (upsert)
+        setResults(prev => {
+          const updated = [...prev];
+          for (const r of succeeded) {
+            const idx = updated.findIndex(x => x.id === r.id);
+            if (idx !== -1) updated[idx] = r;
+            else updated.push(r);
+          }
+          return updated;
+        });
+        setLocalMarks({});
+        toast.success(`${succeeded.length} result${succeeded.length > 1 ? 's' : ''} saved`);
+      }
+
+      if (failed.length > 0) {
+        toast.error(`${failed.length} row${failed.length > 1 ? 's' : ''} failed`);
+        console.warn('Failed rows:', failed);
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.detail ?? 'Bulk save failed');
+    } finally {
+      setBulkSaving(false);
+    }
+  };
+
+  // ─────────────────────────────────────────
+  // Delete
+  // ─────────────────────────────────────────
   const confirmDelete = async () => {
     if (!deleteId) return;
     setDeleting(true);
@@ -507,10 +586,52 @@ export default function ExamResultsPage() {
       setDeleteId(null);
     } catch (err: any) {
       toast.error(err.response?.data?.detail ?? 'Failed to delete');
-    } finally { setDeleting(false); }
+    } finally {
+      setDeleting(false);
+    }
   };
 
-  // ─────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────
+  // Render helpers
+  // ─────────────────────────────────────────
+
+  // Locked row — read-only display
+  const LockedRow = ({ s }: { s: Student }) => {
+    const r  = resultFor(s);
+    const gc = r?.grade ? gradeColor(r.grade) : null;
+    return (
+      <TableRow sx={{ '&:hover': { backgroundColor: 'rgba(255,255,255,0.02)' } }}>
+        <TableCell sx={{ ...tdSx, fontWeight: 600 }}><StudentCell student={s} /></TableCell>
+        <TableCell sx={tdSx}>
+          {r && currentPaper
+            ? <MarkBar obtained={r.obtained_marks} total={currentPaper.total_marks} pass={currentPaper.pass_marks} />
+            : <Typography sx={{ fontFamily: FONT, fontSize: '0.78rem', color: C.textSecondary }}>—</Typography>}
+        </TableCell>
+        <TableCell sx={{ ...tdSx, color: C.textSecondary }}>{currentPaper?.total_marks}</TableCell>
+        <TableCell sx={{ ...tdSx, color: C.textSecondary }}>{currentPaper?.pass_marks}</TableCell>
+        <TableCell sx={tdSx}>
+          {gc
+            ? <Chip label={r!.grade} size="small" sx={{ backgroundColor: gc.dim, color: gc.color, fontFamily: FONT, fontWeight: 700, fontSize: '0.72rem', height: 22 }} />
+            : <Typography sx={{ fontFamily: FONT, fontSize: '0.78rem', color: C.textSecondary }}>—</Typography>}
+        </TableCell>
+        <TableCell sx={{ ...tdSx, color: C.blue, fontWeight: 700 }}>
+          {r?.gpa != null ? r.gpa.toFixed(2) : '—'}
+        </TableCell>
+        <TableCell sx={tdSx}>
+          {r
+            ? <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <CheckCircleOutlined sx={{ fontSize: 15, color: C.green }} />
+                <Typography sx={{ fontFamily: FONT, fontSize: '0.72rem', color: C.green }}>Entered</Typography>
+              </Box>
+            : <Typography sx={{ fontFamily: FONT, fontSize: '0.72rem', color: C.textSecondary }}>Missing</Typography>}
+        </TableCell>
+      </TableRow>
+    );
+  };
+
+  // ─────────────────────────────────────────
+  // JSX
+  // ─────────────────────────────────────────
   return (
     <>
       <GlobalStyles />
@@ -522,13 +643,13 @@ export default function ExamResultsPage() {
           isMobile={isMobile}
         />
 
-        {/* Mode toggle */}
+        {/* ── Mode toggle ── */}
         <Box sx={{ display: 'flex', gap: 1, mb: 3 }}>
           {(['by-exam', 'by-student'] as const).map(mode => (
             <Button key={mode} size="small" onClick={() => setViewMode(mode)}
               sx={{
-                fontFamily: FONT, fontWeight: 600, fontSize: '0.78rem', textTransform: 'none',
-                borderRadius: '8px', px: 2,
+                fontFamily: FONT, fontWeight: 600, fontSize: '0.78rem',
+                textTransform: 'none', borderRadius: '8px', px: 2,
                 backgroundColor: viewMode === mode ? C.accent : 'rgba(255,255,255,0.05)',
                 color: viewMode === mode ? '#111827' : C.textSecondary,
                 border: `1px solid ${viewMode === mode ? C.accent : C.border}`,
@@ -539,45 +660,49 @@ export default function ExamResultsPage() {
           ))}
         </Box>
 
-        {loading ? (
+        {/* ── Page loading ── */}
+        {pageLoading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
             <CircularProgress size={32} thickness={3} sx={{ color: C.accent }} />
           </Box>
 
         ) : viewMode === 'by-exam' ? (
-          // ══════════════════════════════════════════════════════
+          // ══════════════════════════════════════════════
           // MODE 1 — ENTER MARKS BY EXAM
-          // ══════════════════════════════════════════════════════
+          // ══════════════════════════════════════════════
           <Box>
+
             {/* Exam + paper selectors */}
             <Card sx={{ backgroundColor: C.surface, border: `1px solid ${C.border}`, borderRadius: '14px', p: 2.5, mb: 3 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
                 <Box sx={{ width: 3, height: 16, borderRadius: 1, backgroundColor: C.accent }} />
                 <Typography sx={{ fontFamily: FONT, fontWeight: 700, fontSize: '0.85rem', color: C.textPrimary }}>
-                  Select Exam & Paper
+                  Select Exam &amp; Paper
                 </Typography>
               </Box>
 
               <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
+                {/* Exam dropdown */}
                 <TextField select fullWidth size="small" label="Exam" sx={inputSx}
                   value={selectedExam}
-                  onChange={e => { setSelectedExam(Number(e.target.value)); setSelectedPaper(0); setStudents([]); setSearch(''); }}
+                  onChange={e => handleExamChange(Number(e.target.value))}
                   SelectProps={{ MenuProps: menuProps }}>
                   <MenuItem value={0} disabled>Choose an exam</MenuItem>
                   {exams.map(e => (
                     <MenuItem key={e.id} value={e.id}>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
                         <Typography sx={{ fontFamily: FONT, fontSize: '0.875rem', flex: 1 }}>{e.name}</Typography>
-                        {e.is_locked && <Chip label="Locked" size="small" sx={{ backgroundColor: C.redDim, color: C.red, fontFamily: FONT, fontWeight: 600, fontSize: '0.62rem', height: 18 }} />}
-                        {!e.is_published && <Chip label="Draft" size="small" sx={{ backgroundColor: 'rgba(255,255,255,0.07)', color: C.textSecondary, fontFamily: FONT, fontWeight: 600, fontSize: '0.62rem', height: 18 }} />}
+                        {e.is_locked    && <Chip label="Locked" size="small" sx={{ backgroundColor: C.redDim,               color: C.red,           fontFamily: FONT, fontWeight: 600, fontSize: '0.62rem', height: 18 }} />}
+                        {!e.is_published && <Chip label="Draft"  size="small" sx={{ backgroundColor: 'rgba(255,255,255,0.07)', color: C.textSecondary, fontFamily: FONT, fontWeight: 600, fontSize: '0.62rem', height: 18 }} />}
                       </Box>
                     </MenuItem>
                   ))}
                 </TextField>
 
+                {/* Paper dropdown */}
                 <TextField select fullWidth size="small" label="Subject / Class" sx={inputSx}
                   value={selectedPaper} disabled={!selectedExam}
-                  onChange={e => { setSelectedPaper(Number(e.target.value)); setSearch(''); }}
+                  onChange={e => setSelectedPaper(Number(e.target.value))}
                   SelectProps={{ MenuProps: menuProps }}>
                   <MenuItem value={0} disabled>Choose subject &amp; class</MenuItem>
                   {papersForExam.map(p => (
@@ -592,27 +717,30 @@ export default function ExamResultsPage() {
               {currentPaper && (
                 <Box sx={{ display: 'flex', gap: 1.5, mt: 2, flexWrap: 'wrap', alignItems: 'center' }}>
                   {[
-                    { label: 'Total Marks', value: currentPaper.total_marks, color: C.accent  },
-                    { label: 'Pass Marks',  value: currentPaper.pass_marks,  color: C.green   },
-                    { label: 'Students',    value: studentsLoading ? '…' : students.length, color: C.blue },
-                    { label: 'Entered',     value: paperResults.length,       color: C.purple  },
+                    { label: 'Total Marks', value: currentPaper.total_marks,                       color: C.accent  },
+                    { label: 'Pass Marks',  value: currentPaper.pass_marks,                        color: C.green   },
+                    { label: 'Students',    value: studentsLoading ? '…' : students.length,        color: C.blue    },
+                    { label: 'Entered',     value: paperResults.length,                            color: C.purple  },
                   ].map(({ label, value, color }) => (
                     <Box key={label} sx={{ px: 1.5, py: 0.6, borderRadius: '8px', backgroundColor: 'rgba(255,255,255,0.04)', border: `1px solid ${C.border}` }}>
                       <Typography sx={{ fontSize: '0.62rem', color: C.textSecondary, fontFamily: FONT, textTransform: 'uppercase', letterSpacing: '0.07em' }}>{label}</Typography>
                       <Typography sx={{ fontSize: '0.92rem', color, fontFamily: FONT, fontWeight: 700, lineHeight: 1.3 }}>{value}</Typography>
                     </Box>
                   ))}
+
                   {isLocked && (
                     <Box sx={{ px: 1.5, py: 0.75, borderRadius: '8px', backgroundColor: C.redDim, border: `1px solid ${C.red}25`, display: 'flex', alignItems: 'center', gap: 0.75 }}>
                       <CancelOutlined sx={{ fontSize: 14, color: C.red }} />
-                      <Typography sx={{ fontSize: '0.75rem', color: C.red, fontFamily: FONT, fontWeight: 600 }}>Exam locked — editing disabled</Typography>
+                      <Typography sx={{ fontSize: '0.75rem', color: C.red, fontFamily: FONT, fontWeight: 600 }}>
+                        Exam locked — editing disabled
+                      </Typography>
                     </Box>
                   )}
                 </Box>
               )}
             </Card>
 
-            {/* Stats when results exist */}
+            {/* Stats */}
             {selectedPaper && paperResults.length > 0 && (
               <Grid container spacing={{ xs: 1.5, md: 2 }} sx={{ mb: 3 }}>
                 {[
@@ -620,110 +748,126 @@ export default function ExamResultsPage() {
                   { label: 'Passing',   value: stats.passing,      color: C.green,  dim: C.greenDim,  icon: CheckCircleOutlined, delay: 60  },
                   { label: 'Graded',    value: stats.graded,       color: C.blue,   dim: C.blueDim,   icon: GradeOutlined,       delay: 120 },
                   { label: 'Avg Score', value: `${stats.avgPct}%`, color: C.purple, dim: C.purpleDim, icon: QuizOutlined,        delay: 180 },
-                ].map((s, i) => <Grid item xs={6} md={3} key={i}><StatCard {...s} /></Grid>)}
+                ].map((s, i) => (
+                  <Grid item xs={6} md={3} key={i}>
+                    <StatCard {...s} />
+                  </Grid>
+                ))}
               </Grid>
             )}
 
-            {/* Marks entry */}
-            {selectedPaper ? (
-              studentsLoading ? (
-                <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
-                  <CircularProgress size={28} thickness={3} sx={{ color: C.accent }} />
-                </Box>
-              ) : (
-                <>
-                  <Box sx={{ mb: 2 }}>
-                    <TextField fullWidth placeholder="Search students…" value={search} size="small"
-                      onChange={e => setSearch(e.target.value)} sx={inputSx}
-                      InputProps={{ startAdornment: <Search sx={{ color: C.textSecondary, mr: 1, fontSize: 18 }} /> }} />
-                  </Box>
-
-                  {filteredStudents.length === 0 ? (
-                    <EmptyState icon={PersonOutlined} message="No students found for this class" />
-                  ) : isMobile ? (
-                    <Box>
-                      {filteredStudents.map(s => (
-                        isLocked
-                          ? (
-                            <Card key={s.id} sx={{ backgroundColor: C.surface, border: `1px solid ${C.border}`, borderRadius: '12px', p: 2, mb: 1.5 }}>
-                              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: resultFor(s.id) ? 1.25 : 0 }}>
-                                <StudentCell student={s} />
-                                {resultFor(s.id)?.grade && (
-                                  <Chip label={resultFor(s.id)!.grade} size="small"
-                                    sx={{ backgroundColor: gradeColor(resultFor(s.id)!.grade).dim, color: gradeColor(resultFor(s.id)!.grade).color, fontFamily: FONT, fontWeight: 700, fontSize: '0.72rem', height: 22 }} />
-                                )}
-                              </Box>
-                              {resultFor(s.id) && currentPaper && (
-                                <MarkBar obtained={resultFor(s.id)!.obtained_marks} total={currentPaper.total_marks} pass={currentPaper.pass_marks} />
-                              )}
-                            </Card>
-                          ) : (
-                            <MobileEntryCard key={s.id} student={s} paper={currentPaper!}
-                              existing={resultFor(s.id)} onSave={saveResult} />
-                          )
-                      ))}
-                    </Box>
-                  ) : (
-                    <DataTable>
-                      <Table>
-                        <TableHead>
-                          <TableRow>
-                            {['Student', 'Marks', 'Total', 'Pass', 'Grade', 'GPA', isLocked ? 'Status' : 'Save'].map(h => (
-                              <TableCell key={h} sx={thSx}>{h}</TableCell>
-                            ))}
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {filteredStudents.map(s =>
-                            isLocked ? (
-                              <TableRow key={s.id} sx={{ '&:hover': { backgroundColor: 'rgba(255,255,255,0.02)' } }}>
-                                <TableCell sx={{ ...tdSx, fontWeight: 600 }}><StudentCell student={s} /></TableCell>
-                                <TableCell sx={tdSx}>
-                                  {resultFor(s.id) && currentPaper
-                                    ? <MarkBar obtained={resultFor(s.id)!.obtained_marks} total={currentPaper.total_marks} pass={currentPaper.pass_marks} />
-                                    : <Typography sx={{ fontFamily: FONT, fontSize: '0.78rem', color: C.textSecondary }}>—</Typography>}
-                                </TableCell>
-                                <TableCell sx={{ ...tdSx, color: C.textSecondary }}>{currentPaper?.total_marks}</TableCell>
-                                <TableCell sx={{ ...tdSx, color: C.textSecondary }}>{currentPaper?.pass_marks}</TableCell>
-                                <TableCell sx={tdSx}>
-                                  {resultFor(s.id)?.grade
-                                    ? <Chip label={resultFor(s.id)!.grade} size="small" sx={{ backgroundColor: gradeColor(resultFor(s.id)!.grade).dim, color: gradeColor(resultFor(s.id)!.grade).color, fontFamily: FONT, fontWeight: 700, fontSize: '0.72rem', height: 22 }} />
-                                    : <Typography sx={{ fontFamily: FONT, fontSize: '0.78rem', color: C.textSecondary }}>—</Typography>}
-                                </TableCell>
-                                <TableCell sx={{ ...tdSx, color: C.blue, fontWeight: 700 }}>
-                                  {resultFor(s.id)?.gpa != null ? resultFor(s.id)!.gpa!.toFixed(2) : '—'}
-                                </TableCell>
-                                <TableCell sx={tdSx}>
-                                  {resultFor(s.id)
-                                    ? <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}><CheckCircleOutlined sx={{ fontSize: 15, color: C.green }} /><Typography sx={{ fontFamily: FONT, fontSize: '0.72rem', color: C.green }}>Entered</Typography></Box>
-                                    : <Typography sx={{ fontFamily: FONT, fontSize: '0.72rem', color: C.textSecondary }}>Missing</Typography>}
-                                </TableCell>
-                              </TableRow>
-                            ) : (
-                              <MarksEntryRow key={s.id} student={s} paper={currentPaper!}
-                                existing={resultFor(s.id)} onSave={saveResult} />
-                            )
-                          )}
-                        </TableBody>
-                      </Table>
-                    </DataTable>
-                  )}
-                </>
-              )
-            ) : (
+            {/* Marks entry area */}
+            {!selectedPaper ? (
               <EmptyState icon={QuizOutlined}
-                message={selectedExam
-                  ? papersForExam.length === 0
-                    ? 'No exam papers set up for this exam yet'
-                    : 'Select a subject / class above to enter marks'
-                  : 'Select an exam to begin'} />
+                message={
+                  !selectedExam           ? 'Select an exam to begin'
+                  : papersForExam.length === 0 ? 'No exam papers set up for this exam yet'
+                  : 'Select a subject / class above to enter marks'
+                }
+              />
+            ) : studentsLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+                <CircularProgress size={28} thickness={3} sx={{ color: C.accent }} />
+              </Box>
+            ) : (
+              <>
+                {/* Search + Save All row */}
+                <Box sx={{ display: 'flex', gap: 1.5, mb: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
+                  <TextField fullWidth placeholder="Search students…" value={search}
+                    size="small" onChange={e => setSearch(e.target.value)} sx={inputSx}
+                    InputProps={{ startAdornment: <Search sx={{ color: C.textSecondary, mr: 1, fontSize: 18 }} /> }} />
+
+                  {!isLocked && (
+                    <Button
+                      onClick={saveBulkResults}
+                      disabled={bulkSaving || pendingCount === 0}
+                      startIcon={bulkSaving
+                        ? <CircularProgress size={14} sx={{ color: '#111827' }} />
+                        : <SaveOutlined sx={{ fontSize: 16 }} />}
+                      sx={{
+                        fontFamily: FONT, fontWeight: 700, fontSize: '0.82rem',
+                        textTransform: 'none', borderRadius: '10px',
+                        px: 2.5, py: 1, whiteSpace: 'nowrap', flexShrink: 0,
+                        backgroundColor: C.accent, color: '#111827',
+                        '&:hover': { backgroundColor: '#FBBF24' },
+                        '&.Mui-disabled': { opacity: 0.4 },
+                      }}>
+                      {bulkSaving ? 'Saving…' : `Save All${pendingCount > 0 ? ` (${pendingCount})` : ''}`}
+                    </Button>
+                  )}
+                </Box>
+
+                {filteredStudents.length === 0 ? (
+                  <EmptyState icon={PersonOutlined} message="No students found for this class" />
+                ) : isMobile ? (
+                  /* ── Mobile cards ── */
+                  <Box>
+                    {filteredStudents.map(s =>
+                      isLocked ? (
+                        <Card key={s.id} sx={{ backgroundColor: C.surface, border: `1px solid ${C.border}`, borderRadius: '12px', p: 2, mb: 1.5 }}>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: resultFor(s) ? 1.25 : 0 }}>
+                            <StudentCell student={s} />
+                            {resultFor(s)?.grade && (
+                              <Chip label={resultFor(s)!.grade} size="small"
+                                sx={{ backgroundColor: gradeColor(resultFor(s)!.grade).dim, color: gradeColor(resultFor(s)!.grade).color, fontFamily: FONT, fontWeight: 700, fontSize: '0.72rem', height: 22 }} />
+                            )}
+                          </Box>
+                          {resultFor(s) && currentPaper && (
+                            <MarkBar obtained={resultFor(s)!.obtained_marks} total={currentPaper.total_marks} pass={currentPaper.pass_marks} />
+                          )}
+                        </Card>
+                      ) : (
+                        <MobileEntryCard key={s.id} student={s} paper={currentPaper!}
+                          existing={resultFor(s)} onMarkChange={handleMarkChange} />
+                      )
+                    )}
+
+                    {/* Mobile Save All */}
+                    {!isLocked && (
+                      <Button fullWidth onClick={saveBulkResults}
+                        disabled={bulkSaving || pendingCount === 0}
+                        startIcon={bulkSaving ? <CircularProgress size={14} sx={{ color: '#111827' }} /> : <SaveOutlined />}
+                        sx={{
+                          mt: 1, fontFamily: FONT, fontWeight: 700, fontSize: '0.85rem',
+                          textTransform: 'none', borderRadius: '10px', py: 1.25,
+                          backgroundColor: C.accent, color: '#111827',
+                          '&:hover': { backgroundColor: '#FBBF24' },
+                          '&.Mui-disabled': { opacity: 0.4 },
+                        }}>
+                        {bulkSaving ? 'Saving…' : `Save All${pendingCount > 0 ? ` (${pendingCount})` : ''}`}
+                      </Button>
+                    )}
+                  </Box>
+                ) : (
+                  /* ── Desktop table ── */
+                  <DataTable>
+                    <Table>
+                      <TableHead>
+                        <TableRow>
+                          {['Student', 'Marks', 'Total', 'Pass', 'Grade', 'GPA', isLocked ? 'Status' : 'Status'].map(h => (
+                            <TableCell key={h} sx={thSx}>{h}</TableCell>
+                          ))}
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {filteredStudents.map(s =>
+                          isLocked
+                            ? <LockedRow key={s.id} s={s} />
+                            : <MarksEntryRow key={s.id} student={s} paper={currentPaper!}
+                                existing={resultFor(s)} onMarkChange={handleMarkChange} />
+                        )}
+                      </TableBody>
+                    </Table>
+                  </DataTable>
+                )}
+              </>
             )}
           </Box>
 
         ) : (
-          // ══════════════════════════════════════════════════════
+          // ══════════════════════════════════════════════
           // MODE 2 — VIEW BY STUDENT
-          // ══════════════════════════════════════════════════════
+          // ══════════════════════════════════════════════
           <Box>
             <Card sx={{ backgroundColor: C.surface, border: `1px solid ${C.border}`, borderRadius: '14px', p: 2.5, mb: 3 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
@@ -736,8 +880,6 @@ export default function ExamResultsPage() {
             </Card>
 
             {selectedStudent > 0 && (
-                
-                
               results.length === 0 ? (
                 <EmptyState icon={GradeOutlined} message="No results found for this student" />
               ) : (
@@ -753,6 +895,7 @@ export default function ExamResultsPage() {
                     <TableBody>
                       {results.map((r, i) => {
                         const paper = papers.find(p => p.id === r.exam_paper_id);
+                        const gc    = r.grade ? gradeColor(r.grade) : null;
                         return (
                           <TableRow key={r.id} sx={{ '&:hover': { backgroundColor: 'rgba(255,255,255,0.02)' }, transition: `background ${EASE}`, animation: `fadeUp 0.35s ${i * 35}ms ease both` }}>
                             <TableCell sx={{ ...tdSx, fontWeight: 600 }}>
@@ -768,8 +911,8 @@ export default function ExamResultsPage() {
                                 : r.obtained_marks}
                             </TableCell>
                             <TableCell sx={tdSx}>
-                              {r.grade
-                                ? <Chip label={r.grade} size="small" sx={{ backgroundColor: gradeColor(r.grade).dim, color: gradeColor(r.grade).color, fontFamily: FONT, fontWeight: 700, fontSize: '0.72rem', height: 22, border: `1px solid ${gradeColor(r.grade).color}30` }} />
+                              {gc
+                                ? <Chip label={r.grade} size="small" sx={{ backgroundColor: gc.dim, color: gc.color, fontFamily: FONT, fontWeight: 700, fontSize: '0.72rem', height: 22, border: `1px solid ${gc.color}30` }} />
                                 : <Typography sx={{ fontFamily: FONT, fontSize: '0.78rem', color: C.textSecondary }}>—</Typography>}
                             </TableCell>
                             <TableCell sx={{ ...tdSx, color: C.blue, fontWeight: 700 }}>
@@ -800,6 +943,7 @@ export default function ExamResultsPage() {
           title="Delete Result?"
           description="This result can be re-entered at any time."
         />
+
       </Box>
     </>
   );

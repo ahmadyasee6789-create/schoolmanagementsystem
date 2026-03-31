@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from app.db.session import get_db
 from app.routers.auth import get_current_user
 from app.models.users import User, Invitation, OrganizationMember
+from app.models.employee import Employee
 from app.utils.hash import hash_password
 from app.utils.email_sender import send_activation_email
 import logging
@@ -173,9 +174,20 @@ def accept_invite(data: AcceptInviteRequest, db: Session = Depends(get_db)):
     db.add(membership)
 
     # 5️⃣ Mark invitation accepted
+    existing_employee=db.query(Employee).filter(
+        Employee.email==user.email,
+        Employee.organization_id==invite.organization_id
+    ).first()
+    if not existing_employee:
+        employee=Employee(
+            full_name=data.name,
+            email=user.email,
+            organization_id=invite.organization_id,
+            role=invite.role
+        )
+        db.add(employee)
     invite.accepted = True
     db.commit()
-
     # 6️⃣ Return JWT token
     from app.routers.auth import create_access_token
     access_token = create_access_token(data={"user_id": user.id})

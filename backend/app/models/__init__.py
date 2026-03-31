@@ -3,7 +3,7 @@ from .users import User, Organization, OrganizationMember, Invitation
 from .students import Student
 from app.models.student_enrollment import StudentEnrollment
 
-from .classroom import Classroom
+from app.models.classroom import Classroom
 from app.models.attendance import Attendance
 from app.models.student_fee import StudentFee
 from app.models.fee_structure import FeeStructure
@@ -18,3 +18,4 @@ from app.models.exams import ExamPaper
 from app.models.exams import ExamResult
 from app.models.staff_salary import StaffSalary
 from app.models.salary_payments import SalaryPayment
+from app.models.employee import Employee

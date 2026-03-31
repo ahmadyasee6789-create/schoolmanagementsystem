@@ -16,6 +16,7 @@ import { useRouter }       from "next/navigation";
 import { useAuthStore }    from "@/app/store/authStore";
 import Link                from "next/link";
 import axios               from "axios";
+import { api }             from "@/app/lib/api";
 
 // ─── Design tokens (mirror Sidebar) ──────────────────────────────────
 const C = {
@@ -51,14 +52,15 @@ export default function Topbar({ mobileOpen = false, setMobileOpen }: TopbarProp
   const open = Boolean(anchorEl);
 
   const handleLogout = async () => {
-    try {
-      logout();
-      await axios.post("http://localhost:8000/auth/logout", {}, { withCredentials: true });
-      router.replace("/signin");
-    } catch {
-      router.replace("/signin");
-    }
-  };
+  try {
+    await api.post("/auth/logout");
+  } catch (error) {
+    console.error("Logout failed:", error);
+  } finally {
+    logout(); // clear Zustand AFTER request
+    router.replace("/signin");
+  }
+};
 
   const initials = user?.full_name
     ? user.full_name.split(" ").map((n: string) => n[0]).slice(0, 2).join("").toUpperCase()

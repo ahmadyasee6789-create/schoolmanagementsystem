@@ -5,7 +5,7 @@ from datetime import date
 
 class TermBase(BaseModel):
     name: str
-    academic_year_id: int
+    # academic_year_id: int
 
 class TermCreate(TermBase):
     pass

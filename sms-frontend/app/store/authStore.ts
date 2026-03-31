@@ -9,6 +9,7 @@ type User = {
   org_id?: number;
   org_role?: string;
   org_name?: string;
+  is_superadmin?: boolean;
 };
 
 type AuthState = {
@@ -24,7 +25,7 @@ type AuthState = {
   clearSession: () => void;
   setToken: (token: string) => void;
 
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<string>;
   hydrate: () => Promise<void>;
   refreshTokenRequest: () => Promise<boolean>;
   logout: () => void;
@@ -70,12 +71,14 @@ export const useAuthStore = create<AuthState>()(
         set({
               user: {
        ...res.data.user,
-      org_name: res.data.user.org_name, },
+      org_name: res.data.user.org_name,
+      is_superadmin: res.data.user.is_superadmin,},
           // user: res.data.user,
           loading: false,
           hydrated: true,
           authReady: true,
         });
+        return res.data.redirect
       },
 
       refreshTokenRequest: async () => {

@@ -10,7 +10,7 @@ from typing import Optional
 class StudentBase(BaseModel):
     first_name: str
     last_name: str
-    # admission_no: str
+    
     gender: Optional[str] = None
     date_of_birth: Optional[date] = None
     phone: Optional[str] = None
