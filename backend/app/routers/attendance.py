@@ -80,6 +80,7 @@ def mark_attendance(
         else:
             db.add(Attendance(
                 student_id=record.student_id,
+                session_id=active_session.id,
                 class_id=class_id,
                 date=attendance_date,
                 status=record.status,

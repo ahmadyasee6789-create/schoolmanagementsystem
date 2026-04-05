@@ -52,14 +52,8 @@ export default function Topbar({ mobileOpen = false, setMobileOpen }: TopbarProp
   const open = Boolean(anchorEl);
 
   const handleLogout = async () => {
-  try {
-    await api.post("/auth/logout");
-  } catch (error) {
-    console.error("Logout failed:", error);
-  } finally {
-    logout(); // clear Zustand AFTER request
-    router.replace("/signin");
-  }
+  logout(); 
+  router.push("/login");
 };
 
   const initials = user?.full_name

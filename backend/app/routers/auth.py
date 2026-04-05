@@ -211,11 +211,7 @@ def me(db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
     }
 
 
-# ---------------- LOGOUT ----------------
-@router.post("/logout")
-def logout():
-    
-    return {"message": "Logged out"}
+
 
 
 

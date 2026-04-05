@@ -25,6 +25,8 @@ from app.dependencies import get_active_session
 
 import logging
 
+from app.models.users import OrganizationMember
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/students", tags=["Students"])
@@ -166,13 +168,18 @@ def list_students(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
     active_session=Depends(get_active_session),
+    
 ):
+    member = db.query(OrganizationMember).filter(
+    OrganizationMember.user_id == current_user.id,
+    OrganizationMember.organization_id == current_user.org_id
+).first()
     try:
         students, total = student_crud.get_students(
             db=db,
             org_id=current_user.org_id,
             active_session=active_session,
-
+            member=member,
             page=page,
             limit=limit,
             search=search,

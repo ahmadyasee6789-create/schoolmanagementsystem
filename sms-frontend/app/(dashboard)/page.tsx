@@ -14,7 +14,7 @@ import { api } from "../lib/api";
 import {
   PeopleOutline, TrendingUp, TrendingDown,
   AccountBalanceWalletOutlined, PaymentsOutlined,
-  ReceiptLongOutlined, SchoolOutlined,
+  ReceiptLongOutlined, SchoolOutlined, People,
 } from "@mui/icons-material";
 
 // ─── Design tokens ────────────────────────────────────────────────────
@@ -46,14 +46,10 @@ const fmt = (n: number) =>
   : `Rs ${n}`;
 
 // ─── Custom tooltip ───────────────────────────────────────────────────
-// ─── Custom tooltip ───────────────────────────────────────────────────
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
-
-  // Keys that are counts, not money
   const countKeys = ["students", "classes", "faculty"];
-   const countNames = ["Active", "Inactive"];
-
+  const countNames = ["Active", "Inactive"];
   return (
     <Box sx={{
       backgroundColor: C.surfaceHover, border: `1px solid ${C.border}`,
@@ -72,17 +68,14 @@ const CustomTooltip = ({ active, payload, label }: any) => {
             <Typography sx={{ fontSize: "0.75rem", color: C.textSecondary, fontFamily: FONT }}>{p.name}</Typography>
           </Box>
           <Typography sx={{ fontSize: "0.78rem", fontWeight: 700, color: C.textPrimary, fontFamily: FONT }}>
-            {/* ✅ Don't format counts as currency */}
-            {countKeys.includes(p.dataKey)|| countNames.includes(p.name)
-              ? p.value
-              : fmt(p.value)
-            }
+            {countKeys.includes(p.dataKey) || countNames.includes(p.name) ? p.value : fmt(p.value)}
           </Typography>
         </Box>
       ))}
     </Box>
   );
 };
+
 // ─── Stat card ────────────────────────────────────────────────────────
 function StatCard({ title, value, icon: Icon, color, dim, sub, delay = 0 }: {
   title: string; value: string | number; icon: React.ElementType;
@@ -183,9 +176,20 @@ function FinSummaryRow({ label, value, color, border = false }: {
 // ═══════════════════════════════════════════════════════════════════════
 export default function HomePage() {
   const { user, loading: authLoading } = useAuthStore();
+  const role = user?.org_role; // "admin" | "teacher" | "accountant"
   const router  = useRouter();
   const [stats,   setStats]   = useState<any>(null);
   const [loading, setLoading] = useState(true);
+
+  // ── What each role can see ─────────────────────────────────────────
+  // Think of this as a list of true/false switches per role
+  const can = {
+    viewStudents:   role === "admin",                              // only admin
+    viewTeachers:   role === "admin",                              // only admin
+    viewFees:       role === "admin" || role === "accountant",     // admin + accountant
+    viewMyClasses:  role === "teacher" || role === "admin",        // teacher + admin
+    viewAttendance: role === "teacher" || role === "admin",        // teacher + admin
+  };
 
   useEffect(() => {
     if (authLoading) return;
@@ -196,8 +200,6 @@ export default function HomePage() {
         const cached = localStorage.getItem("dashboard_stats");
         if (cached) { setStats(JSON.parse(cached)); setLoading(false); }
         const res = await api.get("/dashboard/stats");
-  
-
         const fresh = res.data;
         if (JSON.stringify(fresh) !== cached) {
           localStorage.setItem("dashboard_stats", JSON.stringify(fresh));
@@ -209,7 +211,6 @@ export default function HomePage() {
     })();
   }, [user, router, authLoading]);
 
-  // ── Loading ────────────────────────────────────────────────────────
   if (loading && !stats) return (
     <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", height: "60vh", backgroundColor: C.bg }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono&display=swap');`}</style>
@@ -231,18 +232,15 @@ export default function HomePage() {
     class: item.class, students: item.students,
   }));
 
-  // Chart uses total_expense (ops + salary) for the expense bar
   const financialData = fin.monthlyComparison.map((item: any) => ({
     month:   item.month,
     Revenue: item.revenue,
-    Salary:  item.salary        ?? 0,
-    Expense: item.expense       ?? 0,
+    Salary:  item.salary  ?? 0,
+    Expense: item.expense ?? 0,
     Net:     item.net,
   }));
 
-  // Net profit colour — green if positive, red if negative
   const netColor = fin.net.yearTotal >= 0 ? C.green : C.red;
-
   const axisStyle = { fill: "rgba(249,250,251,0.3)", fontSize: 11, fontFamily: FONT };
 
   return (
@@ -253,6 +251,7 @@ export default function HomePage() {
       `}</style>
 
       {/* ── Header ──────────────────────────────────────────────── */}
+      {/* Everyone sees the header */}
       <Box sx={{ mb: 3.5, animation: "fadeUp 0.4s ease both" }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 0.4 }}>
           <Box sx={{ width: 3, height: 24, borderRadius: 2, backgroundColor: C.accent, boxShadow: `0 0 8px ${C.accent}` }} />
@@ -261,137 +260,259 @@ export default function HomePage() {
           </Typography>
         </Box>
         <Typography sx={{ color: C.textSecondary, fontSize: "0.82rem", fontFamily: FONT, ml: "19px" }}>
-          {fin.year} · Students, faculty and financial performance
+          {fin.year} · {role === "teacher" ? "Your classes and attendance" : "Students, faculty and financial performance"}
         </Typography>
       </Box>
 
       {/* ── Stat cards row 1 — overview ─────────────────────────── */}
+      {/* Each card is wrapped individually so roles only see their cards */}
       <Grid container spacing={2} sx={{ mb: 2.5 }}>
-        {[
-          { title: "Total Students", value: stats.overview.students.total,              icon: PeopleOutline,              color: C.accent, dim: C.accentDim, sub: `${stats.overview.students.active} active`,                   delay: 0   },
-          { title: "Teachers",       value: stats.overview.faculty,                     icon: SchoolOutlined,             color: C.blue,   dim: C.blueDim,   sub: `${stats.overview.classes} classes`,                          delay: 60  },
-          { title: "Year Revenue",   value: fmt(fin.revenue.yearTotal),                 icon: TrendingUp,                 color: C.green,  dim: C.greenDim,  sub: "Total fee collections",                                     delay: 120 },
-          { title: "Net Profit",     value: fmt(fin.net.yearTotal),                     icon: AccountBalanceWalletOutlined, color: netColor, dim: fin.net.yearTotal >= 0 ? C.greenDim : C.redDim, sub: "Revenue − expenses − salaries", delay: 180 },
-        ].map((c, i) => (
-          <Grid item xs={6} md={3} key={i}>
-            <StatCard {...c} />
+
+        {/* ADMIN + TEACHER: Total Students */}
+        {can.viewStudents && (
+          <Grid item xs={6} md={3}>
+            <StatCard
+              title="Total Students" icon={PeopleOutline}
+              value={stats.overview.students.total}
+              color={C.accent} dim={C.accentDim}
+              sub={`${stats.overview.students.active} active`}
+              delay={0}
+            />
           </Grid>
-        ))}
+        )}
+
+        {/* ADMIN only: Teachers */}
+        {can.viewTeachers && (
+          <Grid item xs={6} md={3}>
+            <StatCard
+              title="Teachers" icon={SchoolOutlined}
+              value={stats.overview.faculty}
+              color={C.blue} dim={C.blueDim}
+              sub={`${stats.overview.classes} classes`}
+              delay={60}
+            />
+          </Grid>
+        )}
+
+        {/* ADMIN + ACCOUNTANT: Year Revenue */}
+        {can.viewFees && (
+          <Grid item xs={6} md={3}>
+            <StatCard
+              title="Year Revenue" icon={TrendingUp}
+              value={fmt(fin.revenue.yearTotal)}
+              color={C.green} dim={C.greenDim}
+              sub="Total fee collections"
+              delay={120}
+            />
+          </Grid>
+        )}
+
+        {/* ADMIN + ACCOUNTANT: Net Profit */}
+        {can.viewFees && (
+          <Grid item xs={6} md={3}>
+            <StatCard
+              title="Net Profit" icon={AccountBalanceWalletOutlined}
+              value={fmt(fin.net.yearTotal)}
+              color={netColor} dim={fin.net.yearTotal >= 0 ? C.greenDim : C.redDim}
+              sub="Revenue − expenses − salaries"
+              delay={180}
+            />
+          </Grid>
+        )}
+
+        {/* TEACHER only: My Classes */}
+        {can.viewMyClasses && role === "teacher" && (
+          <Grid item xs={6} md={3}>
+            <StatCard
+              title="My Classes" icon={SchoolOutlined}
+              value={stats.overview.classes}
+              color={C.blue} dim={C.blueDim}
+              sub="Assigned to you"
+              delay={0}
+            />
+          </Grid>
+        )}
+        {/* TEACHER only: Attendance */}
+        {can.viewAttendance && role==="teacher" &&(
+          <Grid item xs={6} md={3}>
+            <StatCard
+              title="Today Attendance"
+              value={
+                 stats.attendance?.marked
+                  ? `Present:${stats.attendance.present} | Absent:${stats.attendance.absent}`
+                  : "Not marked"
+            }
+            sub={
+               stats.attendance?.marked
+                 ?`${stats.attendance.percentage}%`
+                 :""
+            }
+            icon={People}     // ✅ REQUIRED
+      color={C.purple}  dim={C.purpleDim}     // ✅ REQUIRED
+            delay={60}
+            
+            
+            />
+          </Grid>
+        )}
+
       </Grid>
 
       {/* ── Stat cards row 2 — financial breakdown ──────────────── */}
-      <Grid container spacing={2} sx={{ mb: 3 }}>
-        {[
-          { title: "Operational Expenses", value: fmt(fin.expenses.yearTotal),       icon: ReceiptLongOutlined, color: C.red,    dim: C.redDim,    sub: "Non-salary costs",            delay: 0   },
-          { title: "Salaries Paid",         value: fmt(fin.expenses.salaryYearTotal), icon: PaymentsOutlined,   color: C.purple, dim: C.purpleDim, sub: "Teacher payroll disbursed",    delay: 60  },
-          { title: "Pending Payroll",       value: fmt(fin.expenses.pendingSalaryTotal ?? 0), icon: PaymentsOutlined, color: C.accent, dim: C.accentDim, sub: "Generated but not yet paid", delay: 120 },
-          { title: "Total Outflow",         value: fmt(fin.expenses.combinedYearTotal), icon: TrendingDown,     color: C.red,    dim: C.redDim,    sub: "Expenses + salaries combined", delay: 180 },
-        ].map((c, i) => (
-          <Grid item xs={6} md={3} key={i}>
-            <StatCard {...c} />
+      {/* Only admin and accountant see financial breakdown */}
+      {can.viewFees && (
+        <Grid container spacing={2} sx={{ mb: 3 }}>
+
+          <Grid item xs={6} md={3}>
+            <StatCard
+              title="Operational Expenses" icon={ReceiptLongOutlined}
+              value={fmt(fin.expenses.yearTotal)}
+              color={C.red} dim={C.redDim}
+              sub="Non-salary costs"
+              delay={0}
+            />
           </Grid>
-        ))}
-      </Grid>
+
+          <Grid item xs={6} md={3}>
+            <StatCard
+              title="Salaries Paid" icon={PaymentsOutlined}
+              value={fmt(fin.expenses.salaryYearTotal)}
+              color={C.purple} dim={C.purpleDim}
+              sub="Teacher payroll disbursed"
+              delay={60}
+            />
+          </Grid>
+
+          <Grid item xs={6} md={3}>
+            <StatCard
+              title="Pending Payroll" icon={PaymentsOutlined}
+              value={fmt(fin.expenses.pendingSalaryTotal ?? 0)}
+              color={C.accent} dim={C.accentDim}
+              sub="Generated but not yet paid"
+              delay={120}
+            />
+          </Grid>
+
+          <Grid item xs={6} md={3}>
+            <StatCard
+              title="Total Outflow" icon={TrendingDown}
+              value={fmt(fin.expenses.combinedYearTotal)}
+              color={C.red} dim={C.redDim}
+              sub="Expenses + salaries combined"
+              delay={180}
+            />
+          </Grid>
+
+        </Grid>
+      )}
 
       {/* ── Charts row 1 ────────────────────────────────────────── */}
       <Grid container spacing={2.5} sx={{ mb: 2.5 }}>
 
-        {/* Pie — student status */}
-        <Grid item xs={12} md={4}>
-          <ChartCard title="Student Status" subtitle="Active vs inactive enrolment">
-            <ResponsiveContainer width="100%" height={240}>
-              <PieChart>
-                <Pie data={pieData} dataKey="value" nameKey="name"
-                  outerRadius={88} innerRadius={54} paddingAngle={4} strokeWidth={0}>
-                  {pieData.map((_, i) => (
-                    <Cell key={i} fill={[C.accent, C.blue][i]} />
-                  ))}
-                </Pie>
-                <Tooltip content={<CustomTooltip />} />
-                <Legend iconType="circle" iconSize={7}
-                  formatter={v => <span style={{ color: C.textSecondary, fontSize: "0.75rem", fontFamily: FONT }}>{v}</span>} />
-              </PieChart>
-            </ResponsiveContainer>
-          </ChartCard>
-        </Grid>
+        {/* ADMIN only: Pie — student status */}
+        {can.viewStudents && (
+          <Grid item xs={12} md={4}>
+            <ChartCard title="Student Status" subtitle="Active vs inactive enrolment">
+              <ResponsiveContainer width="100%" height={240}>
+                <PieChart>
+                  <Pie data={pieData} dataKey="value" nameKey="name"
+                    outerRadius={88} innerRadius={54} paddingAngle={4} strokeWidth={0}>
+                    {pieData.map((_, i) => (
+                      <Cell key={i} fill={[C.accent, C.blue][i]} />
+                    ))}
+                  </Pie>
+                  <Tooltip content={<CustomTooltip />} />
+                  <Legend iconType="circle" iconSize={7}
+                    formatter={v => <span style={{ color: C.textSecondary, fontSize: "0.75rem", fontFamily: FONT }}>{v}</span>} />
+                </PieChart>
+              </ResponsiveContainer>
+            </ChartCard>
+          </Grid>
+        )}
 
-        {/* Bar — students per class */}
-        <Grid item xs={12} md={8}>
-          <ChartCard title="Students Per Class" subtitle="Enrolment breakdown by grade">
-            <ResponsiveContainer width="100%" height={240}>
-              <BarChart data={classData} barSize={26}>
-                <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-                <XAxis dataKey="class" tick={axisStyle} axisLine={false} tickLine={false} />
-                <YAxis tick={axisStyle} axisLine={false} tickLine={false} />
-                <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(255,255,255,0.04)" }} />
-                <Bar dataKey="students" fill={C.accent} radius={[5, 5, 0, 0]}
-                  background={{ fill: "rgba(255,255,255,0.02)", radius: 5 }} />
-              </BarChart>
-            </ResponsiveContainer>
-          </ChartCard>
-        </Grid>
+        {/* ADMIN + TEACHER: Bar — students per class */}
+        {can.viewMyClasses && (
+          <Grid item xs={12} md={can.viewStudents ? 8 : 12}>
+            {/* md={8} when pie is visible (admin), md={12} when pie is hidden (teacher) */}
+            <ChartCard title="Students Per Class" subtitle="Enrolment breakdown by grade">
+              <ResponsiveContainer width="100%" height={240}>
+                <BarChart data={classData} barSize={26}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+                  <XAxis dataKey="class" tick={axisStyle} axisLine={false} tickLine={false} />
+                  <YAxis tick={axisStyle} axisLine={false} tickLine={false} />
+                  <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(255,255,255,0.04)" }} />
+                  <Bar dataKey="students" fill={C.accent} radius={[5, 5, 0, 0]}
+                    background={{ fill: "rgba(255,255,255,0.02)", radius: 5 }} />
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartCard>
+          </Grid>
+        )}
+
       </Grid>
 
       {/* ── Charts row 2 — financials ────────────────────────────── */}
-      <Grid container spacing={2.5}>
+      {/* Only admin and accountant see financial charts */}
+      {can.viewFees && (
+        <Grid container spacing={2.5}>
 
-        {/* Stacked bar — revenue / salary / expense / net */}
-        <Grid item xs={12} lg={8}>
-          <ChartCard
-            title="Monthly Financial Overview"
-            subtitle={`${fin.year} — Revenue, salaries, expenses and net profit`}
-          >
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={financialData} barSize={14} barGap={3}>
-                <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-                <XAxis dataKey="month" tick={axisStyle} axisLine={false} tickLine={false}
-                  tickFormatter={v => MONTHS_SHORT[v - 1]} />
-                <YAxis tick={axisStyle} axisLine={false} tickLine={false}
-                  tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v} />
-                <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(255,255,255,0.03)" }} />
-                <Legend iconType="circle" iconSize={7}
-                  formatter={v => <span style={{ color: C.textSecondary, fontSize: "0.75rem", fontFamily: FONT }}>{v}</span>} />
-                <Bar dataKey="Revenue" fill={C.green}  radius={[4, 4, 0, 0]} />
-                <Bar dataKey="Expense" fill={C.red}    radius={[4, 4, 0, 0]} />
-                <Bar dataKey="Salary"  fill={C.purple} radius={[4, 4, 0, 0]} />
-                <Bar dataKey="Net"     fill={C.accent} radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </ChartCard>
-        </Grid>
+          {/* Stacked bar — revenue / salary / expense / net */}
+          <Grid item xs={12} lg={8}>
+            <ChartCard
+              title="Monthly Financial Overview"
+              subtitle={`${fin.year} — Revenue, salaries, expenses and net profit`}
+            >
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={financialData} barSize={14} barGap={3}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+                  <XAxis dataKey="month" tick={axisStyle} axisLine={false} tickLine={false}
+                    tickFormatter={v => MONTHS_SHORT[v - 1]} />
+                  <YAxis tick={axisStyle} axisLine={false} tickLine={false}
+                    tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v} />
+                  <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(255,255,255,0.03)" }} />
+                  <Legend iconType="circle" iconSize={7}
+                    formatter={v => <span style={{ color: C.textSecondary, fontSize: "0.75rem", fontFamily: FONT }}>{v}</span>} />
+                  <Bar dataKey="Revenue" fill={C.green}  radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="Expense" fill={C.red}    radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="Salary"  fill={C.purple} radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="Net"     fill={C.accent} radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartCard>
+          </Grid>
 
-        {/* Financial summary card */}
-        <Grid item xs={12} lg={4}>
-          <ChartCard title="Year Summary" subtitle={`Full ${fin.year} financial breakdown`}>
-            <Box sx={{ pt: 1 }}>
-              <FinSummaryRow label="Fee Revenue"          value={fin.revenue.yearTotal}            color={C.green}  />
-              <FinSummaryRow label="Operational Expenses" value={fin.expenses.yearTotal}           color={C.red}    />
-              <FinSummaryRow label="Salaries Paid"        value={fin.expenses.salaryYearTotal}     color={C.purple} />
-              <FinSummaryRow label="Total Outflow"        value={fin.expenses.combinedYearTotal}   color={C.red}    />
-
-              {/* Divider + net */}
-              <Box sx={{ mt: 1.5, pt: 1.5, borderTop: `1px solid ${C.border}` }}>
-                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <Typography sx={{ fontFamily: FONT, fontSize: "0.9rem", fontWeight: 700, color: C.textPrimary }}>
-                    Net Profit
-                  </Typography>
-                  <Typography sx={{ fontFamily: "'DM Mono', monospace", fontSize: "1.05rem", fontWeight: 700, color: netColor }}>
-                    {fmt(fin.net.yearTotal)}
-                  </Typography>
-                </Box>
-                {(fin.expenses.pendingSalaryTotal ?? 0) > 0 && (
-                  <Box sx={{ mt: 1.5, p: 1.25, borderRadius: "8px", backgroundColor: C.accentDim, border: `1px solid ${C.accent}20` }}>
-                    <Typography sx={{ fontFamily: FONT, fontSize: "0.72rem", color: C.accent, fontWeight: 600 }}>
-                      ⚠ Pending payroll: {fmt(fin.expenses.pendingSalaryTotal)} not yet disbursed
+          {/* Financial summary card */}
+          <Grid item xs={12} lg={4}>
+            <ChartCard title="Year Summary" subtitle={`Full ${fin.year} financial breakdown`}>
+              <Box sx={{ pt: 1 }}>
+                <FinSummaryRow label="Fee Revenue"          value={fin.revenue.yearTotal}          color={C.green}  />
+                <FinSummaryRow label="Operational Expenses" value={fin.expenses.yearTotal}         color={C.red}    />
+                <FinSummaryRow label="Salaries Paid"        value={fin.expenses.salaryYearTotal}   color={C.purple} />
+                <FinSummaryRow label="Total Outflow"        value={fin.expenses.combinedYearTotal} color={C.red}    />
+                <Box sx={{ mt: 1.5, pt: 1.5, borderTop: `1px solid ${C.border}` }}>
+                  <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <Typography sx={{ fontFamily: FONT, fontSize: "0.9rem", fontWeight: 700, color: C.textPrimary }}>
+                      Net Profit
+                    </Typography>
+                    <Typography sx={{ fontFamily: "'DM Mono', monospace", fontSize: "1.05rem", fontWeight: 700, color: netColor }}>
+                      {fmt(fin.net.yearTotal)}
                     </Typography>
                   </Box>
-                )}
+                  {(fin.expenses.pendingSalaryTotal ?? 0) > 0 && (
+                    <Box sx={{ mt: 1.5, p: 1.25, borderRadius: "8px", backgroundColor: C.accentDim, border: `1px solid ${C.accent}20` }}>
+                      <Typography sx={{ fontFamily: FONT, fontSize: "0.72rem", color: C.accent, fontWeight: 600 }}>
+                        ⚠ Pending payroll: {fmt(fin.expenses.pendingSalaryTotal)} not yet disbursed
+                      </Typography>
+                    </Box>
+                  )}
+                </Box>
               </Box>
-            </Box>
-          </ChartCard>
-        </Grid>
+            </ChartCard>
+          </Grid>
 
-      </Grid>
+        </Grid>
+      )}
+
     </Box>
   );
 }

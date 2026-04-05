@@ -166,13 +166,28 @@ function DrawerContent({
   const orgName  = useAuthStore((s) => s.user?.org_name);
   const role = user?.org_role;
   const roleAccess = {
-  admin: "all",
-  manager: "all",
-  teacher: [ "Classrooms", "Attendance"],
-  accountant: ["Finance"],
-};
+    admin:"all",
+    manager:"all",
+    teacher:{
+      sections:["Students","Examinations"],
+      items:["Students","Attendance","ExamResults","DMC Generator"]
+    },
+    accountant:{
+      sections:["Finance"],
+      items:["Fee Structure","Fee Management","Expenses","Teacher Salary"]
+    }
+  }
 
-  const hasAdminAccess = ["admin", "manager"].includes(user?.org_role ?? "");
+  const hasAdminAccess=( sectionTitle:string,itemText?:string)=>{
+    if(role=="admin"||role=="manager") return true;
+    const access= roleAccess[role as keyof typeof roleAccess];
+    if(!access) return false;
+    if (typeof access=="string")return true;
+    if (itemText){
+      return access.items.includes(itemText)
+    }
+    return access.sections.includes(sectionTitle);
+    }
 
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(`${href}/`);
@@ -301,7 +316,9 @@ function DrawerContent({
           })}
           
 
-          {menuSections.map((section) => {
+          {menuSections
+           .filter(section=>hasAdminAccess(section.title))
+           .map((section) => {
             const sectionActive = section.items.some(i => isActive(i.href));
             const isOpen = openSection === section.title;
 
@@ -327,7 +344,9 @@ function DrawerContent({
 
                 <Collapse in={isOpen && !collapsed} timeout={280} unmountOnExit>
                   <List disablePadding>
-                    {section.items.map((sub) => {
+                    {section.items
+                    .filter(sub=>hasAdminAccess(section.title,sub.text))
+                    .map((sub) => {
                       const active = isActive(sub.href);
                       return (
                         <ListItemButton
@@ -374,7 +393,7 @@ function DrawerContent({
             );
           })}
 
-          {hasAdminAccess && (
+          {hasAdminAccess("Organization") && (
             <Box>
               <SectionLabel label="Organization" collapsed={collapsed} />
 

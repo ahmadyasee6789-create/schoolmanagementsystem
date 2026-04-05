@@ -109,13 +109,14 @@ def get_students(
     db: Session,
     org_id: int,
     active_session,
+    member,
     page: int = 1,
     limit: int = 10,
     search: Optional[str] = None,
     grade_name: Optional[str] = None,
 ):
     """Return a page of students enriched with their current active enrollment."""
-
+    
     active_enrollment = (
         db.query(
             StudentEnrollment.student_id,
@@ -127,7 +128,10 @@ def get_students(
         )
         .join(Classroom, StudentEnrollment.classroom_id == Classroom.id)
         .join(Grade, Classroom.grade_id == Grade.id)
-        .filter(StudentEnrollment.is_active == True)
+        .filter(
+    StudentEnrollment.is_active == True,
+    *( [Classroom.class_teacher_member_id == member.id] if member.role == "teacher" else [] )
+)
         .subquery()
     )
 
@@ -146,6 +150,22 @@ def get_students(
         )
         .filter(Student.organization_id == org_id)
     )
+    
+    if member.role == "teacher":
+        teacher_class_ids = [
+            c.id for c in db.query(Classroom).filter(
+                Classroom.organization_id == org_id,
+                Classroom.class_teacher_member_id == member.id
+            ).all()
+        ]
+        query = query.filter(
+            active_enrollment.c.student_id.in_(
+                db.query(StudentEnrollment.student_id).filter(
+                    StudentEnrollment.classroom_id.in_(teacher_class_ids),
+                    StudentEnrollment.is_active == True
+                )
+            )
+        )
 
     if search:
         query = query.filter(

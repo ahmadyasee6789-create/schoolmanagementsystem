@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func, extract, cast, Date
-from datetime import datetime
+from datetime import date, datetime
 
 from app.db.session import get_db
 from app.models.users import User, OrganizationMember
@@ -14,6 +14,8 @@ from app.models.salary_payments import SalaryPayment
 from app.models.student_fee import StudentFee
 from app.routers.auth import get_current_user
 from app.dependencies import get_active_session
+from app.routers.classes import validate_teacher_class
+from app.models.attendance import Attendance
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
@@ -36,10 +38,6 @@ def get_dashboard_stats(
     current_year = datetime.utcnow().year
 
     # ── School overview ───────────────────────────────────────────────
-    total_students = db.query(StudentEnrollment).join(Student).filter(
-    Student.organization_id == org_id,
-    StudentEnrollment.session_id == active_session.id
-).count()
 
     active_students = db.query(StudentEnrollment).join(Student).filter(
     Student.organization_id == org_id,
@@ -49,27 +47,64 @@ def get_dashboard_stats(
 
     total_teachers = db.query(OrganizationMember).filter(
         OrganizationMember.organization_id == org_id,
+
         OrganizationMember.role == "teacher"
     ).count()
-
-    total_classes = db.query(Classroom).filter(
+    if membership.role=="teacher":
+        teacher_classes=db.query(Classroom).filter(
+            Classroom.class_teacher_member_id==membership.id,
+            Classroom.organization_id==org_id
+        ).all()
+        class_ids=[c.id for c in teacher_classes]
+    else:
+        class_ids=db.query(Classroom.id).filter(
+            Classroom.organization_id==org_id
+        ).all()
+        class_ids=[c[0] for c in class_ids]
+    total_students=db.query(StudentEnrollment).join(Student).filter(
+        StudentEnrollment.classroom_id.in_(class_ids),
+         StudentEnrollment.session_id == active_session.id,
+    Student.organization_id == org_id,
+    ).count()
+    today=date.today()
+    attendance=db.query(Attendance).filter(
+        Attendance.class_id.in_(class_ids),
+        Attendance.session_id==active_session.id,
+        Attendance.date==today
+    )
+    attendance_exists=attendance.first()
+    present_count=attendance.filter(
+        Attendance.status=="present"
+    ).count()
+    absent_count=attendance.filter(
+        Attendance.status=="absent"
+    ).count()
+    percentage = 0
+    if total_students > 0:
+        percentage = round((present_count / total_students) * 100, 2)
+  # For teacher
+    if membership.role == "teacher":
+        total_classes = db.query(Classroom).filter(
+           Classroom.organization_id == org_id,
+           Classroom.class_teacher_member_id == membership.id
+    ).count()
+    else:
+      total_classes = db.query(Classroom).filter(
         Classroom.organization_id == org_id
     ).count()
 
     students_per_class = (
     db.query(
         Grade.name.label("grade_name"),
-        func.count(StudentEnrollment.student_id).label("student_count")
+        Classroom.section.label("class_name"),
+        func.count(StudentEnrollment.id).label("student_count")
     )
-    .select_from(Classroom)
-    .join(Grade, Classroom.grade_id == Grade.id)
-    .outerjoin(
-        StudentEnrollment,
-        (Classroom.id == StudentEnrollment.classroom_id) &
-        (StudentEnrollment.session_id == active_session.id)
-    )
+    .join(Classroom, Classroom.grade_id == Grade.id)
+    .join(StudentEnrollment, StudentEnrollment.classroom_id == Classroom.id)
     .filter(Classroom.organization_id == org_id)
-    .group_by(Grade.id, Grade.name)
+            # Classroom.class_teacher_member_id==teacher.id,)
+    .group_by(Grade.name,Grade.display_order, Classroom.section)
+    .order_by(Grade.display_order, Classroom.section)
     .all()
 )
 
@@ -176,16 +211,24 @@ def get_dashboard_stats(
             "faculty":  total_teachers,
             "classes":  total_classes,
             "studentsPerClass": [
-                {"class": name, "students": count}
-                for name, count in students_per_class
+                # ✅ Combine them server-side before sending
+{"class": f"{row.grade_name} {row.class_name}", "students": row.student_count}
+for row in students_per_class
             ],
-        },
+     },
+        "attendance":{
+               "total":total_students,
+               "present":present_count,
+            "absent":absent_count,
+            "percentage":percentage,
+               "marked":True if attendance_exists else False
+         },
 
         "financials": {
             "year": current_year,
 
             "revenue": {
-                "yearTotal": (total_year_revenue, 2),
+                "yearTotal": round(total_year_revenue, 2),
             },
 
             "expenses": {
