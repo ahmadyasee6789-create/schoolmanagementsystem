@@ -39,11 +39,6 @@ def get_dashboard_stats(
 
     # ── School overview ───────────────────────────────────────────────
 
-    active_students = db.query(StudentEnrollment).join(Student).filter(
-    Student.organization_id == org_id,
-    StudentEnrollment.session_id == active_session.id,
-    Student.is_active.is_(True)
-).count()
 
     total_teachers = db.query(OrganizationMember).filter(
         OrganizationMember.organization_id == org_id,
@@ -61,6 +56,12 @@ def get_dashboard_stats(
             Classroom.organization_id==org_id
         ).all()
         class_ids=[c[0] for c in class_ids]
+    active_students = db.query(StudentEnrollment).join(Student).filter(
+    Student.organization_id == org_id,
+    StudentEnrollment.session_id == active_session.id,
+    StudentEnrollment.classroom_id.in_(class_ids),
+    Student.is_active.is_(True)
+).count()
     total_students=db.query(StudentEnrollment).join(Student).filter(
         StudentEnrollment.classroom_id.in_(class_ids),
          StudentEnrollment.session_id == active_session.id,
@@ -93,7 +94,7 @@ def get_dashboard_stats(
         Classroom.organization_id == org_id
     ).count()
 
-    students_per_class = (
+    spc_query = (
     db.query(
         Grade.name.label("grade_name"),
         Classroom.section.label("class_name"),
@@ -102,8 +103,16 @@ def get_dashboard_stats(
     .join(Classroom, Classroom.grade_id == Grade.id)
     .join(StudentEnrollment, StudentEnrollment.classroom_id == Classroom.id)
     .filter(Classroom.organization_id == org_id)
-            # Classroom.class_teacher_member_id==teacher.id,)
-    .group_by(Grade.name,Grade.display_order, Classroom.section)
+)
+
+    if membership.role == "teacher":
+      spc_query = spc_query.filter(
+        Classroom.class_teacher_member_id == membership.id
+    )
+
+    students_per_class = (
+    spc_query
+    .group_by(Grade.name, Grade.display_order, Classroom.section)
     .order_by(Grade.display_order, Classroom.section)
     .all()
 )
