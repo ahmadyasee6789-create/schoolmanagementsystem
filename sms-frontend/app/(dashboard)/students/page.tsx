@@ -10,6 +10,7 @@ import {
 import { Add, Edit, Delete, Search } from '@mui/icons-material';
 import { api } from '@/app/lib/api';
 import { usePaginatedQuery } from '@/app/hooks/usePaginatedQuery';
+import { useAuthStore } from '@/app/store/authStore';
 
 // ─── Design tokens ────────────────────────────────────────────────────
 const C = {
@@ -139,15 +140,27 @@ export default function StudentsPage() {
   const [grades, setGrades] = useState<Grade[]>([]);
   const [loadingClasses, setLoadingClasses] = useState(true);
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
-
-  useEffect(() => {
-    Promise.all([api.get('/classes'), api.get('/grades'), api.get('/sessions/active')])
-      .then(([c, g, s]) => {
-        setClasses(c.data); setGrades(g.data);
-        setActiveSessionId(s.data?.id ?? null);
-        setLoadingClasses(false);
-      });
-  }, []);
+  const {user, hydrated} = useAuthStore();
+useEffect(() => {
+  // Only fetch data if user is authenticated
+  if (!hydrated || !user) return;
+  
+  Promise.all([
+    api.get('/classes'), 
+    api.get('/grades'), 
+    api.get('/sessions/active')
+  ])
+    .then(([c, g, s]) => {
+      setClasses(c.data); 
+      setGrades(g.data);
+      setActiveSessionId(s.data?.id ?? null);
+      setLoadingClasses(false);
+    })
+    .catch(err => {
+      console.error('Failed to fetch dashboard data:', err);
+      setLoadingClasses(false);
+    });
+}, [user, hydrated]); // Add dependencies
 
   const { data: students = [], loading, refetch, page, totalPages, setPage } = usePaginatedQuery({
     fetcher: async ({ page, limit, search, grade_name }) => {
