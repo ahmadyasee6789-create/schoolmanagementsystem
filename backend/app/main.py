@@ -31,7 +31,7 @@ from app.routers import reports
 from app.routers import employees
 from app.routers import superadmin
 
-app = FastAPI()
+app = FastAPI(root_path="/")
 
 # ✅ Use regex to allow ALL Vercel preview deployments
 app.add_middleware(
