@@ -143,6 +143,7 @@ export default function AcademicSessionsPage() {
      console.log('=== ENV VAR DEBUG ===');
   console.log('NEXT_PUBLIC_API_URL:', process.env.NEXT_PUBLIC_API_URL);
   console.log('Full API URL:', `${process.env.NEXT_PUBLIC_API_URL}/sessions`);
+  console.log('ENV CHECK:', process.env.NEXT_PUBLIC_API_URL);
    },
    []);
 
