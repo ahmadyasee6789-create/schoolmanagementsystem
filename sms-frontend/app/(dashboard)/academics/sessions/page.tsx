@@ -139,7 +139,12 @@ export default function AcademicSessionsPage() {
     finally  { setLoading(false); }
   };
 
-  useEffect(() => { fetchSessions(); }, []);
+  useEffect(() => { fetchSessions();
+     console.log('=== ENV VAR DEBUG ===');
+  console.log('NEXT_PUBLIC_API_URL:', process.env.NEXT_PUBLIC_API_URL);
+  console.log('Full API URL:', `${process.env.NEXT_PUBLIC_API_URL}/sessions`);
+   },
+   []);
 
   // ── Create ─────────────────────────────────────────────────────────
   const handleCreate = async () => {
