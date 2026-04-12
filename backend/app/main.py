@@ -32,12 +32,13 @@ from app.routers import employees
 from app.routers  import superadmin
 
 app = FastAPI()
-
+FRONTEND_URL = os.getenv("FRONTEND_URL", "https://schoolmanagementsystem-beta.vercel.app")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",
         "http://127.0.0.1:3000",
+        FRONTEND_URL
     ],
     allow_credentials=True,
     allow_methods=["*"],
