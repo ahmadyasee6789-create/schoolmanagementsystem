@@ -466,7 +466,7 @@ export function AttBar({ pct }: { pct: number }) {
 export function GradeChip({ grade }: { grade: string | null }) {
   if (!grade) return <Typography sx={{ fontFamily: FONT, fontSize: '0.78rem', color: C.textSecondary }}>—</Typography>;
   const u = grade.toUpperCase();
-  let color = C.red, dim = C.redDim;
+  let color: string = C.red, dim: string = C.redDim;
   if (['A+','A','A1'].includes(u)) { color = C.green;  dim = C.greenDim;  }
   else if (['B+','B','B1'].includes(u)) { color = C.blue;   dim = C.blueDim;   }
   else if (['C+','C','C1'].includes(u)) { color = C.accent; dim = C.accentDim; }
