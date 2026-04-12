@@ -29,18 +29,14 @@ from app.routers import payroll
 from app.routers import promotion
 from app.routers import reports
 from app.routers import employees
-from app.routers  import superadmin
+from app.routers import superadmin
 
 app = FastAPI()
-FRONTEND_URL = os.getenv("FRONTEND_URL", "https://schoolmanagementsystem-beta.vercel.app")
+
+# ✅ Use regex to allow ALL Vercel preview deployments
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "https://schoolmanagementsystem-73a4wvby3.vercel.app",
-        FRONTEND_URL
-    ],
+    allow_origin_regex=r'https://.*\.vercel\.app|http://localhost:3000|http://127\.0\.0\.1:3000',
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
