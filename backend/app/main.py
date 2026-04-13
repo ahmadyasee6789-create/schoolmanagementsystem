@@ -30,9 +30,9 @@ from app.routers import promotion
 from app.routers import reports
 from app.routers import employees
 from app.routers import superadmin
-
-app = FastAPI(root_path="/")
-
+from starlette.middleware.trustedhost import TrustedHostMiddleware
+app = FastAPI(root_path="/", redirect_slashes=False)
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
 # ✅ Use regex to allow ALL Vercel preview deployments
 app.add_middleware(
     CORSMiddleware,
