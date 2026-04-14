@@ -413,9 +413,9 @@ export default function ExamResultsPage() {
 
     setPageLoading(true);
     Promise.all([
-      api.get('/exams/'),
-      api.get('/exam-papers/'),
-      api.get('/classes/'),
+      api.get('/exams'),
+      api.get('/exam-papers'),
+      api.get('/classes'),
     ])
       .then(([examsRes, papersRes, classRes]) => {
         setExams(Array.isArray(examsRes.data) ? examsRes.data : []);

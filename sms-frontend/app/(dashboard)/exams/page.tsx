@@ -273,7 +273,7 @@ export default function ExamsPage() {
 
   const fetchTerms = async () => {
     try {
-      const res = await api.get('/terms/');
+      const res = await api.get('/terms');
       const data = Array.isArray(res.data) ? res.data : [];
       setTerms(data);
       // Auto-select first term if only one exists
@@ -283,7 +283,7 @@ export default function ExamsPage() {
 
   const fetchExams = async () => {
     try {
-      const res = await api.get('/exams/');
+      const res = await api.get('/exams');
       setExams(Array.isArray(res.data) ? res.data : []);
     } catch (e: any) {
       toast.error('Failed to load exams');
@@ -356,7 +356,7 @@ export default function ExamsPage() {
         await api.put(`/exams/${editingId}`, payload);
         toast.success('Exam updated');
       } else {
-        await api.post('/exams/', payload);
+        await api.post('/exams', payload);
         toast.success('Exam scheduled');
       }
       setDialogOpen(false);

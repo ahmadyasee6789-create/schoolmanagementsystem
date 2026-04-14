@@ -255,7 +255,7 @@ export default function ExamPapersPage() {
   const fetchDeps = async () => {
     try {
       const [examsRes, classRes, subRes] = await Promise.all([
-        api.get('/exams/'),
+        api.get('/exams'),
         api.get('/classes'),
         api.get('/subjects'),
       ]);
