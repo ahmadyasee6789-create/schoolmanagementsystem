@@ -13,7 +13,7 @@ from app.dependencies import get_active_session
 
 router = APIRouter(prefix="/subjects", tags=["Subjects"])
 
-@router.post("/", response_model=SubjectResponse)
+@router.post("", response_model=SubjectResponse)
 def create_subject(
     subject_data: SubjectCreate,
     db: Session = Depends(get_db),
@@ -90,7 +90,7 @@ def get_all_assignments(
 
     return result
 
-@router.get("/", response_model=List[SubjectResponse])
+@router.get("", response_model=List[SubjectResponse])
 def get_subjects(
     skip: int = 0,
     limit: int = 100,
