@@ -138,6 +138,9 @@ export default function AcademicSessionsPage() {
     } catch { toast.error("Failed to load sessions"); }
     finally  { setLoading(false); }
   };
+    useEffect(()=>{
+      fetchSessions();
+     },[]);
 
 
 
