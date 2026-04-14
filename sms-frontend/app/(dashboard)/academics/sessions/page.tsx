@@ -133,7 +133,7 @@ export default function AcademicSessionsPage() {
   // ── Fetch ──────────────────────────────────────────────────────────
   const fetchSessions = async () => {
     try {
-      const res = await api.get("/sessions");
+      const res = await api.get("/sessions/");
       setSessions(res.data);
     } catch { toast.error("Failed to load sessions"); }
     finally  { setLoading(false); }
@@ -153,7 +153,7 @@ export default function AcademicSessionsPage() {
       return toast.error("Please fill in all fields");
     setSaving(true);
     try {
-      await api.post("/sessions", { ...form, is_active: false });
+      await api.post("/sessions/", { ...form, is_active: false });
       toast.success("Session created");
       setOpen(false);
       setForm({ name: "", start_date: "", end_date: "" });
