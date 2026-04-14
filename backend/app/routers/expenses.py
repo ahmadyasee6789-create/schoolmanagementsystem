@@ -12,7 +12,7 @@ from app.models.expensecategory import ExpenseCategory
 from app.dependencies import get_active_session
 
 router=APIRouter(prefix="/expenses",tags=["expenses"])
-@router.post("/")
+@router.post("")
 def add_expenses(
         expense: ExpenseCreate,
         db:Session=Depends(get_db),
@@ -32,7 +32,7 @@ def add_expenses(
     db.commit()
     db.refresh(new_expense)
     return new_expense
-@router.get("/")
+@router.get("")
 def list_expenses(
     page: int = Query(1, ge=1),
     limit: int = Query(10, ge=1, le=100),

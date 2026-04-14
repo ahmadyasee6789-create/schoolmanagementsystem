@@ -51,7 +51,7 @@ def get_enrolled_students(class_id: int, db: Session) -> List[Student]:
 # -------------------------------------------------------------------
 # MARK / UPDATE ATTENDANCE
 # -------------------------------------------------------------------
-@router.post("/", status_code=status.HTTP_200_OK)
+@router.post("", status_code=status.HTTP_200_OK)
 def mark_attendance(
     data: List[AttendanceCreate],
     db: Session = Depends(get_db),
@@ -93,7 +93,7 @@ def mark_attendance(
 # -------------------------------------------------------------------
 # GET ATTENDANCE (or student list if none recorded yet)
 # -------------------------------------------------------------------
-@router.get("/", status_code=status.HTTP_200_OK)
+@router.get("", status_code=status.HTTP_200_OK)
 def get_attendance(
     class_id: int,
     attendance_date: date,

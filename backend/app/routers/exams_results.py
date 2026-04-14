@@ -59,7 +59,7 @@ def build_result_out(result: ExamResult, exam_paper: ExamPaper, db: Session, org
 # ─────────────────────────────────────────────
 # POST /  — single upsert
 # ─────────────────────────────────────────────
-@router.post("/", response_model=ExamResultOut, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=ExamResultOut, status_code=status.HTTP_201_CREATED)
 def create_exam_result(
     result_in: ExamResultCreate,
     db: Session = Depends(get_db),

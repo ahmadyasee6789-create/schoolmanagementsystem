@@ -15,7 +15,7 @@ router = APIRouter(prefix="/exams", tags=["Exams"])
 # -------------------------
 # GET all exams for org
 # -------------------------
-@router.get("/", response_model=List[ExamOut])
+@router.get("", response_model=List[ExamOut])
 def get_exams(
     db: Session = Depends(get_db),
     current_user: OrganizationMember = Depends(get_current_user),
@@ -53,7 +53,7 @@ def get_exam(
 # -------------------------
 # CREATE exam
 # -------------------------
-@router.post("/", response_model=ExamOut, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=ExamOut, status_code=status.HTTP_201_CREATED)
 def create_exam(
     exam_in: ExamCreate,
     db: Session = Depends(get_db),

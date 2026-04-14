@@ -6,7 +6,7 @@ from app.routers.auth import get_current_user
 from app.models import OrganizationMember,User
 from app.models import Employee
 router=APIRouter(prefix="/employees",tags=["Employees"],redirect_slashes=False,)
-@router.get("/",response_model=list[EmployeeResponse])
+@router.get("",response_model=list[EmployeeResponse])
 def get_employees(
     db:Session=Depends(get_db),
     current_user=Depends(get_current_user)
@@ -31,7 +31,7 @@ def get_employee(
     if not employee:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail="Employee not found")
     return employee
-@router.post("/",response_model=EmployeeResponse,
+@router.post("",response_model=EmployeeResponse,
              status_code=status.HTTP_201_CREATED)
 def create_employee(
     payload:EmployeeCreate,

@@ -57,7 +57,7 @@ def to_response(structure: FeeStructure, db: Session) -> dict:
 # -------------------------------------------------------------------
 # GET ALL
 # -------------------------------------------------------------------
-@router.get("/", response_model=List[FeeStructureOut])
+@router.get("", response_model=List[FeeStructureOut])
 def get_all_fee_structures(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
@@ -86,7 +86,7 @@ def get_all_fee_structures(
 # -------------------------------------------------------------------
 # CREATE
 # -------------------------------------------------------------------
-@router.post("/", response_model=FeeStructureOut, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=FeeStructureOut, status_code=status.HTTP_201_CREATED)
 def create_fee_structure(
     data: FeeStructureCreate,
     db: Session = Depends(get_db),

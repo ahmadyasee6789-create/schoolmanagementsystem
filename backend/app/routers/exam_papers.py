@@ -17,7 +17,7 @@ router = APIRouter(prefix="/exam-papers", tags=["Exam Papers"])
 # -------------------------
 # GET all exam papers for org
 # -------------------------
-@router.get("/", response_model=List[ExamPaperOut])
+@router.get("", response_model=List[ExamPaperOut])
 def get_exam_papers(
     db: Session = Depends(get_db),
     current_user: OrganizationMember = Depends(get_current_user),
@@ -72,7 +72,7 @@ def get_exam_paper(
 # -------------------------
 # CREATE exam paper
 # -------------------------
-@router.post("/", response_model=ExamPaperOut, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=ExamPaperOut, status_code=status.HTTP_201_CREATED)
 def create_exam_paper(
     paper_in: ExamPaperCreate,
     db: Session = Depends(get_db),

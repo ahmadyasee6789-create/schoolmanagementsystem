@@ -54,7 +54,7 @@ def require_delete_access(current_user):
 # -------------------------------------------------------------------
 # CREATE STUDENT
 # -------------------------------------------------------------------
-@router.post("/", response_model=StudentOut, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=StudentOut, status_code=status.HTTP_201_CREATED)
 def create_student(
     data: StudentCreate,
     db: Session = Depends(get_db),
@@ -159,7 +159,7 @@ class PaginatedStudents(BaseModel):
     total_pages: int
 
 
-@router.get("/", response_model=PaginatedStudents)
+@router.get("", response_model=PaginatedStudents)
 def list_students(
     page: int = Query(1, ge=1),
     limit: int = Query(10, ge=1, le=100),

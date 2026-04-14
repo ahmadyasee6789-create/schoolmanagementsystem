@@ -15,7 +15,7 @@ router = APIRouter(prefix="/terms", tags=["Terms"])
 # -------------------------
 # GET all terms for org
 # -------------------------
-@router.get("/", response_model=List[TermOut])
+@router.get("", response_model=List[TermOut])
 def get_terms(
     db: Session = Depends(get_db),
     current_user: OrganizationMember = Depends(get_current_user),
@@ -62,7 +62,7 @@ def get_term(
 # -------------------------
 # CREATE term
 # -------------------------
-@router.post("/", response_model=TermOut, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=TermOut, status_code=status.HTTP_201_CREATED)
 def create_term(
     term_in: TermCreate,
     db: Session = Depends(get_db),
