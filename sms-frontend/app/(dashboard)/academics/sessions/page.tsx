@@ -166,7 +166,7 @@ export default function AcademicSessionsPage() {
   // ── Activate ───────────────────────────────────────────────────────
   const handleSetActive = async (id: number) => {
     try {
-      const res = await api.put(`/sessions/${id}/activate/`);
+      const res = await api.put(`/sessions/${id}/activate`);
       toast.success(`Session "${res.data.name}" activated`);
       fetchSessions();
     } catch (err: any) {
