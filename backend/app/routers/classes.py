@@ -16,7 +16,7 @@ from app.schemas.classroom import AssignTeacherRequest, ClassroomCreate
 router=APIRouter(prefix="/classes", tags=["Classes"])
 
 
-@router.get("/")
+@router.get("")
 def get_classes(
     db: Session = Depends(get_db),
     current_user:User = Depends(get_current_user),

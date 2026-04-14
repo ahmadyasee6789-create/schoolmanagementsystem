@@ -226,8 +226,8 @@ export default function ClassesPage() {
     const fetchData = async () => {
   try {
     const [classesRes, teachersRes, meRes, gradesRes] = await Promise.all([
-      api.get('/classes/'),
-      api.get('/organization/team/', { params: { role: 'teacher' } }),
+      api.get('/classes'),
+      api.get('/organization/team', { params: { role: 'teacher' } }),
       api.get('/auth/me').catch((err) => {
         console.error('Failed to fetch /auth/me', err);
         return { data: null }; // prevent Promise.all from rejecting
@@ -323,7 +323,7 @@ export default function ClassesPage() {
       setAddOpen(false);
       setForm({ grade_id: '', section: '' });
       // Re-fetch to get updated list
-      const res = await api.get('/classes/');
+      const res = await api.get('/classes');
       setClasses(res.data);
     } catch (err: any) {
       toast.error(err.response?.data?.detail ?? 'Failed to create classroom');

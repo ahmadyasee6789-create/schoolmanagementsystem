@@ -121,7 +121,7 @@ export default function OrganizationTeamPage() {
     (async () => {
       try {
         setLoading(true);
-        const res = await api.get("/organization/team/");
+        const res = await api.get("/organization/team");
         setMembers(res.data);
         setError(null);
       } catch (err: any) {

@@ -35,7 +35,7 @@ export default function AcceptInvitePage() {
 
     setLoading(true);
     try {
-      const res = await api.post("/organization/invitations/accept/", { token, name, password });
+      const res = await api.post("/organization/invitations/accept", { token, name, password });
       localStorage.setItem("token", res.data.access_token);
       localStorage.setItem("user",  JSON.stringify(res.data.user));
       setSuccess(true);
