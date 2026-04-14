@@ -54,7 +54,7 @@ export default function TermsPage() {
 
   const fetchTerms = async () => {
     try {
-      const res = await api.get('/terms/');
+      const res = await api.get('/terms');
       setTerms(Array.isArray(res.data) ? res.data : []);
     } catch (e: any) {
       if (e?.response?.status !== 400) toast.error('Failed to load terms');
@@ -93,7 +93,7 @@ export default function TermsPage() {
     try {
       editingId
         ? await api.put(`/terms/${editingId}`, { name: termName })
-        : await api.post('/terms/', { name: termName });
+        : await api.post('/terms', { name: termName });
       toast.success(editingId ? 'Term updated' : 'Term created');
       setDialogOpen(false); fetchTerms();
     } catch (err: any) {
