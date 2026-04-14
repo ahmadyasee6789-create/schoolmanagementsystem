@@ -63,9 +63,9 @@ export default function DMCPage() {
     if (!user) { router.replace('/signin'); return; }
     setLoading(true);
     Promise.all([
-      api.get('/exams/'),
-      api.get('/exam-papers/'),
-      api.get('/classes/'),
+      api.get('/exams'),
+      api.get('/exam-papers'),
+      api.get('/classes'),
     ]).then(([exR, paR, clR]) => {
       setExams(Array.isArray(exR.data) ? exR.data : []);
       setPapers(Array.isArray(paR.data) ? paR.data : []);

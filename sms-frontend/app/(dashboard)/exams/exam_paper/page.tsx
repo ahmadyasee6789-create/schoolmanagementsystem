@@ -247,7 +247,7 @@ export default function ExamPapersPage() {
   // ── Fetch ─────────────────────────────────────────────────────────
   const fetchPapers = async () => {
     try {
-      const res = await api.get('/exam-papers/');
+      const res = await api.get('/exam-papers');
       setPapers(Array.isArray(res.data) ? res.data : []);
     } catch { toast.error('Failed to load exam papers'); }
   };
@@ -332,7 +332,7 @@ export default function ExamPapersPage() {
         });
         toast.success('Exam paper updated');
       } else {
-        await api.post('/exam-papers/', form);
+        await api.post('/exam-papers', form);
         toast.success('Exam paper created');
       }
       setDialogOpen(false);
