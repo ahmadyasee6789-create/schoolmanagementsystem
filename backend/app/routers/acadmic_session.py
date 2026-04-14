@@ -15,7 +15,7 @@ router = APIRouter(prefix="/sessions", tags=["Academic Sessions"])
 # -------------------------------------------------------------------
 # LIST ALL SESSIONS
 # -------------------------------------------------------------------
-@router.get("/", response_model=List[AcademicSessionOut])
+@router.get("", response_model=List[AcademicSessionOut])
 def get_sessions(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
@@ -52,7 +52,7 @@ def get_active_session(
 # -------------------------------------------------------------------
 # CREATE SESSION
 # -------------------------------------------------------------------
-@router.post("/", response_model=AcademicSessionOut)
+@router.post("", response_model=AcademicSessionOut)
 def create_session(
     data: AcademicSessionCreate,
     db: Session = Depends(get_db),
