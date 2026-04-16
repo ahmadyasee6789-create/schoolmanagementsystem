@@ -102,8 +102,10 @@ def invite_user(
     db.add(invite)
     db.commit()
     db.refresh(invite)
-
-    send_activation_email(to_email=data.email, invite_token=token)
+    try:
+       send_activation_email(to_email=data.email, invite_token=token)
+    except Exception as e:
+        logger.error(f"Failed to send invitation email to {data.email}: {str(e)}")
 
     return {"message": "Invitation sent successfully"}
 
