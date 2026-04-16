@@ -14,7 +14,9 @@ def send_activation_email(to_email: str, invite_token: str):
     smtp_port = int(os.getenv("SMTP_PORT", 587))
     sender_email = os.getenv("EMAIL_USER")
     sender_password = os.getenv("EMAIL_PASS")
-
+    print(f"SMTP Server: {smtp_server}")
+    print(f"EMAIL_USER: {'✅ Set' if sender_email else '❌ Missing'}")
+    print(f"EMAIL_PASS: {'✅ Set' if sender_password else '❌ Missing'}")
     if not sender_email or not sender_password:
         raise ValueError("❌ Missing EMAIL_USER or EMAIL_PASS in environment variables")
 
