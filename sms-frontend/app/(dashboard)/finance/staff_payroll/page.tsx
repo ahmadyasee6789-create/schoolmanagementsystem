@@ -144,7 +144,7 @@ function HistoryTeacherRow({ teacher }: { teacher: Teacher }) {
     if (fetched) { setExpanded(e => !e); return; }
     setLoading(true);
     try {
-      const res = await api.get(`/payroll/staff/${teacher.id}`);
+      const res = await api.get(`/payroll/staff${teacher.id}`);
       setPayments(res.data); setFetched(true); setExpanded(true);
     } catch { toast.error("Failed to load history"); }
     finally  { setLoading(false); }
@@ -232,7 +232,7 @@ export default function PayrollPage() {
     setLoading(true);
     try {
       const [teamRes, pendingRes, salariesRes] = await Promise.all([
-        api.get("/employees/"),
+        api.get("/employees"),
         api.get("/payroll/pending"),
         api.get("/payroll/staff-salaries"),
       ]);
@@ -270,7 +270,7 @@ export default function PayrollPage() {
     setSavingSalary(true);
     try {
       const payload = { employee_id: Number(salaryForm.employee_id), base_salary: Number(salaryForm.base_salary), pay_frequency: salaryForm.pay_frequency, effective_from: salaryForm.effective_from, effective_to: salaryForm.effective_to || null };
-      if (editingSalary) { await api.put(`/payroll/staff-salary/${editingSalary.id}`, payload); toast.success("Salary structure updated"); }
+      if (editingSalary) { await api.put(`/payroll/staff-salary${editingSalary.id}`, payload); toast.success("Salary structure updated"); }
       else               { await api.post("/payroll/staff-salary", payload);                    toast.success("Salary structure created"); }
       setSalaryOpen(false); setEditingSalary(null);
       setSalaryForm({ employee_id: "", base_salary: "", pay_frequency: "monthly", effective_from: "", effective_to: "" });

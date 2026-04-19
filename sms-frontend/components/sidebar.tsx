@@ -90,6 +90,7 @@ const menuSections = [
     title: "Finance",
     icon: <AttachMoney sx={{ fontSize: 18 }} />,
     items: [
+       { text: "Employees",       href: "/employees" },
       { text: "Fee Structure",  href: "/finance/fee-structure" },
       { text: "Fee Management", href: "/finance/fee-management" },
       { text: "Teacher Salary", href: "/finance/staff_payroll" },
