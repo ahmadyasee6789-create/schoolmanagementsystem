@@ -235,6 +235,7 @@ export default function HomePage() {
     })();
   }, [user, router, authLoading, role]);
 
+   // 👇 SHOW LOADING STATE
   if (loading && !stats) return (
     <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", height: "60vh", backgroundColor: C.bg }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono&display=swap');`}</style>
@@ -242,7 +243,108 @@ export default function HomePage() {
     </Box>
   );
 
+  // 👇 SHOW ERROR STATE - ADD THIS BEFORE THE NULL CHECK
+  if (error) {
+    return (
+      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "60vh", backgroundColor: C.bg, p: 3 }}>
+        <Card sx={{
+          backgroundColor: C.surface,
+          border: `1px solid ${C.red}40`,
+          borderRadius: "16px",
+          maxWidth: 500,
+          width: "100%",
+        }}>
+          <CardContent sx={{ p: 4, textAlign: "center" }}>
+            <Box sx={{
+              width: 56, height: 56, borderRadius: "28px",
+              backgroundColor: C.redDim,
+              border: `1px solid ${C.red}30`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              mx: "auto",
+              mb: 2,
+            }}>
+              <Typography sx={{ fontSize: 28 }}>⚠️</Typography>
+            </Box>
+            
+            <Typography sx={{ 
+              fontSize: "1.25rem", 
+              fontWeight: 700, 
+              color: C.textPrimary, 
+              fontFamily: FONT, 
+              mb: 1.5 
+            }}>
+              Unable to Load Dashboard
+            </Typography>
+            
+            <Typography sx={{ 
+              fontSize: "0.875rem", 
+              color: C.textSecondary, 
+              fontFamily: FONT, 
+              mb: 3 
+            }}>
+              {error}
+            </Typography>
+            
+            {role === "admin" && (
+              <button
+                onClick={() => router.push("/academics/sessions")}
+                style={{
+                  backgroundColor: C.accent,
+                  color: "#fff",
+                  border: "none",
+                  padding: "10px 24px",
+                  borderRadius: "8px",
+                  fontSize: "0.875rem",
+                  fontWeight: 600,
+                  fontFamily: FONT,
+                  cursor: "pointer",
+                  transition: "all 0.2s ease",
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#E68A00"}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = C.accent}
+              >
+                Go to Academic Sessions 
+              </button>
+            )}
+            
+            {role !== "admin" && (
+              <button
+                onClick={() => window.location.reload()}
+                style={{
+                  backgroundColor: "transparent",
+                  color: C.textPrimary,
+                  border: `1px solid ${C.border}`,
+                  padding: "10px 24px",
+                  borderRadius: "8px",
+                  fontSize: "0.875rem",
+                  fontWeight: 600,
+                  fontFamily: FONT,
+                  cursor: "pointer",
+                  transition: "all 0.2s ease",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = C.accent;
+                  e.currentTarget.style.backgroundColor = C.accentDim;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = C.border;
+                  e.currentTarget.style.backgroundColor = "transparent";
+                }}
+              >
+                Try Again
+              </button>
+            )}
+          </CardContent>
+        </Card>
+      </Box>
+    );
+  }
+
+  // 👇 ONLY SHOW NULL IF NO ERROR AND NO STATS (should not happen normally)
   if (!stats) return null;
+
 
   // ── Derived data ───────────────────────────────────────────────────
   const fin = stats.financials;
