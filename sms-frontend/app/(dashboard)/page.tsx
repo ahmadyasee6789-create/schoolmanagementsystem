@@ -180,7 +180,7 @@ export default function HomePage() {
   const router  = useRouter();
   const [stats,   setStats]   = useState<any>(null);
   const [loading, setLoading] = useState(true);
-
+   const [error, setError] = useState<string | null>(null);
   // ── What each role can see ─────────────────────────────────────────
   // Think of this as a list of true/false switches per role
   const can = {
@@ -191,7 +191,7 @@ export default function HomePage() {
     viewAttendance: role === "teacher" || role === "admin",        // teacher + admin
   };
 
-  useEffect(() => {
+ useEffect(() => {
     if (authLoading) return;
     if (!user) { router.replace("/signin"); return; }
 
@@ -205,11 +205,35 @@ export default function HomePage() {
           localStorage.setItem("dashboard_stats", JSON.stringify(fresh));
           setStats(fresh);
         }
+        setError(null); // Clear any previous error
       } catch (err: any) {
-        if (err.response?.status === 401) router.replace("/signin");
-      } finally { setLoading(false); }
+        console.error("Dashboard error:", err);
+        
+        // 👇 Handle the specific 400 error professionally
+        if (err.response?.status === 400) {
+          const detail = err.response?.data?.detail;
+          
+          if (detail === "No active academic session found") {
+            setError(
+              role === "admin" 
+                ? "No active academic session found. Please go to Settings → Academic Sessions and activate or create a session for the current term."
+                : "No active academic session found. Please contact your school administrator to activate the current academic session."
+            );
+          } else {
+            setError(detail || "Unable to load dashboard data. Please try again later.");
+          }
+        } 
+        else if (err.response?.status === 401) {
+          router.replace("/signin");
+        } 
+        else {
+          setError("An unexpected error occurred. Please refresh the page or contact support.");
+        }
+      } finally { 
+        setLoading(false); 
+      }
     })();
-  }, [user, router, authLoading]);
+  }, [user, router, authLoading, role]);
 
   if (loading && !stats) return (
     <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", height: "60vh", backgroundColor: C.bg }}>
