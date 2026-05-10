@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { Toaster } from "react-hot-toast";
 import AuthHydration from "./providers/AuthHydration";
 import AuthProvider from "./providers/AuthProvider";
 import { useAuthStore } from "@/app/store/authStore";
@@ -34,7 +35,7 @@ export default function RootLayout({
         <AuthHydration>
           <AuthProvider>
             {/* <Layout> */}
-            
+            <Toaster />
             
             {children}
             {/* </Layout> */}

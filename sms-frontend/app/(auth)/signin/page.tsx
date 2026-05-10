@@ -55,6 +55,7 @@ const handleSubmit = async (e: React.FormEvent) => {
 
   } catch (err: any) {
     const msg = err.response?.data?.detail || "Invalid email or password";
+      console.log("FULL ERROR:", err);
 
     // Show special message for trial/suspended
     if (msg.includes("expired")) {
