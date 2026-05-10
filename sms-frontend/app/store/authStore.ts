@@ -64,6 +64,7 @@ export const useAuthStore = create<AuthState>()(
 
       login: async (email, password) => {
         set({ loading: true });
+        try{
         const res = await api.post("/auth/login", { email, password });
 
         get().setSession(res.data.access_token, res.data.expires_in, res.data.refresh_token);
@@ -79,7 +80,10 @@ export const useAuthStore = create<AuthState>()(
           authReady: true,
         });
         return res.data.redirect
-      },
+      } catch (err){
+        set({loading: false});
+        throw err;
+      }},
 
       refreshTokenRequest: async () => {
         const refreshToken = get().refreshToken;
