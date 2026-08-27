@@ -53,7 +53,7 @@ export default function Topbar({ mobileOpen = false, setMobileOpen }: TopbarProp
 
   const handleLogout = async () => {
   logout(); 
-  router.push("/login");
+  router.push("/signin");
 };
 
   const initials = user?.full_name

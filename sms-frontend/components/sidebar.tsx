@@ -257,6 +257,7 @@ function DrawerContent({
       display: "flex",
       flexDirection: "column",
       height: "100%",
+      minHeight:0,
       overflow: "hidden", // prevent outer container from scrolling
     }}>
 
@@ -291,168 +292,20 @@ function DrawerContent({
       )}
 
       {/* ── Scrollable nav ────────────────────────────────── */}
-      <Box sx={{
-        py: 1.5,
-        flexGrow: 1,
-        overflowY: "auto",       // enables scrolling
-        overflowX: "hidden",
-        WebkitOverflowScrolling: "touch", // smooth iOS scroll
-        // hide the scrollbar track (fixes white bar on desktop)
-        scrollbarWidth: "none",
-        "&::-webkit-scrollbar": { display: "none" },
-      }}>
-        <List disablePadding sx={{ px: 0.5 }}>
-
-          {topItems.map((item) => {
-            const active = isActive(item.href);
-            return (
-              <Tooltip key={item.text} title={collapsed ? item.text : ""} placement="right">
-                <ListItemButton onClick={() => handleNav(item.href)} sx={sectionBtnSx(active)}>
-                  {active && <ActiveBar />}
-                  <Box sx={iconSx(active)}>{item.icon}</Box>
-                  {!collapsed && <ListItemText primary={item.text} sx={textSx(active)} />}
-                </ListItemButton>
-              </Tooltip>
-            );
-          })}
-          
-
-          {menuSections
-           .filter(section=>hasAdminAccess(section.title))
-           .map((section) => {
-            const sectionActive = section.items.some(i => isActive(i.href));
-            const isOpen = openSection === section.title;
-
-            return (
-              <Box key={section.title}>
-                <SectionLabel label={section.title} collapsed={collapsed} />
-
-                <Tooltip title={collapsed ? section.title : ""} placement="right">
-                  <ListItemButton
-                    onClick={() => !collapsed && toggle(section.title)}
-                    sx={sectionBtnSx(sectionActive && collapsed)}
-                  >
-                    {sectionActive && collapsed && <ActiveBar />}
-                    <Box sx={iconSx(sectionActive)}>{section.icon}</Box>
-                    {!collapsed && (
-                      <>
-                        <ListItemText primary={section.title} sx={textSx(sectionActive)} />
-                        {isOpen ? <ExpandLess sx={expandIconSx} /> : <ExpandMore sx={expandIconSx} />}
-                      </>
-                    )}
-                  </ListItemButton>
-                </Tooltip>
-
-                <Collapse in={isOpen && !collapsed} timeout={280} unmountOnExit>
-                  <List disablePadding>
-                    {section.items
-                    .filter(sub=>hasAdminAccess(section.title,sub.text))
-                    .map((sub) => {
-                      const active = isActive(sub.href);
-                      return (
-                        <ListItemButton
-                          key={sub.href}
-                          component={Link}
-                          href={sub.href}
-                          onClick={onNavClick}
-                          sx={subItemSx(active)}
-                        >
-                          {active && (
-                            <Box sx={{
-                              position: "absolute", left: 0, top: "50%",
-                              transform: "translateY(-50%)",
-                              width: 2, height: "50%",
-                              borderRadius: "0 2px 2px 0",
-                              background: C.accent,
-                            }} />
-                          )}
-                          <ListItemIcon sx={{ minWidth: 0, mr: 1.5 }}>
-                            <DotIcon sx={{
-                              fontSize: active ? 7 : 5,
-                              color: active ? C.accent : C.textSecondary,
-                              transition: `all ${EASE}`,
-                            }} />
-                          </ListItemIcon>
-                          <ListItemText
-                            primary={sub.text}
-                            sx={{
-                              "& .MuiListItemText-primary": {
-                                fontSize: "0.82rem",
-                                fontWeight: active ? 600 : 400,
-                                color: active ? C.accentText : C.textSecondary,
-                                fontFamily: "'DM Sans', sans-serif",
-                                whiteSpace: "nowrap",
-                              },
-                            }}
-                          />
-                        </ListItemButton>
-                      );
-                    })}
-                  </List>
-                </Collapse>
-              </Box>
-            );
-          })}
-
-          {hasAdminAccess("Organization") && (
-            <Box>
-              <SectionLabel label="Organization" collapsed={collapsed} />
-
-              <Tooltip title={collapsed ? "Organization" : ""} placement="right">
-                <ListItemButton
-                  onClick={() => !collapsed && toggle("Organization")}
-                  sx={sectionBtnSx(orgSection.items.some(i => isActive(i.href)) && collapsed)}
-                >
-                  <Box sx={iconSx(orgSection.items.some(i => isActive(i.href)))}>{orgSection.icon}</Box>
-                  {!collapsed && (
-                    <>
-                      <ListItemText primary="Organization" sx={textSx(false)} />
-                      {openSection === "Organization"
-                        ? <ExpandLess sx={expandIconSx} />
-                        : <ExpandMore sx={expandIconSx} />}
-                    </>
-                  )}
-                </ListItemButton>
-              </Tooltip>
-
-              <Collapse in={openSection === "Organization" && !collapsed} timeout={280} unmountOnExit>
-                <List disablePadding>
-                  {orgSection.items.map((sub) => {
-                    const active = isActive(sub.href);
-                    return (
-                      <ListItemButton
-                        key={sub.href}
-                        component={Link}
-                        href={sub.href}
-                        onClick={onNavClick}
-                        sx={subItemSx(active)}
-                      >
-                        <ListItemIcon sx={{ minWidth: 0, mr: 1.5 }}>
-                          <DotIcon sx={{
-                            fontSize: active ? 7 : 5,
-                            color: active ? C.accent : C.textSecondary,
-                          }} />
-                        </ListItemIcon>
-                        <ListItemText
-                          primary={sub.text}
-                          sx={{
-                            "& .MuiListItemText-primary": {
-                              fontSize: "0.82rem",
-                              fontWeight: active ? 600 : 400,
-                              color: active ? C.accentText : C.textSecondary,
-                              fontFamily: "'DM Sans', sans-serif",
-                            },
-                          }}
-                        />
-                      </ListItemButton>
-                    );
-                  })}
-                </List>
-              </Collapse>
-            </Box>
-          )}
-        </List>
-      </Box>
+     <Box
+  sx={{
+    py: 1.5,
+    flex: 1,
+    minHeight: 0,
+    overflowY: "auto",
+    overflowX: "hidden",
+    WebkitOverflowScrolling: "touch",
+    scrollbarWidth: "none",
+    "&::-webkit-scrollbar": {
+      display: "none",
+    },
+  }}
+>
 
       {/* ── Collapse toggle — never scrolls away ─────────── */}
       <Box
