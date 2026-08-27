@@ -27,22 +27,38 @@ export default function AuthHydration({ children }: { children: React.ReactNode 
   useSessionRefresh();
 
   // ✅ Route protection
-  useEffect(() => {
-    if (!hydrated) return;
+// ✅ Route protection
+useEffect(() => {
+  if (!hydrated) return;
 
-    const publicRoutes = ["/signin", "/signup", "/organization/invitations/accept","/forgot-password", "/reset-password"];
-    const isPublic = publicRoutes.includes(pathname);
+  const publicRoutes = ["/signin", "/signup", "/organization/invitations/accept", "/forgot-password", "/reset-password"];
+  const isPublic = publicRoutes.includes(pathname);
 
-    if (!user && !isPublic) {
-      router.replace("/signin");
-      return;
-    }
+  if (!user && !isPublic) {
+    router.replace("/signin");
+    return;
+  }
 
-    if (user && pathname === "/signin") {
-      router.replace("/");
-      return;
-    }
-  }, [hydrated, user, pathname, router]);
+  // Where a logged-in user belongs, based on role
+  const homeRouteFor = (u: typeof user) => {
+    if (!u) return "/signin";
+    if (u.is_superadmin) return "/superadmin";      // adjust field name if different
+    return "/";                                     // normal org dashboard
+  };
+
+  if (user && pathname === "/signin") {
+    router.replace(homeRouteFor(user));
+    return;
+  }
+
+  // Superadmins should never sit on the regular dashboard route(s) —
+  // stops /dashboard/stats from ever firing for an org-less superadmin.
+  if (user?.is_superadmin && pathname !== "/superadmin" && !pathname.startsWith("/superadmin")) {
+    router.replace("/superadmin");
+    return;
+  }
+
+}, [hydrated, user, pathname, router]);
 
   if (!hydrated) return <p>Loading session...</p>;
 

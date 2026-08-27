@@ -194,13 +194,13 @@ def me(db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # 🔹 Determine org membership dynamically
     org_member = db.query(OrganizationMember).filter(
         OrganizationMember.user_id == user.id
     ).first()
-    org_data=db.query(Organization).filter(
+    org_data = db.query(Organization).filter(
         Organization.id == org_member.organization_id
     ).first() if org_member else None
+
     return {
         "id": user.id,
         "full_name": user.full_name,
@@ -208,6 +208,7 @@ def me(db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
         "org_role": org_member.role if org_member else None,
         "org_id": org_member.organization_id if org_member else None,
         "org_name": org_data.name if org_data else None,
+        "is_superadmin": getattr(user, "is_superadmin", False),   # ← add this
     }
 
 

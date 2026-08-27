@@ -1,12 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from datetime import date
+from decimal import Decimal
 from app.db.session import get_db
 from app.models.staff_salary import StaffSalary
 from app.models.salary_payments import SalaryPayment
 from app.models.employee import Employee
 from app.routers.auth import get_current_user
-from app.models.users import User,OrganizationMember
+from app.models.users import User
 from app.schemas.payroll import (
     StaffSalaryCreate,
     StaffSalaryUpdate,
@@ -18,6 +19,8 @@ from app.schemas.payroll import (
 from app.dependencies import get_active_session
 
 router = APIRouter(prefix="/payroll", tags=["Payroll"])
+
+
 @router.get(
     "/salaries",
     response_model=list[SalaryPaymentResponse]
@@ -33,7 +36,7 @@ def get_all_salaries(
         SalaryPayment.organization_id == current_user.org_id,
         SalaryPayment.month == month,
         SalaryPayment.year == year,
-        SalaryPayment.session_id==active_session.id
+        SalaryPayment.session_id == active_session.id
     ).all()
     return payments
 
@@ -72,6 +75,7 @@ def create_staff_salary(
 
     return salary
 
+
 @router.get(
     "/staff-salaries",
     response_model=list[StaffSalaryResponse]
@@ -84,6 +88,8 @@ def get_all_staff_salaries(
         StaffSalary.organization_id == current_user.org_id
     ).all()
     return salaries
+
+
 @router.put(
     "/staff-salary/{salary_id}",
     response_model=StaffSalaryResponse
@@ -110,6 +116,7 @@ def update_staff_salary(
     db.refresh(salary)
 
     return salary
+
 
 @router.post("/generate", response_model=SalaryPaymentResponse)
 def generate_salary(
@@ -170,6 +177,8 @@ def generate_salary(
     db.commit()
     db.refresh(payment)
     return payment
+
+
 @router.post("/generate-all")
 def generate_all_salaries(
     month: int,
@@ -178,6 +187,11 @@ def generate_all_salaries(
     current_user: User = Depends(get_current_user),
     active_session=Depends(get_active_session)
 ):
+    # Validate once, up front — not per-employee inside the loop
+    if month < 1 or month > 12:
+        raise HTTPException(status_code=400, detail="Invalid month")
+    if year < 2000:
+        raise HTTPException(status_code=400, detail="Invalid year")
 
     # Get all employees in the organization
     employees = db.query(Employee).filter(
@@ -200,7 +214,7 @@ def generate_all_salaries(
         # Skip if already generated
         exists = db.query(SalaryPayment).filter(
             SalaryPayment.employee_id == employee.id,
-            SalaryPayment.organization_id==current_user.org_id,
+            SalaryPayment.organization_id == current_user.org_id,
             SalaryPayment.month == month,
             SalaryPayment.year == year,
             SalaryPayment.session_id == active_session.id
@@ -212,11 +226,6 @@ def generate_all_salaries(
         deductions = 0
         bonus = 0
         net = gross - deductions + bonus
-        if month < 1 or month > 12:
-          raise HTTPException(status_code=400, detail="Invalid month")
-
-        if year < 2000:
-          raise HTTPException(status_code=400, detail="Invalid year")
 
         payment = SalaryPayment(
             organization_id=current_user.org_id,
@@ -236,6 +245,8 @@ def generate_all_salaries(
 
     db.commit()
     return {"message": "Payroll generated", "count": len(created)}
+
+
 @router.post(
     "/pay/{payment_id}",
     response_model=SalaryPaymentResponse
@@ -251,7 +262,7 @@ def pay_salary(
     payment = db.query(SalaryPayment).filter(
         SalaryPayment.id == payment_id,
         SalaryPayment.organization_id == current_user.org_id,
-        SalaryPayment.session_id==active_session.id
+        SalaryPayment.session_id == active_session.id
     ).first()
 
     if not payment:
@@ -260,12 +271,9 @@ def pay_salary(
     if payment.status == "paid":
         raise HTTPException(status_code=400, detail="Salary already paid")
 
-    
-    from decimal import Decimal
-
-    gross = Decimal(payment.gross_amount)
-    deductions = Decimal(payload.deductions or 0)
-    bonus = Decimal(payload.bonus or 0)
+    gross = Decimal(str(payment.gross_amount))
+    deductions = Decimal(str(payload.deductions or 0))
+    bonus = Decimal(str(payload.bonus or 0))
 
     payment.deductions = deductions
     payment.bonus = bonus
@@ -278,11 +286,13 @@ def pay_salary(
     db.refresh(payment)
 
     return payment
+
+
 @router.get(
     "/staff/{employee_id}",
     response_model=list[SalaryPaymentResponse]
 )
-def Staff_salary_history(
+def staff_salary_history(
     employee_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -292,13 +302,15 @@ def Staff_salary_history(
     payments = db.query(SalaryPayment).filter(
         SalaryPayment.employee_id == employee_id,
         SalaryPayment.organization_id == current_user.org_id,
-        SalaryPayment.session_id==active_session.id
+        SalaryPayment.session_id == active_session.id
     ).order_by(
         SalaryPayment.year.desc(),
         SalaryPayment.month.desc()
     ).all()
 
     return payments
+
+
 @router.get(
     "/pending",
     response_model=list[SalaryPaymentResponse]
