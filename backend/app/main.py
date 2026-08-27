@@ -34,11 +34,14 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 app = FastAPI( redirect_slashes=True,)
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
 # ✅ Use regex to allow ALL Vercel preview deployments
+from fastapi.middleware.cors import CORSMiddleware
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",
-        "https://your-frontend.vercel.app",
+        "https://schoolmanagementsystem-b6r46g4qg.vercel.app",
+        "https://schoolmanagementsystem-beta.vercel.app",
     ],
     allow_credentials=True,
     allow_methods=["*"],
