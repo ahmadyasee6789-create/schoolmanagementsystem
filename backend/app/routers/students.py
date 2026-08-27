@@ -1,4 +1,6 @@
 # app/routers/students.py
+from fastapi import UploadFile, File
+from app.services.student_import_service import preview_student_import
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
@@ -194,7 +196,21 @@ def list_students(
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
+@router.post("/import/preview")
+def import_students_preview(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+    active_session=Depends(get_active_session),
+):
+    require_write_access(current_user)
 
+    return preview_student_import(
+        file=file,
+        db=db,
+        org_id=current_user.org_id,
+        session_id=active_session.id,
+    )
 # -------------------------------------------------------------------
 # GET SINGLE STUDENT
 # -------------------------------------------------------------------

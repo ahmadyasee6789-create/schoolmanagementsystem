@@ -11,6 +11,7 @@ import { Add, Edit, Delete, Search } from '@mui/icons-material';
 import { api } from '@/app/lib/api';
 import { usePaginatedQuery } from '@/app/hooks/usePaginatedQuery';
 import { useAuthStore } from '@/app/store/authStore';
+import { toast } from 'react-hot-toast/headless';
 
 // ─── Design tokens ────────────────────────────────────────────────────
 const C = {
@@ -141,6 +142,8 @@ export default function StudentsPage() {
   const [loadingClasses, setLoadingClasses] = useState(true);
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
   const {user, hydrated} = useAuthStore();
+  const [importing, setImporting] = useState(false);
+const [importPreview, setImportPreview] = useState<any>(null);
 useEffect(() => {
   // Only fetch data if user is authenticated
   if (!hydrated || !user) return;
@@ -216,17 +219,66 @@ useEffect(() => {
         });
       }
       setDialogOpen(false); refetch();
-    } catch (e) { console.error(e); }
+    } catch (e: any) {
+  console.error(e);
+
+  const msg =
+    e.response?.data?.detail ||
+    "Something went wrong";
+
+  toast.error(msg);
+}
     finally { setSaving(false); }
   };
 
   const deleteStudent = async (id: number) => {
     if (confirm('Delete this student?')) {
       try { await api.delete(`/students/${id}`); refetch(); }
-      catch (e) { console.error(e); }
+      catch (e: any) {
+        console.error(e);
+        toast.error("Failed to delete student");
+      }
     }
   };
+const handleImport = async (
+  e: React.ChangeEvent<HTMLInputElement>
+) => {
+  const file = e.target.files?.[0];
 
+  if (!file) return;
+
+  const formData = new FormData();
+  formData.append("file", file);
+
+  setImporting(true);
+
+  try {
+    const res = await api.post(
+      "/students/import/preview",
+      formData,
+      {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      }
+    );
+
+    console.log(res.data);
+
+    setImportPreview(res.data);
+
+    toast.success("Import preview loaded");
+  }catch (e: any) {
+  console.error("Import error:", e.response?.data);
+
+  toast.error(
+    e.response?.data?.detail || "Import failed"
+  );
+
+  } finally {
+    setImporting(false);
+  }
+};
   // ─── Render ──────────────────────────────────────────────────────
   return (
     <>
@@ -256,6 +308,26 @@ useEffect(() => {
             }}>
             Add Student
           </Button>
+          <Button
+  component="label"
+  sx={{
+    border: `1px solid ${C.border}`,
+    color: C.textPrimary,
+    fontFamily: FONT,
+    textTransform: "none",
+    borderRadius: "10px",
+    px: 2,
+  }}
+>
+  {importing ? "Importing..." : "Import Students"}
+
+  <input
+    hidden
+    type="file"
+    accept=".xlsx,.csv"
+    onChange={handleImport}
+  />
+</Button>
         </Box>
 
         {/* Filters */}
