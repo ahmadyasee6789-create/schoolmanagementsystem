@@ -28,7 +28,7 @@ export default function StudentsPerClassChart({ data, fullWidth = false }: Stude
           <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(128,128,128,0.06)" }} />
           <Bar
             dataKey="students"
-            fill="#F59E0B"
+            fill="#8B6DF2"
             radius={[5, 5, 0, 0]}
             background={{ fill: "rgba(128,128,128,0.04)", radius: 5 }}
           />
