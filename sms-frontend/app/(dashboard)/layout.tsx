@@ -1,14 +1,12 @@
 "use client";
-import Sidebar from "@/components/sidebar";
-import Topbar from "@/components/Topbar";
-import { Box,useTheme,useMediaQuery } from "@mui/material";
-import { useState } from "react";
 
-// ⚠️ These MUST exactly match the constants in Sidebar.tsx
-const SIDEBAR_WIDTH   = 272; // drawerWidth in Sidebar
-const COLLAPSED_WIDTH = 64;  // collapsedWidth in Sidebar
-const TOPBAR_HEIGHT   = 64;
-const EASE            = "360ms cubic-bezier(0.4, 0, 0.2, 1)";
+import { useState } from "react";
+import AdminSidebar from "@/components/sidebar/AdminSidebar";
+import Topbar from "@/components/topbar/Topbar";
+
+const SIDEBAR_WIDTH = 272;
+const COLLAPSED_WIDTH = 64;
+const TOPBAR_HEIGHT = 64;
 
 export default function DashboardLayout({
   children,
@@ -16,40 +14,32 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const [collapsed, setCollapsed] = useState(false);
-  // const [collapsed, setCollapsed]   = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false); // ← this must exist here
-
-  const theme    = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
-
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <Box sx={{ minHeight: "100vh", backgroundColor: "#0D1117" }}>
-      {/* Both are position:fixed — render outside main flow */}
-     <Topbar mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
-      <Sidebar
+    <div className="min-h-screen bg-white dark:bg-[#0D1117]">
+      <Topbar mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} collapsed={collapsed} />
+
+      <AdminSidebar
         collapsed={collapsed}
         setCollapsed={setCollapsed}
-        mobileOpen={mobileOpen}        // ✅
-        setMobileOpen={setMobileOpen}  // ✅
+        mobileOpen={mobileOpen}
+        setMobileOpen={setMobileOpen}
       />
 
-      {/* Main content — offset matches sidebar width exactly */}
-     <Box
-  component="main"
-  sx={{
-    ml: { xs: 0, md: `${collapsed ? COLLAPSED_WIDTH : SIDEBAR_WIDTH}px` }, // ✅ xs: 0 is critical
-    mt: `${TOPBAR_HEIGHT}px`,
+     <main
+  className="box-border bg-white transition-[margin-left] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] dark:bg-[#0D1117]
+    ml-0 md:ml-[var(--sidebar-offset)]"
+  style={{
+    ["--sidebar-offset" as string]: `${collapsed ? COLLAPSED_WIDTH : SIDEBAR_WIDTH}px`,
+    marginTop: TOPBAR_HEIGHT,
     minHeight: `calc(100vh - ${TOPBAR_HEIGHT}px)`,
-    backgroundColor: "#0D1117",
     backgroundImage:
       "radial-gradient(ellipse 80% 50% at 50% -20%, rgba(245,158,11,0.04) 0%, transparent 60%)",
-    transition: `margin-left ${EASE}`,
-    boxSizing: "border-box",
   }}
 >
-  {children}
-</Box>
-    </Box>
+        {children}
+      </main>
+    </div>
   );
 }

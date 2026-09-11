@@ -4,7 +4,7 @@ import "./globals.css";
 import { Toaster } from "react-hot-toast";
 import AuthHydration from "./providers/AuthHydration";
 import AuthProvider from "./providers/AuthProvider";
-import { useAuthStore } from "@/app/store/authStore";
+import { ThemeProvider } from "./context/ThemeContext";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -14,7 +14,6 @@ const geistSans = Geist({
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
-  
 });
 
 export const metadata: Metadata = {
@@ -29,20 +28,16 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <AuthHydration>
           <AuthProvider>
-            {/* <Layout> */}
-            <Toaster />
-            
-            {children}
-            {/* </Layout> */}
+            <ThemeProvider>
+              <Toaster />
+              {children}
+            </ThemeProvider>
           </AuthProvider>
         </AuthHydration>
       </body>
     </html>
   );
 }
-  

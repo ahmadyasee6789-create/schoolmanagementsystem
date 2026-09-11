@@ -1,153 +1,48 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import {
-  Box, Button, Chip, Dialog, DialogActions, DialogContent,
-  DialogTitle, Grid, IconButton, Table, TableBody, TableCell,
-  TableHead, TableRow, TextField, Typography, Tooltip,
-  useMediaQuery, useTheme,
-} from "@mui/material";
-import {
-  Close, CalendarTodayOutlined, CheckCircleOutlined,
-  RadioButtonUncheckedOutlined, EventOutlined, PlayArrowOutlined,
-} from "@mui/icons-material";
+import { useEffect, useState } from "react";
+import { Calendar, Plus } from "lucide-react";
 import { api } from "@/app/lib/api";
 import toast from "react-hot-toast";
-import {
-  C, FONT, EASE, inputSx,
-  GlobalStyles, PageHeader, EmptyState, DataTable, MobileFab,
-} from "@/components/ui";
+import SessionCard from "@/components/academics/SessionCard";
+import SessionsTable from "@/components/academics/SessionTable";
+import AddSessionDialog from "@/components/academics/AddSessionDialog";
 
-// ─── Types ──────────────────────────────────────────────────────────────
-type Session = {
+interface Session {
   id: number;
   name: string;
   start_date: string;
   end_date: string;
   is_active: boolean;
-};
-type SessionForm = { name: string; start_date: string; end_date: string };
-
-// ─── Helpers ─────────────────────────────────────────────────────────────
-const fmtDate = (d: string) =>
-  d ? new Date(d).toLocaleDateString("en-PK", { day: "2-digit", month: "short", year: "numeric" }) : "—";
-
-// ─── Status chip ─────────────────────────────────────────────────────────
-function StatusChip({ active }: { active: boolean }) {
-  return (
-    <Chip
-      icon={active
-        ? <CheckCircleOutlined          sx={{ fontSize: "13px !important", color: `${C.green}  !important` }} />
-        : <RadioButtonUncheckedOutlined sx={{ fontSize: "13px !important", color: `${C.textSecondary} !important` }} />
-      }
-      label={active ? "Active" : "Inactive"} size="small"
-      sx={{
-        backgroundColor: active ? C.greenDim : "rgba(255,255,255,0.04)",
-        color:           active ? C.green    : C.textSecondary,
-        fontFamily: FONT, fontWeight: 600, fontSize: "0.7rem",
-        height: 22,
-        border: `1px solid ${active ? C.green + "30" : C.border}`,
-        "& .MuiChip-icon": { ml: "6px" },
-      }}
-    />
-  );
 }
 
-// ─── Mobile session card ─────────────────────────────────────────────────
-function SessionCard({ session, onActivate }: {
-  session: Session; onActivate: () => void;
-}) {
-  return (
-    <Box sx={{
-      backgroundColor: C.surface, border: `1px solid ${session.is_active ? C.green + "40" : C.border}`,
-      borderRadius: "12px", p: 2, mb: 1.5,
-      transition: `border-color ${EASE}`,
-      "&:hover": { borderColor: session.is_active ? C.green + "60" : "rgba(245,158,11,0.25)" },
-    }}>
-      <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", mb: 1.25 }}>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
-          <Box sx={{
-            width: 36, height: 36, borderRadius: "10px",
-            backgroundColor: session.is_active ? C.greenDim : C.accentDim,
-            border: `1px solid ${session.is_active ? C.green + "25" : "rgba(245,158,11,0.2)"}`,
-            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-          }}>
-            <CalendarTodayOutlined sx={{ fontSize: 17, color: session.is_active ? C.green : C.accent }} />
-          </Box>
-          <Box>
-            <Typography sx={{ fontWeight: 700, fontSize: "0.925rem", color: C.textPrimary, fontFamily: FONT, lineHeight: 1.2 }}>
-              {session.name}
-            </Typography>
-            <StatusChip active={session.is_active} />
-          </Box>
-        </Box>
-
-        {!session.is_active && (
-          <Button
-            size="small"
-            onClick={onActivate}
-            startIcon={<PlayArrowOutlined sx={{ fontSize: 13 }} />}
-            sx={{
-              color: C.accent, fontFamily: FONT, fontWeight: 600, fontSize: "0.72rem",
-              textTransform: "none", borderRadius: "7px", px: 1.25,
-              border: `1px solid ${C.accent}30`,
-              "&:hover": { backgroundColor: C.accentDim },
-            }}
-          >
-            Activate
-          </Button>
-        )}
-      </Box>
-
-      {/* Date range */}
-      <Box sx={{ display: "flex", gap: 2, mt: 0.5 }}>
-        {[
-          { label: "Start", value: fmtDate(session.start_date) },
-          { label: "End",   value: fmtDate(session.end_date)   },
-        ].map(d => (
-          <Box key={d.label}>
-            <Typography sx={{ fontFamily: '"DM Mono", monospace', fontSize: "0.65rem", color: C.textSecondary, letterSpacing: "0.1em", textTransform: "uppercase" }}>
-              {d.label}
-            </Typography>
-            <Typography sx={{ fontFamily: '"DM Mono", monospace', fontSize: "0.78rem", color: C.textPrimary, fontWeight: 500 }}>
-              {d.value}
-            </Typography>
-          </Box>
-        ))}
-      </Box>
-    </Box>
-  );
-}
-
-// ─── Main Page ────────────────────────────────────────────────────────────
 export default function AcademicSessionsPage() {
-  const theme    = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
-
   const [sessions, setSessions] = useState<Session[]>([]);
-  const [loading,  setLoading]  = useState(true);
-  const [open,     setOpen]     = useState(false);
-  const [form,     setForm]     = useState<SessionForm>({ name: "", start_date: "", end_date: "" });
-  const [saving,   setSaving]   = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({ name: "", start_date: "", end_date: "" });
+  const [saving, setSaving] = useState(false);
 
-  // ── Fetch ──────────────────────────────────────────────────────────
   const fetchSessions = async () => {
     try {
       const res = await api.get("/sessions");
       setSessions(res.data);
-    } catch { toast.error("Failed to load sessions"); }
-    finally  { setLoading(false); }
+    } catch {
+      toast.error("Failed to load sessions");
+    } finally {
+      setLoading(false);
+    }
   };
-    useEffect(()=>{
-      fetchSessions();
-     },[]);
 
+  useEffect(() => {
+    fetchSessions();
+  }, []);
 
-
-  // ── Create ─────────────────────────────────────────────────────────
   const handleCreate = async () => {
-    if (!form.name.trim() || !form.start_date || !form.end_date)
-      return toast.error("Please fill in all fields");
+    if (!form.name.trim() || !form.start_date || !form.end_date) {
+      toast.error("Please fill in all fields");
+      return;
+    }
     setSaving(true);
     try {
       await api.post("/sessions", { ...form, is_active: false });
@@ -157,10 +52,11 @@ export default function AcademicSessionsPage() {
       fetchSessions();
     } catch (err: any) {
       toast.error(err.response?.data?.detail || "Error creating session");
-    } finally { setSaving(false); }
+    } finally {
+      setSaving(false);
+    }
   };
 
-  // ── Activate ───────────────────────────────────────────────────────
   const handleSetActive = async (id: number) => {
     try {
       const res = await api.put(`/sessions/${id}/activate`);
@@ -171,239 +67,66 @@ export default function AcademicSessionsPage() {
     }
   };
 
-  // ── Render ─────────────────────────────────────────────────────────
   return (
-    <>
-      <GlobalStyles />
+    <div className="min-h-full bg-white p-4 dark:bg-[#111827] sm:p-6 md:p-8">
+      {/* Header */}
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-[1.45rem] font-bold text-slate-900 dark:text-slate-50">
+            Academic Sessions
+          </h1>
+          <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
+            Manage school years and set the active academic session
+          </p>
+        </div>
+        <button
+          onClick={() => setOpen(true)}
+          className="flex items-center gap-1.5 rounded-lg bg-[#8B6DF2] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-400"
+        >
+          <Plus size={16} />
+          Add Session
+        </button>
+      </div>
 
-      <Box sx={{ p: { xs: 1.5, sm: 2.5, md: 3 }, backgroundColor: C.bg, minHeight: "100%" }}>
-
-        {/* ── Header ──────────────────────────────────────────── */}
-        <PageHeader
-          title="Academic Sessions"
-          subtitle="Manage school years and set the active academic session"
-          actionLabel="Add Session"
-          onAction={() => setOpen(true)}
-          isMobile={isMobile}
-        />
-
-        {/* ── Content ─────────────────────────────────────────── */}
-        {loading ? (
-          <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
-            <Box sx={{
-              width: 32, height: 32, borderRadius: "50%",
-              border: `3px solid ${C.accentDim}`, borderTopColor: C.accent,
-              animation: "spin 0.7s linear infinite",
-              "@keyframes spin": { to: { transform: "rotate(360deg)" } },
-            }} />
-          </Box>
-
-        ) : sessions.length === 0 ? (
-          <EmptyState
-            icon={CalendarTodayOutlined}
-            message="No academic sessions found"
-            actionLabel="Add Session"
-            onAction={() => setOpen(true)}
-          />
-
-        ) : isMobile ? (
-          /* ── Mobile cards ──────────────────────────────────── */
-          <Box>
-            {sessions.map(s => (
+      {/* Content */}
+      {loading ? (
+        <div className="flex justify-center py-16">
+          <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-amber-400/20 border-t-amber-500" />
+        </div>
+      ) : sessions.length === 0 ? (
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 py-16 dark:border-white/10">
+          <Calendar size={32} className="mb-3 text-slate-300 dark:text-slate-600" />
+          <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">No academic sessions found</p>
+          <button
+            onClick={() => setOpen(true)}
+            className="rounded-lg bg-[#8B6DF2] px-4 py-2 text-sm font-semibold text-white "
+          >
+            Add Session
+          </button>
+        </div>
+      ) : (
+        <>
+          {/* Mobile */}
+          <div className="sm:hidden">
+            {sessions.map((s) => (
               <SessionCard key={s.id} session={s} onActivate={() => handleSetActive(s.id)} />
             ))}
-          </Box>
+          </div>
+          {/* Desktop */}
+          <div className="hidden sm:block">
+            <SessionsTable sessions={sessions} onActivate={handleSetActive} />
+          </div>
+        </>
+      )}
 
-        ) : (
-          /* ── Desktop table ──────────────────────────────────── */
-          <DataTable>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  {["Session", "Start Date", "End Date", "Status", "Actions"].map(h => (
-                    <TableCell key={h} sx={{
-                      fontFamily: '"DM Mono", monospace',
-                      fontSize: "0.68rem", fontWeight: 500,
-                      letterSpacing: "0.12em", textTransform: "uppercase",
-                      color: C.textSecondary, borderBottom: `1px solid ${C.border}`,
-                      py: 1.25, px: 2,
-                    }}>{h}</TableCell>
-                  ))}
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {sessions.map((s, i) => (
-                  <TableRow
-                    key={s.id}
-                    sx={{
-                      "&:hover": { backgroundColor: "rgba(255,255,255,0.02)" },
-                      transition: `background ${EASE}`,
-                      animation: `fadeUp 0.3s ${i * 35}ms ease both`,
-                      "@keyframes fadeUp": {
-                        from: { opacity: 0, transform: "translateY(8px)" },
-                        to:   { opacity: 1, transform: "translateY(0)" },
-                      },
-                    }}
-                  >
-                    {/* Name */}
-                    <TableCell sx={{ borderColor: C.border, py: 1.5, px: 2 }}>
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-                        <Box sx={{
-                          width: 32, height: 32, borderRadius: "9px",
-                          backgroundColor: s.is_active ? C.greenDim : C.accentDim,
-                          border: `1px solid ${s.is_active ? C.green + "25" : "rgba(245,158,11,0.18)"}`,
-                          display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-                        }}>
-                          <CalendarTodayOutlined sx={{ fontSize: 15, color: s.is_active ? C.green : C.accent }} />
-                        </Box>
-                        <Typography sx={{ fontFamily: FONT, fontWeight: 700, fontSize: "0.875rem", color: C.textPrimary }}>
-                          {s.name}
-                        </Typography>
-                      </Box>
-                    </TableCell>
-
-                    {/* Start date */}
-                    <TableCell sx={{ borderColor: C.border, py: 1.5, px: 2 }}>
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
-                        <EventOutlined sx={{ fontSize: 13, color: C.textSecondary }} />
-                        <Typography sx={{ fontFamily: '"DM Mono", monospace', fontSize: "0.8rem", color: C.textPrimary }}>
-                          {fmtDate(s.start_date)}
-                        </Typography>
-                      </Box>
-                    </TableCell>
-
-                    {/* End date */}
-                    <TableCell sx={{ borderColor: C.border, py: 1.5, px: 2 }}>
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
-                        <EventOutlined sx={{ fontSize: 13, color: C.textSecondary }} />
-                        <Typography sx={{ fontFamily: '"DM Mono", monospace', fontSize: "0.8rem", color: C.textPrimary }}>
-                          {fmtDate(s.end_date)}
-                        </Typography>
-                      </Box>
-                    </TableCell>
-
-                    {/* Status */}
-                    <TableCell sx={{ borderColor: C.border, py: 1.5, px: 2 }}>
-                      <StatusChip active={s.is_active} />
-                    </TableCell>
-
-                    {/* Actions */}
-                    <TableCell sx={{ borderColor: C.border, py: 1.5, px: 2 }}>
-                      {!s.is_active ? (
-                        <Tooltip title="Set as active session" arrow>
-                          <Button
-                            size="small"
-                            onClick={() => handleSetActive(s.id)}
-                            startIcon={<PlayArrowOutlined sx={{ fontSize: 13 }} />}
-                            sx={{
-                              color: C.accent, fontFamily: FONT, fontWeight: 600,
-                              fontSize: "0.72rem", textTransform: "none",
-                              borderRadius: "8px", px: 1.5,
-                              border: `1px solid ${C.accent}30`,
-                              "&:hover": { backgroundColor: C.accentDim },
-                              transition: `all ${EASE}`,
-                            }}
-                          >
-                            Activate
-                          </Button>
-                        </Tooltip>
-                      ) : (
-                        <Typography sx={{ fontFamily: FONT, fontSize: "0.75rem", color: C.green, fontStyle: "italic" }}>
-                          Current session
-                        </Typography>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </DataTable>
-        )}
-
-        {/* Mobile FAB */}
-        {isMobile && <MobileFab onClick={() => setOpen(true)} />}
-
-        {/* ── Add Session Dialog ─────────────────────────────── */}
-        <Dialog
-          open={open} onClose={() => setOpen(false)}
-          fullWidth maxWidth="xs" fullScreen={isMobile}
-          PaperProps={{ sx: {
-            backgroundColor: C.surface,
-            border: isMobile ? "none" : `1px solid ${C.border}`,
-            borderRadius: isMobile ? 0 : "16px",
-            boxShadow: "0 24px 64px rgba(0,0,0,0.5)",
-          }}}
-        >
-          <DialogTitle sx={{
-            fontFamily: FONT, fontWeight: 700, fontSize: "1.05rem",
-            color: C.textPrimary, borderBottom: `1px solid ${C.border}`,
-            display: "flex", alignItems: "center", justifyContent: "space-between",
-          }}>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-              <CalendarTodayOutlined sx={{ fontSize: 18, color: C.accent }} />
-              Add Academic Session
-            </Box>
-            {isMobile && (
-              <IconButton onClick={() => setOpen(false)} sx={{ color: C.textSecondary }}>
-                <Close />
-              </IconButton>
-            )}
-          </DialogTitle>
-
-          <DialogContent sx={{ pt: 2.5 }}>
-            <Grid container spacing={2}>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth required label="Session Name" sx={inputSx}
-                  placeholder="e.g. 2025 – 2026"
-                  value={form.name}
-                  autoFocus
-                  onChange={e => setForm({ ...form, name: e.target.value })}
-                />
-              </Grid>
-              <Grid item xs={6}>
-                <TextField
-                  fullWidth required type="date" label="Start Date" sx={inputSx}
-                  value={form.start_date}
-                  InputLabelProps={{ shrink: true }}
-                  onChange={e => setForm({ ...form, start_date: e.target.value })}
-                />
-              </Grid>
-              <Grid item xs={6}>
-                <TextField
-                  fullWidth required type="date" label="End Date" sx={inputSx}
-                  value={form.end_date}
-                  InputLabelProps={{ shrink: true }}
-                  onChange={e => setForm({ ...form, end_date: e.target.value })}
-                />
-              </Grid>
-            </Grid>
-          </DialogContent>
-
-          <DialogActions sx={{ px: 3, pb: 2.5, gap: 1, borderTop: `1px solid ${C.border}` }}>
-            <Button
-              onClick={() => setOpen(false)} disabled={saving}
-              sx={{ color: C.textSecondary, fontFamily: FONT, textTransform: "none", borderRadius: "8px" }}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="contained" onClick={handleCreate}
-              disabled={saving || !form.name.trim() || !form.start_date || !form.end_date}
-              sx={{
-                backgroundColor: C.accent, color: "#111827",
-                fontFamily: FONT, fontWeight: 600,
-                textTransform: "none", borderRadius: "10px", px: 3,
-                "&:hover": { backgroundColor: "#FBBF24" },
-                "&.Mui-disabled": { backgroundColor: "rgba(245,158,11,0.2)", color: "rgba(17,24,39,0.4)" },
-              }}
-            >
-              {saving ? "Creating…" : "Save Session"}
-            </Button>
-          </DialogActions>
-        </Dialog>
-
-      </Box>
-    </>
+      <AddSessionDialog
+        open={open}
+        onClose={() => setOpen(false)}
+        form={form}
+        setForm={setForm}
+        onSave={handleCreate}
+        saving={saving}
+      />
+    </div>
   );
 }

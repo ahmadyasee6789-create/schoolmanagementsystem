@@ -1,99 +1,14 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import {
-  Box, Button, Card, Dialog, DialogTitle, DialogContent,
-  DialogActions, Grid, IconButton, MenuItem, Table, TableBody, TableCell,
-  TableHead, TableRow, TextField, Typography, CircularProgress,
-  FormControl, RadioGroup, FormLabel, FormControlLabel, Radio, Chip,
-} from '@mui/material';
-import { Add, Edit, Delete, Search } from '@mui/icons-material';
-import { api } from '@/app/lib/api';
-import { usePaginatedQuery } from '@/app/hooks/usePaginatedQuery';
-import { useAuthStore } from '@/app/store/authStore';
-import { toast } from 'react-hot-toast/headless';
+import { useEffect, useState } from "react";
+import { AlertTriangle, Pencil, Plus, Search, Trash2, Upload, UserRound, Users, X } from "lucide-react";
+import { api } from "@/app/lib/api";
+import { usePaginatedQuery } from "@/app/hooks/usePaginatedQuery";
+import { useAuthStore } from "@/app/store/authStore";
+import toast from "react-hot-toast";
 
-// ─── Design tokens ────────────────────────────────────────────────────
-const C = {
-  bg:            "#0D1117",
-  surface:       "#161B27",
-  surfaceHover:  "#1C2333",
-  border:        "rgba(255,255,255,0.07)",
-  accent:        "#F59E0B",
-  accentDim:     "rgba(245,158,11,0.12)",
-  textPrimary:   "#F9FAFB",
-  textSecondary: "rgba(249,250,251,0.45)",
-  green:         "#34D399",
-  greenDim:      "rgba(52,211,153,0.1)",
-  red:           "#F87171",
-  redDim:        "rgba(248,113,113,0.1)",
-  inputBg:       "#1C2333",
-};
-const FONT = "'DM Sans', sans-serif";
-const EASE = "260ms cubic-bezier(0.4,0,0.2,1)";
-
-// ─── Shared styles ────────────────────────────────────────────────────
-const inputSx = {
-  "& .MuiOutlinedInput-root": {
-    backgroundColor: C.inputBg,
-    borderRadius: "10px",
-    fontFamily: FONT,
-    color: C.textPrimary,
-    fontSize: "0.875rem",
-    "& fieldset": { borderColor: C.border },
-    "&:hover fieldset": { borderColor: "rgba(245,158,11,0.35)" },
-    "&.Mui-focused fieldset": { borderColor: C.accent },
-  },
-  "& .MuiInputLabel-root": { color: C.textSecondary, fontFamily: FONT, fontSize: "0.875rem" },
-  "& .MuiInputLabel-root.Mui-focused": { color: C.accent },
-  "& input": { color: C.textPrimary, fontFamily: FONT },
-  "& .MuiSelect-select": { color: C.textPrimary, fontFamily: FONT },
-  "& .MuiSvgIcon-root": { color: C.textSecondary },
-};
-
-const menuPaperSx = {
-  PaperProps: {
-    sx: {
-      backgroundColor: C.surfaceHover,
-      border: `1px solid ${C.border}`,
-      borderRadius: "10px",
-      "& .MuiMenuItem-root": {
-        fontFamily: FONT, fontSize: "0.875rem", color: C.textPrimary,
-        "&:hover": { backgroundColor: C.accentDim },
-        "&.Mui-selected": { backgroundColor: C.accentDim, color: C.accent },
-      },
-    },
-  },
-};
-
-const thSx = {
-  borderColor: C.border, color: C.textSecondary, fontFamily: FONT,
-  fontSize: "0.7rem", fontWeight: 700, letterSpacing: "0.08em",
-  textTransform: "uppercase" as const, py: 1.5, whiteSpace: "nowrap" as const,
-};
-
-const tdSx = {
-  borderColor: C.border, color: C.textPrimary,
-  fontFamily: FONT, fontSize: "0.855rem", py: 1.5,
-};
-
-// ─── Section divider inside dialog ───────────────────────────────────
-function SectionLabel({ label }: { label: string }) {
-  return (
-    <Grid item xs={12}>
-      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mt: 2, mb: 0.5 }}>
-        <Box sx={{ width: 3, height: 16, borderRadius: 1, backgroundColor: C.accent }} />
-        <Typography sx={{ fontSize: "0.78rem", fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: C.textSecondary, fontFamily: FONT }}>
-          {label}
-        </Typography>
-      </Box>
-    </Grid>
-  );
-}
-
-// ─── Types ────────────────────────────────────────────────────────────
 type Grade = { id: number; name: string };
-type Classroom = { id: number; name: string; grade_id: number; section: string; grade_name: string };
+type Classroom = { id: number; grade_id: number; section: string; grade_name: string };
 type Student = {
   id: number;
   admission_no: string;
@@ -115,24 +30,46 @@ type Student = {
   discount_percent?: number;
 };
 type StudentFormData = {
-  id: number; first_name: string; last_name: string;
-  phone: string; email: string; father_name: string; father_phone: string;
-  mother_name: string; guardian_name: string; guardian_phone: string;
-  gender: string; date_of_birth: string;
-  classroom_id: number; discount_percent: number; enrollment_date: string;
+  id: number;
+  first_name: string;
+  last_name: string;
+  phone: string;
+  email: string;
+  father_name: string;
+  father_phone: string;
+  mother_name: string;
+  guardian_name: string;
+  guardian_phone: string;
+  gender: string;
+  date_of_birth: string;
+  classroom_id: number;
+  discount_percent: number;
+  enrollment_date: string;
 };
+type ApiError = { response?: { data?: { detail?: string } } };
 
 const emptyForm: StudentFormData = {
-  id: 0, first_name: '', last_name: '', phone: '', email: '',
-  father_name: '', father_phone: '', mother_name: '', guardian_name: '', guardian_phone: '',
-  gender: 'male', date_of_birth: '', classroom_id: 0,
-  discount_percent: 0, enrollment_date: new Date().toISOString().split('T')[0],
+  id: 0, first_name: "", last_name: "", phone: "", email: "", father_name: "", father_phone: "", mother_name: "", guardian_name: "", guardian_phone: "", gender: "male", date_of_birth: "", classroom_id: 0, discount_percent: 0, enrollment_date: new Date().toISOString().split("T")[0],
 };
+const inputClass = "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-[#8B6DF2] dark:border-white/10 dark:bg-white/5 dark:text-slate-100 dark:placeholder:text-slate-500";
+const secondaryButtonClass = "rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5";
 
-// ─── Main component ───────────────────────────────────────────────────
+function StudentCard({ student, onEdit, onDelete }: { student: Student; onEdit: () => void; onDelete: () => void }) {
+  const parent = student.father_name || student.mother_name || student.guardian_name || "No parent recorded";
+  return (
+    <article className="rounded-xl border border-slate-200 bg-white p-4 transition-colors hover:border-[#8B6DF2]/40 dark:border-white/10 dark:bg-white/[0.03]">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0"><div className="flex items-center gap-2"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[#8B6DF2]/20 bg-[#8B6DF2]/10"><UserRound size={15} className="text-[#8B6DF2]" /></span><div className="min-w-0"><p className="truncate text-sm font-bold text-slate-900 dark:text-slate-50">{student.first_name} {student.last_name}</p><p className="mt-0.5 text-xs font-medium text-[#8B6DF2]">{student.admission_no}</p></div></div></div>
+        <div className="flex shrink-0 gap-1"><button type="button" title="Edit student" onClick={onEdit} className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-[#8B6DF2]/10 hover:text-[#8B6DF2] dark:text-slate-500"><Pencil size={16} /></button><button type="button" title="Delete student" onClick={onDelete} className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-red-500/10 hover:text-red-500 dark:text-slate-500"><Trash2 size={16} /></button></div>
+      </div>
+      <div className="mt-4 grid grid-cols-2 gap-3 text-xs"><div><p className="text-slate-400 dark:text-slate-500">Class</p><p className="mt-1 font-semibold text-slate-700 dark:text-slate-200">{student.grade_name ? `${student.grade_name} – ${student.section}` : "Not enrolled"}</p></div><div><p className="text-slate-400 dark:text-slate-500">Roll no.</p><p className="mt-1 font-semibold text-slate-700 dark:text-slate-200">{student.roll_number || "—"}</p></div><div className="col-span-2"><p className="text-slate-400 dark:text-slate-500">Parent / guardian</p><p className="mt-1 truncate font-semibold text-slate-700 dark:text-slate-200">{parent}</p></div></div>
+    </article>
+  );
+}
+
 export default function StudentsPage() {
-  const [search, setSearch] = useState('');
-  const [gradeFilter, setGradeFilter] = useState<string | 'all'>('all');
+  const [search, setSearch] = useState("");
+  const [gradeFilter, setGradeFilter] = useState<string | "all">("all");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState<StudentFormData>(emptyForm);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -141,454 +78,101 @@ export default function StudentsPage() {
   const [grades, setGrades] = useState<Grade[]>([]);
   const [loadingClasses, setLoadingClasses] = useState(true);
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
-  const {user, hydrated} = useAuthStore();
+  const { user, hydrated } = useAuthStore();
   const [importing, setImporting] = useState(false);
-const [importPreview, setImportPreview] = useState<any>(null);
-useEffect(() => {
-  // Only fetch data if user is authenticated
-  if (!hydrated || !user) return;
-  
-  Promise.all([
-    api.get('/classes'), 
-    api.get('/grades'), 
-    api.get('/sessions/active')
-  ])
-    .then(([c, g, s]) => {
-      setClasses(c.data); 
-      setGrades(g.data);
-      setActiveSessionId(s.data?.id ?? null);
-      setLoadingClasses(false);
-    })
-    .catch(err => {
-      console.error('Failed to fetch dashboard data:', err);
-      setLoadingClasses(false);
-    });
-}, [user, hydrated]); // Add dependencies
+  const [importPreview, setImportPreview] = useState<unknown>(null);
+  const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  useEffect(() => {
+    if (!hydrated || !user) return;
+    Promise.all([api.get("/classes"), api.get("/grades"), api.get("/sessions/active")])
+      .then(([classrooms, gradeList, session]) => {
+        setClasses(classrooms.data);
+        setGrades(gradeList.data);
+        setActiveSessionId(session.data?.id ?? null);
+      })
+      .catch((error) => console.error("Failed to fetch student form data:", error))
+      .finally(() => setLoadingClasses(false));
+  }, [user, hydrated]);
 
   const { data: students = [], loading, refetch, page, totalPages, setPage } = usePaginatedQuery({
-    fetcher: async ({ page, limit, search, grade_name }) => {
-      const res = await api.get('/students', {
-        params: { page, limit, search, grade_name }
-      });
-      console.log('API response:', res.data);
-      const data = Array.isArray(res.data) ? res.data : (res.data.items ?? []);
-      const totalPages = Array.isArray(res.data) ? 1 : (res.data.total_pages ?? 1);
-      return { data, totalPages };
+    fetcher: async ({ page: currentPage, limit, search: query, grade_name }) => {
+      const response = await api.get("/students", { params: { page: currentPage, limit, search: query, grade_name } });
+      const data = Array.isArray(response.data) ? response.data : (response.data.items ?? []);
+      const pageCount = Array.isArray(response.data) ? 1 : (response.data.total_pages ?? 1);
+      return { data, totalPages: pageCount };
     },
-    filters: {
-      search,
-      grade_name: gradeFilter !== "all" ? gradeFilter : undefined
-    },
-    debounceKeys: ["search"]
+    filters: { search, grade_name: gradeFilter !== "all" ? gradeFilter : undefined },
+    debounceKeys: ["search"],
   });
 
+  const updateForm = <K extends keyof StudentFormData>(key: K, value: StudentFormData[K]) => setForm((previous) => ({ ...previous, [key]: value }));
   const openAddDialog = () => { setForm(emptyForm); setEditingId(null); setDialogOpen(true); };
-  const openEditDialog = (s: Student) => {
-    setForm({
-      id: s.id, first_name: s.first_name, last_name: s.last_name,
-      phone: s.phone || '', email: s.email || '', father_name: s.father_name || '',
-      father_phone: s.father_phone || '', mother_name: s.mother_name || '',
-      guardian_name: s.guardian_name || '', guardian_phone: s.guardian_phone || '',
-      gender: s.gender, date_of_birth: s.date_of_birth, classroom_id: 0,
-      discount_percent: s.discount_percent || 0,
-      enrollment_date: new Date().toISOString().split('T')[0],
-    });
-    setEditingId(s.id); setDialogOpen(true);
+  const openEditDialog = (student: Student) => {
+    setForm({ id: student.id, first_name: student.first_name, last_name: student.last_name, phone: student.phone || "", email: student.email || "", father_name: student.father_name || "", father_phone: student.father_phone || "", mother_name: student.mother_name || "", guardian_name: student.guardian_name || "", guardian_phone: student.guardian_phone || "", gender: student.gender, date_of_birth: student.date_of_birth, classroom_id: 0, discount_percent: student.discount_percent || 0, enrollment_date: new Date().toISOString().split("T")[0] });
+    setEditingId(student.id);
+    setDialogOpen(true);
   };
-
   const saveStudent = async () => {
     setSaving(true);
     try {
       if (editingId) {
-        await api.put(`/students/${editingId}`, {
-          first_name: form.first_name, last_name: form.last_name,
-          phone: form.phone || null, email: form.email || null,
-          father_name: form.father_name || null, father_phone: form.father_phone || null,
-          mother_name: form.mother_name || null, guardian_name: form.guardian_name || null,
-          guardian_phone: form.guardian_phone || null, gender: form.gender,
-          date_of_birth: form.date_of_birth || null,
-        });
+        await api.put(`/students/${editingId}`, { first_name: form.first_name, last_name: form.last_name, phone: form.phone || null, email: form.email || null, father_name: form.father_name || null, father_phone: form.father_phone || null, mother_name: form.mother_name || null, guardian_name: form.guardian_name || null, guardian_phone: form.guardian_phone || null, gender: form.gender, date_of_birth: form.date_of_birth || null });
       } else {
-        await api.post('/students/with-enrollment', {
-          ...form, phone: form.phone || null, email: form.email || null,
-          father_name: form.father_name || null, father_phone: form.father_phone || null,
-          mother_name: form.mother_name || null, guardian_name: form.guardian_name || null,
-          guardian_phone: form.guardian_phone || null, date_of_birth: form.date_of_birth || null,
-          classroom_id: Number(form.classroom_id), session_id: activeSessionId,
-          discount_percent: Number(form.discount_percent) || 0,
-        });
+        await api.post("/students/with-enrollment", { ...form, phone: form.phone || null, email: form.email || null, father_name: form.father_name || null, father_phone: form.father_phone || null, mother_name: form.mother_name || null, guardian_name: form.guardian_name || null, guardian_phone: form.guardian_phone || null, date_of_birth: form.date_of_birth || null, classroom_id: Number(form.classroom_id), session_id: activeSessionId, discount_percent: Number(form.discount_percent) || 0 });
       }
-      setDialogOpen(false); refetch();
-    } catch (e: any) {
-  console.error(e);
-
-  const msg =
-    e.response?.data?.detail ||
-    "Something went wrong";
-
-  toast.error(msg);
-}
-    finally { setSaving(false); }
+      toast.success(editingId ? "Student updated" : "Student added");
+      setDialogOpen(false);
+      refetch();
+    } catch (error: unknown) { toast.error((error as ApiError).response?.data?.detail || "Something went wrong"); } finally { setSaving(false); }
+  };
+  const confirmDelete = async () => {
+    if (!deleteId) return;
+    setDeleting(true);
+    try { await api.delete(`/students/${deleteId}`); toast.success("Student deleted"); setDeleteId(null); refetch(); }
+    catch (error: unknown) { toast.error((error as ApiError).response?.data?.detail || "Failed to delete student"); } finally { setDeleting(false); }
+  };
+  const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append("file", file);
+    setImporting(true);
+    try {
+      const response = await api.post("/students/import/preview", formData, { headers: { "Content-Type": "multipart/form-data" } });
+      setImportPreview(response.data);
+      toast.success("Import preview loaded");
+    } catch (error: unknown) { toast.error((error as ApiError).response?.data?.detail || "Import failed"); } finally { setImporting(false); event.target.value = ""; }
   };
 
-  const deleteStudent = async (id: number) => {
-    if (confirm('Delete this student?')) {
-      try { await api.delete(`/students/${id}`); refetch(); }
-      catch (e: any) {
-        console.error(e);
-        toast.error("Failed to delete student");
-      }
-    }
-  };
-const handleImport = async (
-  e: React.ChangeEvent<HTMLInputElement>
-) => {
-  const file = e.target.files?.[0];
+  const pageItems = Array.from({ length: totalPages }, (_, index) => index + 1)
+    .filter((item) => item === 1 || item === totalPages || Math.abs(item - page) <= 1)
+    .reduce<(number | "…")[]>((items, item, index, filteredItems) => { if (index > 0 && item - filteredItems[index - 1] > 1) items.push("…"); items.push(item); return items; }, []);
 
-  if (!file) return;
-
-  const formData = new FormData();
-  formData.append("file", file);
-
-  setImporting(true);
-
-  try {
-    const res = await api.post(
-      "/students/import/preview",
-      formData,
-      {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-      }
-    );
-
-    console.log(res.data);
-
-    setImportPreview(res.data);
-
-    toast.success("Import preview loaded");
-  }catch (e: any) {
-  console.error("Import error:", e.response?.data);
-
-  toast.error(
-    e.response?.data?.detail || "Import failed"
-  );
-
-  } finally {
-    setImporting(false);
-  }
-};
-  // ─── Render ──────────────────────────────────────────────────────
   return (
-    <>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');`}</style>
+    <div className="min-h-full bg-white p-4 dark:bg-[#0D1117] sm:p-6 md:p-8">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-[1.45rem] font-bold text-slate-900 dark:text-slate-50">Students</h1><p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">Manage student records, enrolments and information</p></div><div className="flex flex-wrap items-center gap-2"><label className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5"><Upload size={16} />{importing ? "Importing…" : "Import Students"}<input hidden type="file" accept=".xlsx,.csv" onChange={handleImport} /></label><button type="button" onClick={openAddDialog} className="flex items-center gap-1.5 rounded-lg bg-[#8B6DF2] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-400"><Plus size={16} />Add Student</button></div></div>
 
-      <Box sx={{ p: { xs: 2, sm: 3 }, backgroundColor: C.bg, minHeight: "100%" }}>
+      {Boolean(importPreview) && <div className="mb-6 flex items-center gap-2 rounded-xl border border-emerald-400/25 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-500/10 dark:text-emerald-400"><Upload size={16} /><span>Import preview is ready. Review the uploaded data before continuing.</span><button type="button" onClick={() => setImportPreview(null)} className="ml-auto rounded-md p-1 hover:bg-emerald-500/10" aria-label="Dismiss import preview"><X size={15} /></button></div>}
 
-        {/* Header */}
-        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 4 }}>
-          <Box>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 0.5 }}>
-              <Box sx={{ width: 3, height: 22, borderRadius: 2, backgroundColor: C.accent, boxShadow: `0 0 8px ${C.accent}` }} />
-              <Typography sx={{ fontSize: "1.35rem", fontWeight: 700, color: C.textPrimary, fontFamily: FONT, letterSpacing: "-0.02em" }}>
-                Students
-              </Typography>
-            </Box>
-            <Typography sx={{ color: C.textSecondary, fontSize: "0.82rem", fontFamily: FONT, ml: "19px" }}>
-              Manage student records, enrolments and information
-            </Typography>
-          </Box>
-          <Button onClick={openAddDialog} startIcon={<Add sx={{ fontSize: 18 }} />}
-            sx={{
-              backgroundColor: C.accent, color: "#111827", fontFamily: FONT, fontWeight: 600,
-              fontSize: "0.82rem", borderRadius: "10px", px: 2.5, py: 1, textTransform: "none",
-              boxShadow: `0 4px 16px ${C.accentDim}`,
-              "&:hover": { backgroundColor: "#FBBF24", boxShadow: "0 6px 20px rgba(245,158,11,0.35)" },
-            }}>
-            Add Student
-          </Button>
-          <Button
-  component="label"
-  sx={{
-    border: `1px solid ${C.border}`,
-    color: C.textPrimary,
-    fontFamily: FONT,
-    textTransform: "none",
-    borderRadius: "10px",
-    px: 2,
-  }}
->
-  {importing ? "Importing..." : "Import Students"}
+      <div className="mb-6 grid gap-3 md:grid-cols-12"><div className="relative md:col-span-7"><Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" /><input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Search by name or admission no…" className={`${inputClass} pl-9`} /></div><select value={gradeFilter} onChange={(event) => { setGradeFilter(event.target.value); setPage(1); }} className={`${inputClass} md:col-span-5`}><option value="all">All Grades</option>{grades.map((grade) => <option key={grade.id} value={grade.name}>{grade.name}</option>)}</select></div>
 
-  <input
-    hidden
-    type="file"
-    accept=".xlsx,.csv"
-    onChange={handleImport}
-  />
-</Button>
-        </Box>
+      {loading ? <div className="flex justify-center py-16"><div className="h-8 w-8 animate-spin rounded-full border-[3px] border-[#8B6DF2]/20 border-t-[#8B6DF2]" /></div> : (students as Student[]).length === 0 ? <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 py-16 dark:border-white/10"><Users size={32} className="mb-3 text-slate-300 dark:text-slate-600" /><p className="mb-4 text-sm text-slate-500 dark:text-slate-400">No students found</p><button type="button" onClick={openAddDialog} className="rounded-lg bg-[#8B6DF2] px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-400">Add your first student</button></div> : <>
+        <div className="grid gap-3 sm:hidden">{(students as Student[]).map((student) => <StudentCard key={student.id} student={student} onEdit={() => openEditDialog(student)} onDelete={() => setDeleteId(student.id)} />)}</div>
+        <div className="hidden overflow-x-auto rounded-xl border border-slate-200 dark:border-white/10 sm:block"><table className="w-full min-w-[1100px] border-collapse text-left"><thead className="bg-slate-50 dark:bg-white/[0.03]"><tr>{["Adm. No.", "Name", "Grade / Section", "Parent", "Contact", "Roll No.", "Discount", "Actions"].map((heading) => <th key={heading} className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{heading}</th>)}</tr></thead><tbody>{(students as Student[]).map((student) => <tr key={student.id} className="border-t border-slate-100 transition-colors hover:bg-slate-50 dark:border-white/5 dark:hover:bg-white/[0.02]"><td className="px-4 py-3 text-sm font-semibold text-[#8B6DF2]">{student.admission_no}</td><td className="px-4 py-3 text-sm font-semibold text-slate-900 dark:text-slate-100">{student.first_name} {student.last_name}</td><td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">{student.grade_name ? <span className="rounded-md border border-[#8B6DF2]/20 bg-[#8B6DF2]/10 px-2 py-1 text-xs font-semibold text-[#8B6DF2]">{student.grade_name} – {student.section}</span> : <span className="text-slate-400 dark:text-slate-500">Not enrolled</span>}</td><td className="max-w-48 truncate px-4 py-3 text-sm text-slate-600 dark:text-slate-300">{student.father_name || student.mother_name || student.guardian_name || "—"}</td><td className="px-4 py-3 text-sm text-slate-500 dark:text-slate-400">{student.father_phone || student.guardian_phone || "—"}</td><td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">{student.roll_number || "—"}</td><td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">{student.discount_percent ? `${student.discount_percent}%` : "—"}</td><td className="px-4 py-3"><div className="flex gap-1"><button type="button" title="Edit student" onClick={() => openEditDialog(student)} className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-[#8B6DF2]/10 hover:text-[#8B6DF2] dark:text-slate-500"><Pencil size={16} /></button><button type="button" title="Delete student" onClick={() => setDeleteId(student.id)} className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-red-500/10 hover:text-red-500 dark:text-slate-500"><Trash2 size={16} /></button></div></td></tr>)}</tbody></table></div>
+      </>}
 
-        {/* Filters */}
-        <Grid container spacing={2} sx={{ mb: 2.5 }}>
-          <Grid item xs={12} md={7}>
-            <TextField
-              fullWidth
-              placeholder="Search by name or admission no…"
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-              sx={inputSx}
-              InputProps={{ startAdornment: <Search sx={{ color: C.textSecondary, mr: 1, fontSize: 20 }} /> }}
-            />
-          </Grid>
-          <Grid item xs={12} md={5}>
-            <TextField
-              select fullWidth label="Grade" value={gradeFilter}
-              onChange={(e) => { setGradeFilter(e.target.value); setPage(1); }}
-              sx={inputSx} SelectProps={{ MenuProps: menuPaperSx }}>
-              <MenuItem value="all">All Grades</MenuItem>
-              {grades.map((g) => <MenuItem key={g.id} value={g.name}>{g.name}</MenuItem>)}
-            </TextField>
-          </Grid>
-        </Grid>
+      {totalPages > 1 && <nav aria-label="Student pages" className="mt-6 flex flex-wrap justify-center gap-1"><button type="button" onClick={() => setPage(page - 1)} disabled={page <= 1} className={secondaryButtonClass}>← Previous</button>{pageItems.map((item, index) => item === "…" ? <span key={`ellipsis-${index}`} className="px-2 py-2 text-sm text-slate-400 dark:text-slate-500">…</span> : <button key={item} type="button" onClick={() => setPage(item)} className={`h-9 min-w-9 rounded-lg border px-2 text-sm font-semibold transition-colors ${page === item ? "border-[#8B6DF2] bg-[#8B6DF2]/10 text-[#8B6DF2]" : "border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5"}`}>{item}</button>)}<button type="button" onClick={() => setPage(page + 1)} disabled={page >= totalPages} className={secondaryButtonClass}>Next →</button></nav>}
 
-        {/* Table */}
-        <Card sx={{ backgroundColor: C.surface, border: `1px solid ${C.border}`, borderRadius: "14px", boxShadow: "0 4px 24px rgba(0,0,0,0.2)", overflow: "hidden" }}>
-          {loading ? (
-            <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
-              <CircularProgress size={32} thickness={3} sx={{ color: C.accent }} />
-            </Box>
-          ) : (
-            <Table>
-              <TableHead>
-                <TableRow sx={{ backgroundColor: C.surfaceHover }}>
-                  {["Adm. No.", "Name", "Grade / Section", "Parent", "Contact", "Roll No.", "Discount", "Actions"].map(h => (
-                    <TableCell key={h} sx={thSx}>{h}</TableCell>
-                  ))}
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {(students as Student[]).map((s) => (
-                  <TableRow key={s.id} sx={{ "&:hover": { backgroundColor: "rgba(255,255,255,0.02)" }, transition: `background ${EASE}` }}>
-                    <TableCell sx={{ ...tdSx, color: C.accent, fontWeight: 600 }}>{s.admission_no}</TableCell>
-                    <TableCell sx={{ ...tdSx, fontWeight: 600 }}>{`${s.first_name} ${s.last_name}`}</TableCell>
-                    <TableCell sx={tdSx}>
-                      {s.grade_name ? (
-                        <Chip label={`${s.grade_name} – ${s.section}`} size="small" sx={{
-                          backgroundColor: C.accentDim, color: C.accent, fontFamily: FONT,
-                          fontWeight: 600, fontSize: "0.72rem", border: `1px solid rgba(245,158,11,0.2)`, height: 22,
-                        }} />
-                      ) : (
-                        <Typography sx={{ fontSize: "0.78rem", color: C.textSecondary, fontFamily: FONT }}>Not enrolled</Typography>
-                      )}
-                    </TableCell>
-                    <TableCell sx={tdSx}>{s.father_name || s.mother_name || s.guardian_name || "—"}</TableCell>
-                    <TableCell sx={{ ...tdSx, color: C.textSecondary }}>{s.father_phone || s.guardian_phone || "—"}</TableCell>
-                    <TableCell sx={tdSx}>{s.roll_number || "—"}</TableCell>
-                    <TableCell sx={tdSx}>{s.discount_percent ? `${s.discount_percent}%` : "—"}</TableCell>
-                    <TableCell sx={tdSx}>
-                      <Box sx={{ display: "flex", gap: 0.5 }}>
-                        <IconButton size="small" onClick={() => openEditDialog(s)} sx={{
-                          color: C.textSecondary, borderRadius: "8px", p: 0.75,
-                          "&:hover": { backgroundColor: C.accentDim, color: C.accent },
-                          transition: `all ${EASE}`,
-                        }}>
-                          <Edit sx={{ fontSize: 16 }} />
-                        </IconButton>
-                        <IconButton size="small" onClick={() => deleteStudent(s.id)} sx={{
-                          color: C.textSecondary, borderRadius: "8px", p: 0.75,
-                          "&:hover": { backgroundColor: C.redDim, color: C.red },
-                          transition: `all ${EASE}`,
-                        }}>
-                          <Delete sx={{ fontSize: 16 }} />
-                        </IconButton>
-                      </Box>
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {(students as Student[]).length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={8} sx={{ ...tdSx, textAlign: "center", color: C.textSecondary, py: 5 }}>
-                      No students found
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          )}
-        </Card>
+      {dialogOpen && <div className="fixed inset-0 z-50 overflow-y-auto bg-black/40 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="student-dialog-title"><div className="mx-auto my-4 w-full max-w-3xl rounded-2xl border border-slate-200 bg-white p-5 shadow-xl dark:border-white/10 dark:bg-[#1a2233]"><div className="mb-5 flex items-center justify-between"><h2 id="student-dialog-title" className="text-base font-bold text-slate-900 dark:text-slate-50">{editingId ? "Edit Student" : "Add Student"}</h2><button type="button" onClick={() => setDialogOpen(false)} className="rounded-lg p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-white/5 dark:hover:text-slate-300"><X size={18} /></button></div>
+        <div className="space-y-6"><section><h3 className="mb-3 border-l-2 border-[#8B6DF2] pl-2 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Personal Information</h3><div className="grid gap-4 md:grid-cols-2"><label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">First Name <span className="text-red-500">*</span><input value={form.first_name} onChange={(event) => updateForm("first_name", event.target.value)} className={`${inputClass} mt-1.5`} /></label><label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">Last Name <span className="text-red-500">*</span><input value={form.last_name} onChange={(event) => updateForm("last_name", event.target.value)} className={`${inputClass} mt-1.5`} /></label><fieldset className="md:col-span-2"><legend className="text-xs font-semibold text-slate-600 dark:text-slate-300">Gender</legend><div className="mt-2 flex flex-wrap gap-x-5 gap-y-2">{["male", "female", "other"].map((gender) => <label key={gender} className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200"><input type="radio" name="gender" checked={form.gender === gender} onChange={() => updateForm("gender", gender)} className="accent-[#8B6DF2]" />{gender.charAt(0).toUpperCase() + gender.slice(1)}</label>)}</div></fieldset><label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">Date of Birth<input type="date" value={form.date_of_birth || ""} onChange={(event) => updateForm("date_of_birth", event.target.value)} className={`${inputClass} mt-1.5`} /></label><label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">Phone<input value={form.phone} onChange={(event) => updateForm("phone", event.target.value)} className={`${inputClass} mt-1.5`} /></label><label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 md:col-span-2">Email<input type="email" value={form.email} onChange={(event) => updateForm("email", event.target.value)} className={`${inputClass} mt-1.5`} /></label></div></section>
+          <section><h3 className="mb-3 border-l-2 border-[#8B6DF2] pl-2 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Parent / Guardian</h3><div className="grid gap-4 md:grid-cols-2"><label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">Father&apos;s Name<input value={form.father_name} onChange={(event) => updateForm("father_name", event.target.value)} className={`${inputClass} mt-1.5`} /></label><label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">Father&apos;s Phone<input value={form.father_phone} onChange={(event) => updateForm("father_phone", event.target.value)} className={`${inputClass} mt-1.5`} /></label><label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">Mother&apos;s Name<input value={form.mother_name} onChange={(event) => updateForm("mother_name", event.target.value)} className={`${inputClass} mt-1.5`} /></label><label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">Guardian&apos;s Name<input value={form.guardian_name} onChange={(event) => updateForm("guardian_name", event.target.value)} className={`${inputClass} mt-1.5`} /></label><label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 md:col-span-2">Guardian&apos;s Phone<input value={form.guardian_phone} onChange={(event) => updateForm("guardian_phone", event.target.value)} className={`${inputClass} mt-1.5`} /></label></div></section>
+          {!editingId && <section><h3 className="mb-3 border-l-2 border-[#8B6DF2] pl-2 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Enrolment</h3><div className="grid gap-4 md:grid-cols-2"><label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">Class <span className="text-red-500">*</span><select value={form.classroom_id} disabled={loadingClasses} onChange={(event) => updateForm("classroom_id", Number(event.target.value))} className={`${inputClass} mt-1.5 disabled:cursor-not-allowed disabled:opacity-50`}><option value={0} disabled>{loadingClasses ? "Loading classes…" : "Select class"}</option>{classes.map((classroom) => <option key={classroom.id} value={classroom.id}>{classroom.grade_name} – {classroom.section}</option>)}</select></label><label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">Discount %<input type="number" min={0} max={100} value={form.discount_percent} onChange={(event) => updateForm("discount_percent", Number(event.target.value))} className={`${inputClass} mt-1.5`} /></label><label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">Enrolment Date<input type="date" value={form.enrollment_date} onChange={(event) => updateForm("enrollment_date", event.target.value)} className={`${inputClass} mt-1.5`} /></label></div>{!activeSessionId && <p className="mt-3 text-xs text-amber-600 dark:text-amber-400">An active academic session is required before a student can be enrolled.</p>}</section>}</div>
+        <div className="mt-6 flex justify-end gap-2"><button type="button" onClick={() => setDialogOpen(false)} disabled={saving} className={secondaryButtonClass}>Cancel</button><button type="button" onClick={saveStudent} disabled={saving || !form.first_name || !form.last_name || (!editingId && (!form.classroom_id || !activeSessionId))} className="rounded-lg bg-[#8B6DF2] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-400 disabled:cursor-not-allowed disabled:opacity-40">{saving ? "Saving…" : editingId ? "Update Student" : "Add Student"}</button></div>
+      </div></div>}
 
-        {/* ── Pagination ───────────────────────────────────────────── */}
-        {totalPages > 1 && (
-          <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", mt: 3, gap: 1 }}>
-            <Button
-              onClick={() => setPage(page - 1)}
-              disabled={page <= 1}
-              sx={{
-                color: C.textSecondary, fontFamily: FONT, textTransform: "none",
-                borderRadius: "8px", border: `1px solid ${C.border}`, px: 2,
-                "&:hover": { backgroundColor: C.accentDim, color: C.accent, borderColor: C.accent },
-                "&.Mui-disabled": { opacity: 0.3 },
-              }}>
-              ← Previous
-            </Button>
-
-            {/* Page number pills */}
-            {Array.from({ length: totalPages }, (_, i) => i + 1)
-              .filter(p => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
-              .reduce<(number | '...')[]>((acc, p, idx, arr) => {
-                if (idx > 0 && (p as number) - (arr[idx - 1] as number) > 1) acc.push('...');
-                acc.push(p);
-                return acc;
-              }, [])
-              .map((p, idx) =>
-                p === '...' ? (
-                  <Typography key={`ellipsis-${idx}`} sx={{ color: C.textSecondary, fontFamily: FONT, px: 1 }}>…</Typography>
-                ) : (
-                  <Button
-                    key={p}
-                    onClick={() => setPage(p as number)}
-                    sx={{
-                      minWidth: 36, height: 36, p: 0, fontFamily: FONT, fontWeight: 600,
-                      fontSize: "0.82rem", borderRadius: "8px", textTransform: "none",
-                      border: `1px solid ${page === p ? C.accent : C.border}`,
-                      backgroundColor: page === p ? C.accentDim : "transparent",
-                      color: page === p ? C.accent : C.textSecondary,
-                      "&:hover": { backgroundColor: C.accentDim, color: C.accent, borderColor: C.accent },
-                    }}>
-                    {p}
-                  </Button>
-                )
-              )}
-
-            <Button
-              onClick={() => setPage(page + 1)}
-              disabled={page >= totalPages}
-              sx={{
-                color: C.textSecondary, fontFamily: FONT, textTransform: "none",
-                borderRadius: "8px", border: `1px solid ${C.border}`, px: 2,
-                "&:hover": { backgroundColor: C.accentDim, color: C.accent, borderColor: C.accent },
-                "&.Mui-disabled": { opacity: 0.3 },
-              }}>
-              Next →
-            </Button>
-          </Box>
-        )}
-
-        {/* ── Dialog ──────────────────────────────────────────────── */}
-        <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} fullWidth maxWidth="md"
-          PaperProps={{ sx: { backgroundColor: C.surface, border: `1px solid ${C.border}`, borderRadius: "16px", boxShadow: "0 24px 64px rgba(0,0,0,0.5)" } }}>
-          <DialogTitle sx={{ fontFamily: FONT, fontWeight: 700, fontSize: "1.05rem", color: C.textPrimary, borderBottom: `1px solid ${C.border}` }}>
-            {editingId ? 'Edit Student' : 'Add Student'}
-          </DialogTitle>
-
-          <DialogContent sx={{ pt: 2, pb: 1 }}>
-            <Grid container spacing={2} mt={0}>
-              <SectionLabel label="Personal Information" />
-
-              {[
-                { label: "First Name", key: "first_name", required: true, md: 6 },
-                { label: "Last Name",  key: "last_name",  required: true, md: 6 },
-              ].map(({ label, key, required, md }) => (
-                <Grid item xs={12} md={md} key={key}>
-                  <TextField fullWidth label={label} required={required} sx={inputSx}
-                    value={(form as any)[key]}
-                    onChange={(e) => setForm({ ...form, [key]: e.target.value })} />
-                </Grid>
-              ))}
-
-              <Grid item xs={12} md={6}>
-                <FormControl sx={{ ml: 0.5 }}>
-                  <FormLabel sx={{ color: C.textSecondary, fontFamily: FONT, fontSize: "0.82rem", "&.Mui-focused": { color: C.accent } }}>Gender</FormLabel>
-                  <RadioGroup row value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })}>
-                    {["male", "female", "other"].map(g => (
-                      <FormControlLabel key={g} value={g} label={g.charAt(0).toUpperCase() + g.slice(1)}
-                        control={<Radio size="small" sx={{ color: C.textSecondary, "&.Mui-checked": { color: C.accent } }} />}
-                        sx={{ "& .MuiFormControlLabel-label": { fontFamily: FONT, fontSize: "0.875rem", color: C.textPrimary } }} />
-                    ))}
-                  </RadioGroup>
-                </FormControl>
-              </Grid>
-
-              {[
-                { label: "Date of Birth", key: "date_of_birth", type: "date", md: 6 },
-                { label: "Phone",         key: "phone",         type: "text", md: 6 },
-                { label: "Email",         key: "email",         type: "email", md: 6 },
-              ].map(({ label, key, type, md }) => (
-                <Grid item xs={12} md={md} key={key}>
-                  <TextField fullWidth label={label} type={type} InputLabelProps={type === "date" ? { shrink: true } : undefined}
-                    sx={inputSx} value={(form as any)[key]}
-                    onChange={(e) => setForm({ ...form, [key]: e.target.value })} />
-                </Grid>
-              ))}
-
-              <SectionLabel label="Parent / Guardian" />
-
-              {[
-                { label: "Father's Name",    key: "father_name",    md: 6 },
-                { label: "Father's Phone",   key: "father_phone",   md: 6 },
-                { label: "Mother's Name",    key: "mother_name",    md: 6 },
-                { label: "Guardian's Name",  key: "guardian_name",  md: 6 },
-                { label: "Guardian's Phone", key: "guardian_phone", md: 6 },
-              ].map(({ label, key, md }) => (
-                <Grid item xs={12} md={md} key={key}>
-                  <TextField fullWidth label={label} sx={inputSx} value={(form as any)[key]}
-                    onChange={(e) => setForm({ ...form, [key]: e.target.value })} />
-                </Grid>
-              ))}
-
-              {!editingId && (
-                <>
-                  <SectionLabel label="Enrolment" />
-
-                  <Grid item xs={12} md={6}>
-                    <TextField select fullWidth label="Class" required sx={inputSx}
-                      value={form.classroom_id} disabled={loadingClasses}
-                      onChange={(e) => setForm({ ...form, classroom_id: Number(e.target.value) })}
-                      SelectProps={{ MenuProps: menuPaperSx }}>
-                      <MenuItem value={0} disabled>Select Class</MenuItem>
-                      {classes.map(c => (
-                        <MenuItem key={c.id} value={c.id}>{c.grade_name} – {c.section}</MenuItem>
-                      ))}
-                    </TextField>
-                  </Grid>
-
-                  {[
-                    { label: "Discount %",     key: "discount_percent", type: "number", md: 6 },
-                    { label: "Enrolment Date", key: "enrollment_date",  type: "date",   md: 6 },
-                  ].map(({ label, key, type, md }) => (
-                    <Grid item xs={12} md={md} key={key}>
-                      <TextField fullWidth label={label} type={type}
-                        InputLabelProps={type === "date" ? { shrink: true } : undefined}
-                        inputProps={type === "number" ? { min: 0, max: 100 } : undefined}
-                        sx={inputSx} value={(form as any)[key]}
-                        onChange={(e) => setForm({ ...form, [key]: type === "number" ? Number(e.target.value) : e.target.value })} />
-                    </Grid>
-                  ))}
-                </>
-              )}
-            </Grid>
-          </DialogContent>
-
-          <DialogActions sx={{ px: 3, pb: 2.5, gap: 1, borderTop: `1px solid ${C.border}` }}>
-            <Button onClick={() => setDialogOpen(false)} disabled={saving}
-              sx={{ color: C.textSecondary, fontFamily: FONT, textTransform: "none", borderRadius: "8px" }}>
-              Cancel
-            </Button>
-            <Button variant="contained" onClick={saveStudent}
-              disabled={saving || !form.first_name || !form.last_name || (!editingId && !form.classroom_id) || (!editingId && !activeSessionId)}
-              sx={{
-                backgroundColor: C.accent, color: "#111827", fontFamily: FONT, fontWeight: 600,
-                textTransform: "none", borderRadius: "10px", px: 3,
-                "&:hover": { backgroundColor: "#FBBF24" },
-                "&.Mui-disabled": { backgroundColor: "rgba(245,158,11,0.2)", color: "rgba(17,24,39,0.4)" },
-              }}>
-              {saving ? 'Saving…' : editingId ? 'Update Student' : 'Add Student'}
-            </Button>
-          </DialogActions>
-        </Dialog>
-      </Box>
-    </>
+      {deleteId !== null && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="delete-student-title"><div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-5 shadow-xl dark:border-white/10 dark:bg-[#1a2233]"><div className="flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-full bg-red-50 dark:bg-red-500/10"><AlertTriangle size={18} className="text-red-500" /></span><h2 id="delete-student-title" className="text-base font-bold text-slate-900 dark:text-slate-50">Delete student?</h2></div><p className="mt-3 text-sm text-slate-500 dark:text-slate-400">This will permanently delete the student record.</p><div className="mt-6 flex justify-end gap-2"><button type="button" onClick={() => setDeleteId(null)} disabled={deleting} className={secondaryButtonClass}>Cancel</button><button type="button" onClick={confirmDelete} disabled={deleting} className="rounded-lg bg-red-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-400 disabled:cursor-not-allowed disabled:opacity-40">{deleting ? "Deleting…" : "Delete"}</button></div></div></div>}
+    </div>
   );
 }

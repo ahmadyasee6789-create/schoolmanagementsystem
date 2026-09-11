@@ -1,148 +1,84 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import {
-  Box, Button, Dialog, DialogActions, DialogContent, DialogTitle,
-  Grid, IconButton, Table, TableBody, TableCell, TableHead, TableRow,
-  TextField, Typography, Tooltip, useMediaQuery, useTheme,
-} from "@mui/material";
-import { Delete, Edit, Search, Close, MenuBook } from "@mui/icons-material";
+import { useEffect, useState } from "react";
+import { BookOpen, Plus, Search } from "lucide-react";
 import { api } from "@/app/lib/api";
 import toast from "react-hot-toast";
-import {
-  C, FONT, EASE, inputSx,
-  GlobalStyles, PageHeader, EmptyState,
-  DeleteDialog, DataTable, MobileFab,
-  thSx,tdSx
-} from "@/components/ui";
+import SubjectCard from "@/components/academics/subject/SubjectCard";
+import SubjectsTable from "@/components/academics/subject/SubjectsTable";
+import AddEditSubjectDialog from "@/components/academics/subject/AddEditSubjectDialog";
+import DeleteSubjectDialog from "@/components/academics/subject/DeleteSubjectDialog";
 
-// ─── Types ─────────────────────────────────────────────────────────────
-type Subject    = { id: number; name: string };
-type SubjectForm = { name: string };
+export type Subject = { id: number; name: string };
 
-// ─── Mobile card ────────────────────────────────────────────────────────
-function SubjectCard({ subject, onEdit, onDelete }: {
-  subject: Subject; onEdit: () => void; onDelete: () => void;
-}) {
-  return (
-    <Box sx={{
-      backgroundColor: C.surface,
-      border: `1px solid ${C.border}`,
-      borderRadius: "12px",
-      p: 2, mb: 1.5,
-      display: "flex", alignItems: "center", justifyContent: "space-between",
-      transition: `border-color ${EASE}`,
-      "&:hover": { borderColor: "rgba(245,158,11,0.25)" },
-    }}>
-      {/* Left */}
-      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-        <Box sx={{
-          width: 36, height: 36, borderRadius: "10px",
-          backgroundColor: C.accentDim, border: `1px solid rgba(245,158,11,0.2)`,
-          display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-        }}>
-          <MenuBook sx={{ fontSize: 18, color: C.accent }} />
-        </Box>
-        <Box>
-          <Typography sx={{ fontWeight: 700, fontSize: "0.925rem", color: C.textPrimary, fontFamily: FONT, lineHeight: 1.2 }}>
-            {subject.name}
-          </Typography>
-          <Typography sx={{ fontSize: "0.72rem", color: C.textSecondary, fontFamily: FONT }}>
-            #{String(subject.id).padStart(3, "0")}
-          </Typography>
-        </Box>
-      </Box>
-
-      {/* Actions */}
-      <Box sx={{ display: "flex", gap: 0.5 }}>
-        <IconButton size="small" onClick={onEdit} sx={{
-          color: C.textSecondary, borderRadius: "8px", p: 0.75,
-          "&:hover": { backgroundColor: C.accentDim, color: C.accent },
-          transition: `all ${EASE}`,
-        }}>
-          <Edit sx={{ fontSize: 15 }} />
-        </IconButton>
-        <IconButton size="small" onClick={onDelete} sx={{
-          color: C.textSecondary, borderRadius: "8px", p: 0.75,
-          "&:hover": { backgroundColor: C.redDim, color: C.red },
-          transition: `all ${EASE}`,
-        }}>
-          <Delete sx={{ fontSize: 15 }} />
-        </IconButton>
-      </Box>
-    </Box>
-  );
-}
-
-// ─── Main Page ──────────────────────────────────────────────────────────
 export default function SubjectsPage() {
-  const theme    = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
-
   const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [loading,  setLoading]  = useState(true);
-  const [search,   setSearch]   = useState("");
-
-  // Add / Edit
-  const [open,    setOpen]    = useState(false);
-  const [editing, setEditing] = useState<Subject | null>(null);
-  const [form,    setForm]    = useState<SubjectForm>({ name: "" });
-  const [saving,  setSaving]  = useState(false);
-
-  // Delete
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingSubject, setEditingSubject] = useState<Subject | null>(null);
+  const [subjectName, setSubjectName] = useState("");
+  const [saving, setSaving] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  // ── Fetch ──────────────────────────────────────────────────────────
   const fetchSubjects = async () => {
     try {
       const res = await api.get("/subjects");
-      setSubjects(res.data);
+      setSubjects(Array.isArray(res.data) ? res.data : []);
     } catch {
       toast.error("Failed to load subjects");
+      setSubjects([]);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { fetchSubjects(); }, []);
+  useEffect(() => {
+    fetchSubjects();
+  }, []);
 
-  // ── Derived ────────────────────────────────────────────────────────
-  const filtered = subjects.filter(s =>
-    s.name.toLowerCase().includes(search.toLowerCase())
+  const filteredSubjects = subjects.filter((subject) =>
+    subject.name.toLowerCase().includes(search.toLowerCase()),
   );
 
-  // ── Handlers ──────────────────────────────────────────────────────
   const openAdd = () => {
-    setEditing(null);
-    setForm({ name: "" });
-    setOpen(true);
+    setEditingSubject(null);
+    setSubjectName("");
+    setDialogOpen(true);
   };
 
-  const openEdit = (s: Subject) => {
-    setEditing(s);
-    setForm({ name: s.name });
-    setOpen(true);
+  const openEdit = (subject: Subject) => {
+    setEditingSubject(subject);
+    setSubjectName(subject.name);
+    setDialogOpen(true);
   };
 
-  const handleSave = async () => {
-    if (!form.name.trim()) return;
+  const saveSubject = async () => {
+    const name = subjectName.trim();
+    if (!name) return;
+
     setSaving(true);
     try {
-      if (editing) {
-        await api.put(`/subjects/${editing.id}`, form);
+      if (editingSubject) {
+        await api.put(`/subjects/${editingSubject.id}`, { name });
+        setSubjects((current) =>
+          current.map((subject) =>
+            subject.id === editingSubject.id ? { ...subject, name } : subject,
+          ),
+        );
         toast.success("Subject updated");
-        setSubjects(prev => prev.map(s => s.id === editing.id ? { ...s, name: form.name } : s));
       } else {
-        await api.post("/subjects", form);
+        await api.post("/subjects", { name });
         toast.success("Subject created");
         await fetchSubjects();
       }
-      setOpen(false);
-      setEditing(null);
-      setForm({ name: "" });
-    } catch (err: any) {
-      toast.error(err.response?.data?.detail || "Error saving subject");
+
+      setDialogOpen(false);
+      setEditingSubject(null);
+      setSubjectName("");
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail ?? "Failed to save subject");
     } finally {
       setSaving(false);
     }
@@ -150,251 +86,108 @@ export default function SubjectsPage() {
 
   const confirmDelete = async () => {
     if (!deleteId) return;
+
     setDeleting(true);
     try {
       await api.delete(`/subjects/${deleteId}`);
-      toast.success("Subject deleted");
-      setSubjects(prev => prev.filter(s => s.id !== deleteId));
+      setSubjects((current) => current.filter((subject) => subject.id !== deleteId));
       setDeleteId(null);
-    } catch (err: any) {
-      toast.error(err.response?.data?.detail || "Failed to delete");
+      toast.success("Subject deleted");
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail ?? "Failed to delete subject");
     } finally {
       setDeleting(false);
     }
   };
 
-  // ── Render ─────────────────────────────────────────────────────────
   return (
-    <>
-      <GlobalStyles />
+    <div className="min-h-full bg-white p-4 dark:bg-[#111827] sm:p-6 md:p-8">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-[1.45rem] font-bold text-slate-900 dark:text-slate-50">
+            Subjects
+          </h1>
+          <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
+            Manage academic subjects offered in your school
+          </p>
+        </div>
+        <button
+          onClick={openAdd}
+          className="flex items-center gap-1.5 rounded-lg bg-[#8B6DF2] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-400"
+        >
+          <Plus size={16} />
+          Add Subject
+        </button>
+      </div>
 
-      <Box sx={{ p: { xs: 1.5, sm: 2.5, md: 3 }, backgroundColor: C.bg, minHeight: "100%" }}>
-
-        {/* ── Page Header (reused) ─────────────────────────────── */}
-        <PageHeader
-          title="Subjects"
-          subtitle="Manage academic subjects offered in your school"
-          actionLabel="Add Subject"
-          onAction={openAdd}
-          isMobile={isMobile}
+      <div className="relative mb-6 max-w-sm">
+        <Search
+          size={16}
+          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500"
         />
+        <input
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Search subjects…"
+          className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-[#8B6DF2] dark:border-white/10 dark:bg-white/5 dark:text-slate-100 dark:placeholder:text-slate-500"
+        />
+      </div>
 
-        {/* ── Search bar ──────────────────────────────────────── */}
-        <Box sx={{ mb: 2.5 }}>
-          <TextField
-            fullWidth
-            placeholder="Search subjects…"
-            value={search}
-            size="small"
-            onChange={e => setSearch(e.target.value)}
-            sx={inputSx}
-            InputProps={{
-              startAdornment: <Search sx={{ color: C.textSecondary, mr: 1, fontSize: 18 }} />,
-            }}
-          />
-        </Box>
-
-        {/* ── Content ─────────────────────────────────────────── */}
-        {loading ? (
-          <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
-            <Box sx={{
-              width: 32, height: 32, borderRadius: "50%",
-              border: `3px solid ${C.accentDim}`,
-              borderTopColor: C.accent,
-              animation: "spin 0.7s linear infinite",
-              "@keyframes spin": { to: { transform: "rotate(360deg)" } },
-            }} />
-          </Box>
-
-        ) : filtered.length === 0 ? (
-          <EmptyState
-            icon={MenuBook}
-            message={search ? "No subjects match your search" : "No subjects found"}
-            actionLabel="Add Subject"
-            onAction={openAdd}
-          />
-
-        ) : isMobile ? (
-          /* ── Mobile cards ──────────────────────────────────── */
-          <Box>
-            {filtered.map(s => (
+      {loading ? (
+        <div className="flex justify-center py-16">
+          <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-[#8B6DF2]/20 border-t-[#8B6DF2]" />
+        </div>
+      ) : filteredSubjects.length === 0 ? (
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 py-16 dark:border-white/10">
+          <BookOpen size={32} className="mb-3 text-slate-300 dark:text-slate-600" />
+          <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
+            {search ? "No subjects match your search" : "No subjects found"}
+          </p>
+          <button
+            onClick={openAdd}
+            className="rounded-lg bg-[#8B6DF2] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-400"
+          >
+            Add your first subject
+          </button>
+        </div>
+      ) : (
+        <>
+          <div className="sm:hidden">
+            {filteredSubjects.map((subject) => (
               <SubjectCard
-                key={s.id}
-                subject={s}
-                onEdit={() => openEdit(s)}
-                onDelete={() => setDeleteId(s.id)}
+                key={subject.id}
+                subject={subject}
+                onEdit={() => openEdit(subject)}
+                onDelete={() => setDeleteId(subject.id)}
               />
             ))}
-          </Box>
+          </div>
+          <div className="hidden sm:block">
+            <SubjectsTable
+              subjects={filteredSubjects}
+              onEdit={openEdit}
+              onDelete={setDeleteId}
+            />
+          </div>
+        </>
+      )}
 
-        ) : (
-          /* ── Desktop table (DataTable reused) ─────────────── */
-          <DataTable>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  {["#", "Subject Name", "Actions"].map(h => (
-                    <TableCell key={h} sx={thSx}>{h}</TableCell>
-                  ))}
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {filtered.map((s, i) => (
-                  <TableRow
-                    key={s.id}
-                    sx={{
-                      "&:hover": { backgroundColor: "rgba(255,255,255,0.02)" },
-                      transition: `background ${EASE}`,
-                      animation: `fadeUp 0.3s ${i * 30}ms ease both`,
-                      "@keyframes fadeUp": {
-                        from: { opacity: 0, transform: "translateY(8px)" },
-                        to:   { opacity: 1, transform: "translateY(0)" },
-                      },
-                    }}
-                  >
-                    {/* ID */}
-                    <TableCell sx={{ ...tdSx, color: C.textSecondary, fontFamily: '"DM Mono", monospace', width: 80 }}>
-                      {String(s.id).padStart(3, "0")}
-                    </TableCell>
+      <AddEditSubjectDialog
+        open={dialogOpen}
+        onClose={() => setDialogOpen(false)}
+        editing={Boolean(editingSubject)}
+        subjectName={subjectName}
+        setSubjectName={setSubjectName}
+        onSave={saveSubject}
+        saving={saving}
+      />
 
-                    {/* Name */}
-                    <TableCell sx={tdSx}>
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-                        <Box sx={{
-                          width: 32, height: 32, borderRadius: "9px",
-                          backgroundColor: C.accentDim,
-                          border: `1px solid rgba(245,158,11,0.18)`,
-                          display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-                        }}>
-                          <MenuBook sx={{ fontSize: 15, color: C.accent }} />
-                        </Box>
-                        <Typography sx={{ fontFamily: FONT, fontWeight: 700, fontSize: "0.875rem", color: C.textPrimary }}>
-                          {s.name}
-                        </Typography>
-                      </Box>
-                    </TableCell>
-
-                    {/* Actions */}
-                    <TableCell sx={tdSx}>
-                      <Box sx={{ display: "flex", gap: 0.5 }}>
-                        <Tooltip title="Edit Subject" arrow>
-                          <IconButton size="small" onClick={() => openEdit(s)} sx={{
-                            color: C.textSecondary, borderRadius: "8px", p: 0.75,
-                            "&:hover": { backgroundColor: C.accentDim, color: C.accent },
-                            transition: `all ${EASE}`,
-                          }}>
-                            <Edit sx={{ fontSize: 15 }} />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Delete Subject" arrow>
-                          <IconButton size="small" onClick={() => setDeleteId(s.id)} sx={{
-                            color: C.textSecondary, borderRadius: "8px", p: 0.75,
-                            "&:hover": { backgroundColor: C.redDim, color: C.red },
-                            transition: `all ${EASE}`,
-                          }}>
-                            <Delete sx={{ fontSize: 15 }} />
-                          </IconButton>
-                        </Tooltip>
-                      </Box>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </DataTable>
-        )}
-
-        {/* Mobile FAB */}
-        {isMobile && <MobileFab onClick={openAdd} />}
-
-        {/* ── Add / Edit Dialog ──────────────────────────────── */}
-        <Dialog
-          open={open}
-          onClose={() => setOpen(false)}
-          fullWidth maxWidth="xs"
-          fullScreen={isMobile}
-          PaperProps={{
-            sx: {
-              backgroundColor: C.surface,
-              border: isMobile ? "none" : `1px solid ${C.border}`,
-              borderRadius: isMobile ? 0 : "16px",
-              boxShadow: "0 24px 64px rgba(0,0,0,0.5)",
-            },
-          }}
-        >
-          <DialogTitle sx={{
-            fontFamily: FONT, fontWeight: 700, fontSize: "1.05rem",
-            color: C.textPrimary, borderBottom: `1px solid ${C.border}`,
-            display: "flex", alignItems: "center", justifyContent: "space-between",
-          }}>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-              <MenuBook sx={{ fontSize: 18, color: C.accent }} />
-              {editing ? "Edit Subject" : "Add Subject"}
-            </Box>
-            {isMobile && (
-              <IconButton onClick={() => setOpen(false)} sx={{ color: C.textSecondary }}>
-                <Close />
-              </IconButton>
-            )}
-          </DialogTitle>
-
-          <DialogContent sx={{ pt: 2.5 }}>
-            <Grid container spacing={2}>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Subject Name"
-                  required
-                  sx={inputSx}
-                  placeholder="e.g. Mathematics"
-                  value={form.name}
-                  autoFocus
-                  inputProps={{ maxLength: 100 }}
-                  onKeyDown={e => e.key === "Enter" && handleSave()}
-                  onChange={e => setForm({ name: e.target.value })}
-                />
-              </Grid>
-            </Grid>
-          </DialogContent>
-
-          <DialogActions sx={{ px: 3, pb: 2.5, gap: 1, borderTop: `1px solid ${C.border}` }}>
-            <Button
-              onClick={() => setOpen(false)}
-              disabled={saving}
-              sx={{ color: C.textSecondary, fontFamily: FONT, textTransform: "none", borderRadius: "8px" }}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="contained"
-              onClick={handleSave}
-              disabled={saving || !form.name.trim()}
-              sx={{
-                backgroundColor: C.accent, color: "#111827",
-                fontFamily: FONT, fontWeight: 600,
-                textTransform: "none", borderRadius: "10px", px: 3,
-                "&:hover": { backgroundColor: "#FBBF24" },
-                "&.Mui-disabled": { backgroundColor: "rgba(245,158,11,0.2)", color: "rgba(17,24,39,0.4)" },
-              }}
-            >
-              {saving
-                ? (editing ? "Saving…" : "Creating…")
-                : (editing ? "Save Changes" : "Add Subject")}
-            </Button>
-          </DialogActions>
-        </Dialog>
-
-        {/* ── Delete Confirm (reused) ────────────────────────── */}
-        <DeleteDialog
-          open={!!deleteId}
-          onClose={() => setDeleteId(null)}
-          onConfirm={confirmDelete}
-          loading={deleting}
-          title="Delete Subject?"
-          description="This will permanently remove the subject and may affect related records."
-        />
-
-      </Box>
-    </>
+      <DeleteSubjectDialog
+        open={deleteId !== null}
+        onClose={() => setDeleteId(null)}
+        onConfirm={confirmDelete}
+        loading={deleting}
+      />
+    </div>
   );
 }

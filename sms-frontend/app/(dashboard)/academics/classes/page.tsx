@@ -1,28 +1,12 @@
-'use client';
+"use client";
 
-import React, { useEffect, useState } from 'react';
-import {
-  Box, Button, Card, Chip, CircularProgress, Dialog, DialogActions,
-  DialogContent, DialogTitle, Grid, IconButton, MenuItem, Table,
-  TableBody, TableCell, TableHead, TableRow, TextField, Typography,
-  useMediaQuery, useTheme, Tooltip,
-} from '@mui/material';
-import {
-  Add, Edit, Delete, Search, Close, ClassOutlined,
-  PersonOutlined, SchoolOutlined, LayersOutlined,
-  PersonAdd, PeopleOutlined,
-} from '@mui/icons-material';
-import { api } from '@/app/lib/api';
-import toast from 'react-hot-toast';
-import { useAuthStore } from '@/app/store/authStore';
-import { useRouter } from 'next/navigation';
-import {
-  C, FONT, EASE, inputSx, menuProps, thSx, tdSx,
-  GlobalStyles, StatCard, PageHeader, EmptyState,
-  SectionLabel, DeleteDialog, DataTable, MobileFab,
-} from '@/components/ui';
+import { Fragment, useEffect, useState } from "react";
+import { GraduationCap, Layers, Plus, Search, School, Trash2, User, UserPlus, Users, X } from "lucide-react";
+import { api } from "@/app/lib/api";
+import toast from "react-hot-toast";
+import { useAuthStore } from "@/app/store/authStore";
+import { useRouter } from "next/navigation";
 
-// ─── Types — match router response exactly ────────────────────────────
 type ClassType = {
   id: number;
   grade_id?: number;
@@ -32,671 +16,185 @@ type ClassType = {
   class_name: string;
   teacher_id: number | null;
   teacher_name: string | null;
-  session_id?: number;
-   student_count?: number;
 };
-
 type TeacherType = { id: number; full_name: string; email: string };
-type Grade       = { id: number; name: string };
-type Student = {
-  id: number;
-  first_name: string;
-  last_name: string;
-  admission_no: string;
-  roll_number: string | null;
-  grade_name: string | null;
-  section: string | null;
-  father_name: string | null;
-  father_phone: string | null;
-  phone: string | null;
-};
+type Grade = { id: number; name: string };
+type Student = { id: number; first_name: string; last_name: string; roll_number: string | null; father_name: string | null; phone: string | null };
 type ClassForm = { grade_id: number | string; section: string };
+type ApiError = { response?: { data?: { detail?: string } } };
 
-// ─── Helper ───────────────────────────────────────────────────────────
-function classLabel(c: ClassType) {
-  const grade = c.grade?.name ?? c.grade_name;
-  if (grade && c.section) return `${grade} – ${c.section}`;
+const inputClass = "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition-colors focus:border-[#8B6DF2] dark:border-white/10 dark:bg-white/5 dark:text-slate-100";
+const secondaryButtonClass = "rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5";
+const actionButtonClass = "rounded-lg p-1.5 text-slate-400 transition-colors dark:text-slate-500";
+
+function classLabel(classroom: ClassType) {
+  const grade = classroom.grade?.name ?? classroom.grade_name;
+  if (grade && classroom.section) return `${grade} – ${classroom.section}`;
   if (grade) return grade;
-  return c.class_name || c.section || `Class #${c.id}`;
+  return classroom.class_name || classroom.section || `Class #${classroom.id}`;
 }
 
-// ─── Mobile class card ────────────────────────────────────────────────
-function ClassCard({ cls, isAdmin, onAssign, onDelete, onViewStudents }: {
-  cls: ClassType; isAdmin: boolean;
-  onAssign: () => void; onDelete: () => void; onViewStudents: () => void;
-}) {
+function ClassCard({ classroom, isAdmin, onAssign, onDelete, onViewStudents }: { classroom: ClassType; isAdmin: boolean; onAssign: () => void; onDelete: () => void; onViewStudents: () => void }) {
   return (
-    <Card sx={{
-      backgroundColor: C.surface, border: `1px solid ${C.border}`,
-      borderRadius: '12px', p: 2, mb: 1.5,
-      transition: `border-color ${EASE}`,
-      '&:hover': { borderColor: 'rgba(245,158,11,0.25)' },
-    }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.25 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
-          <Box sx={{ width: 36, height: 36, borderRadius: '10px', backgroundColor: C.accentDim, border: `1px solid rgba(245,158,11,0.2)`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <ClassOutlined sx={{ fontSize: 18, color: C.accent }} />
-          </Box>
-          <Box>
-            <Typography sx={{ fontWeight: 700, fontSize: '0.95rem', color: C.textPrimary, fontFamily: FONT, lineHeight: 1.2 }}>
-              {classLabel(cls)}
-            </Typography>
-            <Typography sx={{ fontSize: '0.72rem', color: C.textSecondary, fontFamily: FONT }}>
-              Section {cls.section}
-            </Typography>
-          </Box>
-        </Box>
-        {isAdmin && (
-          <Box sx={{ display: 'flex', gap: 0.5 }}>
-            <IconButton size="small" onClick={onAssign} sx={{ color: C.textSecondary, borderRadius: '8px', p: 0.75, '&:hover': { backgroundColor: C.accentDim, color: C.accent }, transition: `all ${EASE}` }}>
-              <PersonAdd sx={{ fontSize: 15 }} />
-            </IconButton>
-            <IconButton size="small" onClick={onDelete} sx={{ color: C.textSecondary, borderRadius: '8px', p: 0.75, '&:hover': { backgroundColor: C.redDim, color: C.red }, transition: `all ${EASE}` }}>
-              <Delete sx={{ fontSize: 15 }} />
-            </IconButton>
-          </Box>
-        )}
-      </Box>
-
-      {/* Teacher row */}
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 1.5 }}>
-        <PersonOutlined sx={{ fontSize: 13, color: C.textSecondary }} />
-        {cls.teacher_name
-          ? <Typography sx={{ fontSize: '0.78rem', color: C.textSecondary, fontFamily: FONT }}>{cls.teacher_name}</Typography>
-          : <Typography sx={{ fontSize: '0.78rem', color: C.red, fontFamily: FONT, fontStyle: 'italic' }}>No teacher assigned</Typography>
-        }
-      </Box>
-
-      <Button size="small" onClick={onViewStudents}
-        startIcon={<PeopleOutlined sx={{ fontSize: 14 }} />}
-        sx={{ color: C.blue, fontFamily: FONT, fontWeight: 600, fontSize: '0.75rem', textTransform: 'none', borderRadius: '7px', px: 1.5, border: `1px solid ${C.blue}30`, '&:hover': { backgroundColor: C.blueDim } }}>
-        View Students
-      </Button>
-    </Card>
+    <article className="rounded-xl border border-slate-200 bg-white p-4 transition-colors hover:border-[#8B6DF2]/40 dark:border-white/10 dark:bg-white/[0.03]">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[#8B6DF2]/20 bg-[#8B6DF2]/10"><GraduationCap size={15} className="text-[#8B6DF2]" /></span><p className="truncate text-sm font-bold text-slate-900 dark:text-slate-50">{classLabel(classroom)}</p></div>
+          <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400"><User size={13} />{classroom.teacher_name || "No teacher assigned"}</p>
+        </div>
+        {isAdmin && <div className="flex gap-1"><button type="button" title={classroom.teacher_name ? "Reassign teacher" : "Assign teacher"} onClick={onAssign} className={`${actionButtonClass} hover:bg-[#8B6DF2]/10 hover:text-[#8B6DF2]`}><UserPlus size={16} /></button><button type="button" title="Delete classroom" onClick={onDelete} className={`${actionButtonClass} hover:bg-red-500/10 hover:text-red-500`}><Trash2 size={16} /></button></div>}
+      </div>
+      <button type="button" onClick={onViewStudents} className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-blue-400/25 px-3 py-1.5 text-xs font-semibold text-blue-600 transition-colors hover:bg-blue-50 dark:border-blue-400/20 dark:text-blue-400 dark:hover:bg-blue-500/10"><Users size={14} />View Students</button>
+    </article>
   );
 }
 
-// ─── Students dialog ──────────────────────────────────────────────────
-function StudentsDialog({ open, onClose, classId, className, isMobile }: {
-  open: boolean; onClose: () => void; classId: number; className: string; isMobile: boolean;
-}) {
+function StudentsDialog({ open, onClose, classId, className }: { open: boolean; onClose: () => void; classId: number; className: string }) {
   const [students, setStudents] = useState<Student[]>([]);
-  const [loading, setLoading]   = useState(false);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!open || !classId) return;
-    setLoading(true);
-    api.get(`/students/by-class/${classId}`)
-      .then(r => setStudents(Array.isArray(r.data) ? r.data : []))
-      .catch(() => toast.error('Failed to load students'))
-      .finally(() => setLoading(false));
-  }, [open, classId]);
-
-  return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm" fullScreen={isMobile}
-      PaperProps={{ sx: { backgroundColor: C.surface, border: isMobile ? 'none' : `1px solid ${C.border}`, borderRadius: isMobile ? 0 : '16px', boxShadow: '0 24px 64px rgba(0,0,0,0.5)' } }}>
-      <DialogTitle sx={{ fontFamily: FONT, fontWeight: 700, fontSize: '1.05rem', color: C.textPrimary, borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-          <PeopleOutlined sx={{ fontSize: 18, color: C.accent }} />
-          {className}
-        </Box>
-        <IconButton onClick={onClose} sx={{ color: C.textSecondary }}><Close /></IconButton>
-      </DialogTitle>
-      <DialogContent sx={{ pt: 2 }}>
-        {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}>
-            <CircularProgress size={28} thickness={3} sx={{ color: C.accent }} />
-          </Box>
-        ) : students.length === 0 ? (
-          <Box sx={{ textAlign: 'center', py: 6 }}>
-            <PeopleOutlined sx={{ fontSize: 36, color: C.textSecondary, opacity: 0.4, mb: 1 }} />
-            <Typography sx={{ color: C.textSecondary, fontFamily: FONT, fontSize: '0.875rem' }}>No students enrolled</Typography>
-          </Box>
-        ) : (
-          <Box sx={{ overflowX: 'auto' }}>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  {['Roll', 'Name', 'Father', 'Phone'].map(h => (
-                    <TableCell key={h} sx={{ ...thSx, py: 1 }}>{h}</TableCell>
-                  ))}
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {students.map((s) => (
-                  <TableRow key={s.id} sx={{ '&:hover': { backgroundColor: 'rgba(255,255,255,0.02)' } }}>
-                    <TableCell sx={{ ...tdSx, color: C.accent, fontWeight: 700, py: 1.25 }}>{s.roll_number}</TableCell>
-                    <TableCell sx={{ ...tdSx, py: 1.25 }}>{s.first_name} {s.last_name}</TableCell>
-                    <TableCell sx={{ ...tdSx, color: C.textSecondary, py: 1.25 }}>{s.father_name}</TableCell>
-                    <TableCell sx={{ ...tdSx, color: C.textSecondary, py: 1.25 }}>{s.phone}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Box>
-        )}
-      </DialogContent>
-      <DialogActions sx={{ px: 3, pb: 2, borderTop: `1px solid ${C.border}` }}>
-        <Button onClick={onClose} sx={{ color: C.textSecondary, fontFamily: FONT, textTransform: 'none', borderRadius: '8px' }}>Close</Button>
-      </DialogActions>
-    </Dialog>
-  );
-}
-
-// ─── Main Page ────────────────────────────────────────────────────────
-export default function ClassesPage() {
-  const theme    = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const router   = useRouter();
-  const { user, loading: authLoading } = useAuthStore();
-
-  const [classes, setClasses]   = useState<ClassType[]>([]);
-  const [teachers, setTeachers] = useState<TeacherType[]>([]);
-  const [grades, setGrades]     = useState<Grade[]>([]);
-  const [role, setRole]         = useState<'admin' | 'teacher' | null>(null);
-  const [loading, setLoading]   = useState(true);
-  const [search, setSearch]     = useState('');
-  const [gradeFilter, setGradeFilter] = useState<string>('all');
-
-  // Assign teacher
-  const [assignOpen, setAssignOpen]   = useState(false);
-  const [selectedClass, setSelectedClass] = useState<ClassType | null>(null);
-  const [teacherId, setTeacherId]     = useState<number | ''>('');
-  const [assigning, setAssigning]     = useState(false);
-
-  // Add classroom
-  const [addOpen, setAddOpen]   = useState(false);
-  const [form, setForm]         = useState<ClassForm>({ grade_id: '', section: '' });
-  const [saving, setSaving]     = useState(false);
-
-  // Delete
-  const [deleteId, setDeleteId] = useState<number | null>(null);
-  const [deleting, setDeleting] = useState(false);
-
-  // Students
-  const [studentsOpen, setStudentsOpen]         = useState(false);
-  const [studentsClassId, setStudentsClassId]   = useState(0);
-  const [studentsClassName, setStudentsClassName] = useState('');
-
-  // ── Fetch ─────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (authLoading) return;
-    if (!user) { router.replace('/signin'); return; }
-
-    const fetchData = async () => {
-  try {
-    const [classesRes, teachersRes, meRes, gradesRes] = await Promise.all([
-      api.get('/classes'),
-      api.get('/organization/team', { params: { role: 'teacher' } }),
-      api.get('/auth/me').catch((err) => {
-        console.error('Failed to fetch /auth/me', err);
-        return { data: null }; // prevent Promise.all from rejecting
-      }),
-      api.get('/grades'),
-    ]);
-
-        const me = meRes.data;
-        setRole(me.org_role);
-        setTeachers(teachersRes.data);
-        setGrades(gradesRes.data);
-
-        // Teachers only see their own classes
-        const allClasses: ClassType[] = classesRes.data;
-        setClasses(
-          me.org_role === 'teacher'
-            ? allClasses.filter(c => c.teacher_id === me.id)
-            : allClasses
-        );
+    const loadStudents = async () => {
+      setLoading(true);
+      try {
+        const response = await api.get(`/students/by-class/${classId}`);
+        setStudents(Array.isArray(response.data) ? response.data : []);
       } catch {
-        toast.error('Failed to load classrooms');
+        toast.error("Failed to load students");
       } finally {
         setLoading(false);
       }
     };
+    void loadStudents();
+  }, [open, classId]);
 
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="class-students-title">
+      <div className="max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-xl dark:border-white/10 dark:bg-[#1a2233]">
+        <div className="mb-5 flex items-center justify-between gap-3"><div className="flex min-w-0 items-center gap-2"><Users size={18} className="shrink-0 text-[#8B6DF2]" /><h2 id="class-students-title" className="truncate text-base font-bold text-slate-900 dark:text-slate-50">{className}</h2></div><button type="button" onClick={onClose} className="rounded-lg p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-white/5 dark:hover:text-slate-300"><X size={18} /></button></div>
+        {loading ? <div className="flex justify-center py-12"><div className="h-7 w-7 animate-spin rounded-full border-[3px] border-[#8B6DF2]/20 border-t-[#8B6DF2]" /></div> : students.length === 0 ? <div className="py-12 text-center"><Users size={32} className="mx-auto mb-3 text-slate-300 dark:text-slate-600" /><p className="text-sm text-slate-500 dark:text-slate-400">No students enrolled</p></div> : <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-white/10"><table className="w-full min-w-[520px] border-collapse text-left"><thead className="bg-slate-50 dark:bg-white/[0.03]"><tr>{["Roll", "Name", "Father", "Phone"].map((heading) => <th key={heading} className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{heading}</th>)}</tr></thead><tbody>{students.map((student) => <tr key={student.id} className="border-t border-slate-100 dark:border-white/5"><td className="px-4 py-3 text-sm font-semibold text-[#8B6DF2]">{student.roll_number || "—"}</td><td className="px-4 py-3 text-sm font-medium text-slate-900 dark:text-slate-100">{student.first_name} {student.last_name}</td><td className="px-4 py-3 text-sm text-slate-500 dark:text-slate-400">{student.father_name || "—"}</td><td className="px-4 py-3 text-sm text-slate-500 dark:text-slate-400">{student.phone || "—"}</td></tr>)}</tbody></table></div>}
+        <div className="mt-5 flex justify-end"><button type="button" onClick={onClose} className={secondaryButtonClass}>Close</button></div>
+      </div>
+    </div>
+  );
+}
+
+export default function ClassesPage() {
+  const router = useRouter();
+  const { user, loading: authLoading } = useAuthStore();
+  const [classes, setClasses] = useState<ClassType[]>([]);
+  const [teachers, setTeachers] = useState<TeacherType[]>([]);
+  const [grades, setGrades] = useState<Grade[]>([]);
+  const [role, setRole] = useState<"admin" | "teacher" | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [gradeFilter, setGradeFilter] = useState("all");
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [selectedClass, setSelectedClass] = useState<ClassType | null>(null);
+  const [teacherId, setTeacherId] = useState<number | "">("");
+  const [assigning, setAssigning] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [form, setForm] = useState<ClassForm>({ grade_id: "", section: "" });
+  const [saving, setSaving] = useState(false);
+  const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [studentsOpen, setStudentsOpen] = useState(false);
+  const [studentsClassId, setStudentsClassId] = useState(0);
+  const [studentsClassName, setStudentsClassName] = useState("");
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user) { router.replace("/signin"); return; }
+    const fetchData = async () => {
+      try {
+        const [classesRes, teachersRes, meRes, gradesRes] = await Promise.all([
+          api.get("/classes"),
+          api.get("/organization/team", { params: { role: "teacher" } }),
+          api.get("/auth/me"),
+          api.get("/grades"),
+        ]);
+        const me = meRes.data;
+        setRole(me.org_role);
+        setTeachers(teachersRes.data);
+        setGrades(gradesRes.data);
+        const allClasses: ClassType[] = classesRes.data;
+        setClasses(me.org_role === "teacher" ? allClasses.filter((classroom) => classroom.teacher_id === me.id) : allClasses);
+      } catch {
+        toast.error("Failed to load classrooms");
+      } finally {
+        setLoading(false);
+      }
+    };
     fetchData();
-  }, [user, authLoading]);
+  }, [user, authLoading, router]);
 
-  // ── Derived ───────────────────────────────────────────────────────
-  const isAdmin = role === 'admin';
-
-  const uniqueGrades = Array.from(
-    new Set(classes.map(c => c.grade?.name ?? c.grade_name).filter(Boolean))
-  ) as string[];
-
-  const filtered = classes.filter(c => {
-    const label = classLabel(c).toLowerCase();
-    const matchSearch = label.includes(search.toLowerCase())
-      || (c.teacher_name ?? '').toLowerCase().includes(search.toLowerCase());
-    const matchGrade = gradeFilter === 'all'
-      || (c.grade?.name ?? c.grade_name) === gradeFilter;
-    return matchSearch && matchGrade;
+  const isAdmin = role === "admin";
+  const uniqueGrades = Array.from(new Set(classes.map((classroom) => classroom.grade?.name ?? classroom.grade_name).filter(Boolean))) as string[];
+  const filtered = classes.filter((classroom) => {
+    const matchesSearch = classLabel(classroom).toLowerCase().includes(search.toLowerCase()) || (classroom.teacher_name ?? "").toLowerCase().includes(search.toLowerCase());
+    return matchesSearch && (gradeFilter === "all" || (classroom.grade?.name ?? classroom.grade_name) === gradeFilter);
   });
+  const grouped = uniqueGrades.reduce<Record<string, ClassType[]>>((groups, grade) => { groups[grade] = filtered.filter((classroom) => (classroom.grade?.name ?? classroom.grade_name) === grade); return groups; }, {});
+  const ungrouped = filtered.filter((classroom) => !(classroom.grade?.name ?? classroom.grade_name));
+  const stats = { total: classes.length, grades: uniqueGrades.length, assigned: classes.filter((classroom) => classroom.teacher_name).length, unassigned: classes.filter((classroom) => !classroom.teacher_name).length };
 
-  // Group by grade
-  const grouped = uniqueGrades.reduce<Record<string, ClassType[]>>((acc, g) => {
-    acc[g] = filtered.filter(c => (c.grade?.name ?? c.grade_name) === g);
-    return acc;
-  }, {});
-  const ungrouped = filtered.filter(c => !(c.grade?.name ?? c.grade_name));
-
-  const stats = {
-    total:      classes.length,
-    grades:     uniqueGrades.length,
-    assigned:   classes.filter(c => c.teacher_name).length,
-    unassigned: classes.filter(c => !c.teacher_name).length,
-  };
-
-  // ── Assign teacher ────────────────────────────────────────────────
-  const openAssign = (cls: ClassType) => {
-    setSelectedClass(cls);
-    setTeacherId(cls.teacher_id ?? '');
-    setAssignOpen(true);
-  };
-
+  const openStudents = (classroom: ClassType) => { setStudentsClassId(classroom.id); setStudentsClassName(classLabel(classroom)); setStudentsOpen(true); };
+  const openAssign = (classroom: ClassType) => { setSelectedClass(classroom); setTeacherId(classroom.teacher_id ?? ""); setAssignOpen(true); };
   const submitAssign = async () => {
     if (!selectedClass || !teacherId) return;
     setAssigning(true);
     try {
       await api.post(`/classes/${selectedClass.id}/assign-teacher`, { teacher_id: teacherId });
-      const teacher = teachers.find(t => t.id === teacherId);
-      setClasses(prev => prev.map(c =>
-        c.id === selectedClass.id
-          ? { ...c, teacher_id: Number(teacherId), teacher_name: teacher?.full_name ?? null }
-          : c
-      ));
+      const teacher = teachers.find((item) => item.id === teacherId);
+      setClasses((previous) => previous.map((classroom) => classroom.id === selectedClass.id ? { ...classroom, teacher_id: Number(teacherId), teacher_name: teacher?.full_name ?? null } : classroom));
       toast.success(`Teacher assigned to ${classLabel(selectedClass)}`);
       setAssignOpen(false);
-    } catch (err: any) {
-      toast.error(err.response?.data?.detail ?? 'Failed to assign teacher');
-    } finally { setAssigning(false); }
+    } catch (error: unknown) { toast.error((error as ApiError).response?.data?.detail ?? "Failed to assign teacher"); } finally { setAssigning(false); }
   };
-
-  // ── Add classroom ─────────────────────────────────────────────────
   const submitAdd = async () => {
     if (!form.grade_id || !form.section.trim()) return;
     setSaving(true);
     try {
-      // Matches existing: POST /grades/{grade_id}/sections
       await api.post(`/grades/${form.grade_id}/sections`, { section: form.section });
-      toast.success('Classroom created');
+      toast.success("Classroom created");
       setAddOpen(false);
-      setForm({ grade_id: '', section: '' });
-      // Re-fetch to get updated list
-      const res = await api.get('/classes');
-      setClasses(res.data);
-    } catch (err: any) {
-      toast.error(err.response?.data?.detail ?? 'Failed to create classroom');
-    } finally { setSaving(false); }
+      setForm({ grade_id: "", section: "" });
+      const response = await api.get("/classes");
+      setClasses(response.data);
+    } catch (error: unknown) { toast.error((error as ApiError).response?.data?.detail ?? "Failed to create classroom"); } finally { setSaving(false); }
   };
-
-  // ── Delete ────────────────────────────────────────────────────────
   const confirmDelete = async () => {
     if (!deleteId) return;
     setDeleting(true);
-    try {
-      await api.delete(`/classes/${deleteId}`);
-      toast.success('Classroom deleted');
-      setClasses(prev => prev.filter(c => c.id !== deleteId));
-      setDeleteId(null);
-    } catch (err: any) {
-      toast.error(err.response?.data?.detail ?? 'Failed to delete');
-    } finally { setDeleting(false); }
+    try { await api.delete(`/classes/${deleteId}`); toast.success("Classroom deleted"); setClasses((previous) => previous.filter((classroom) => classroom.id !== deleteId)); setDeleteId(null); }
+    catch (error: unknown) { toast.error((error as ApiError).response?.data?.detail ?? "Failed to delete"); } finally { setDeleting(false); }
   };
 
-  // ── Render ────────────────────────────────────────────────────────
+  const groupedRows = Object.entries(grouped).filter(([, classrooms]) => classrooms.length > 0);
   return (
-    <>
-      <GlobalStyles />
+    <div className="min-h-full bg-white p-4 dark:bg-[#0D1117] sm:p-6 md:p-8">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-[1.45rem] font-bold text-slate-900 dark:text-slate-50">Classes</h1><p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">{isAdmin ? "Manage classrooms and assign class teachers" : "Your assigned classrooms"}</p></div>{isAdmin && <button type="button" onClick={() => setAddOpen(true)} className="flex items-center gap-1.5 rounded-lg bg-[#8B6DF2] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-400"><Plus size={16} />Add Class</button>}</div>
 
-      <Box sx={{ p: { xs: 1.5, sm: 2.5, md: 3 }, backgroundColor: C.bg, minHeight: '100%' }}>
+      <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">{[
+        { label: "Total Classes", value: stats.total, Icon: GraduationCap, tone: "text-[#8B6DF2] bg-[#8B6DF2]/10 border-[#8B6DF2]/20" },
+        { label: "Grades", value: stats.grades, Icon: School, tone: "text-blue-600 bg-blue-50 border-blue-400/20 dark:text-blue-400 dark:bg-blue-500/10" },
+        { label: "With Teacher", value: stats.assigned, Icon: User, tone: "text-emerald-600 bg-emerald-50 border-emerald-400/20 dark:text-emerald-400 dark:bg-emerald-500/10" },
+        { label: "No Teacher", value: stats.unassigned, Icon: Layers, tone: "text-red-500 bg-red-50 border-red-400/20 dark:bg-red-500/10" },
+      ].map(({ label, value, Icon, tone }) => <div key={label} className="rounded-xl border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-white/[0.03]"><div className="flex items-center justify-between gap-2"><span className={`flex h-9 w-9 items-center justify-center rounded-lg border ${tone}`}><Icon size={18} /></span><span className="text-2xl font-bold text-slate-900 dark:text-slate-50">{value}</span></div><p className="mt-3 text-xs font-medium text-slate-500 dark:text-slate-400">{label}</p></div>)}</div>
 
-        <PageHeader
-          title="Classes"
-          subtitle={isAdmin ? 'Manage classrooms and assign class teachers' : 'Your assigned classrooms'}
-          actionLabel={isAdmin ? 'Add Class' : undefined}
-          onAction={() => setAddOpen(true)}
-          isMobile={isMobile}
-        />
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row"><div className="relative flex-1"><Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by class or teacher…" className={`${inputClass} pl-9`} /></div><select value={gradeFilter} onChange={(event) => setGradeFilter(event.target.value)} className={`${inputClass} sm:w-48`}><option value="all">All Grades</option>{uniqueGrades.map((grade) => <option key={grade} value={grade}>{grade}</option>)}</select></div>
 
-        {/* Stats */}
-        <Grid container spacing={{ xs: 1.5, md: 2 }} sx={{ mb: { xs: 2.5, md: 3 } }}>
-          {[
-            { label: 'Total Classes', value: stats.total,      color: C.accent, dim: C.accentDim, icon: ClassOutlined,  delay: 0   },
-            { label: 'Grades',        value: stats.grades,     color: C.purple, dim: C.purpleDim, icon: SchoolOutlined, delay: 60  },
-            { label: 'With Teacher',  value: stats.assigned,   color: C.green,  dim: C.greenDim,  icon: PersonOutlined, delay: 120 },
-            { label: 'No Teacher',    value: stats.unassigned, color: C.red,    dim: C.redDim,    icon: LayersOutlined, delay: 180 },
-          ].map((s, i) => (
-            <Grid item xs={6} md={3} key={i}>
-              <StatCard {...s} />
-            </Grid>
-          ))}
-        </Grid>
+      {loading || authLoading ? <div className="flex justify-center py-16"><div className="h-8 w-8 animate-spin rounded-full border-[3px] border-[#8B6DF2]/20 border-t-[#8B6DF2]" /></div> : filtered.length === 0 ? <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 py-16 dark:border-white/10"><GraduationCap size={32} className="mb-3 text-slate-300 dark:text-slate-600" /><p className="mb-4 text-sm text-slate-500 dark:text-slate-400">{search ? "No classrooms match your search" : "No classrooms found"}</p>{isAdmin && <button type="button" onClick={() => setAddOpen(true)} className="rounded-lg bg-[#8B6DF2] px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-400">Add a classroom</button>}</div> : <>
+        <div className="space-y-6 sm:hidden">{groupedRows.map(([grade, classrooms]) => <section key={grade}><div className="mb-2 flex items-center gap-2"><School size={14} className="text-[#8B6DF2]" /><h2 className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">{grade}</h2></div><div className="grid gap-3">{classrooms.map((classroom) => <ClassCard key={classroom.id} classroom={classroom} isAdmin={isAdmin} onAssign={() => openAssign(classroom)} onDelete={() => setDeleteId(classroom.id)} onViewStudents={() => openStudents(classroom)} />)}</div></section>)}{ungrouped.map((classroom) => <ClassCard key={classroom.id} classroom={classroom} isAdmin={isAdmin} onAssign={() => openAssign(classroom)} onDelete={() => setDeleteId(classroom.id)} onViewStudents={() => openStudents(classroom)} />)}</div>
+        <div className="hidden overflow-x-auto rounded-xl border border-slate-200 dark:border-white/10 sm:block"><table className="w-full min-w-[900px] border-collapse text-left"><thead className="bg-slate-50 dark:bg-white/[0.03]"><tr>{["Class", "Grade", "Section", "Class Teacher", "Status", "Actions"].map((heading) => <th key={heading} className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{heading}</th>)}</tr></thead><tbody>{groupedRows.map(([grade, classrooms]) => <Fragment key={grade}><tr className="border-t border-slate-100 bg-slate-50/60 dark:border-white/5 dark:bg-white/[0.02]"><td colSpan={6} className="px-4 py-2"><span className="flex items-center gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400"><School size={13} className="text-[#8B6DF2]" />{grade}<span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] dark:bg-white/10 dark:text-slate-300">{classrooms.length} section{classrooms.length === 1 ? "" : "s"}</span></span></td></tr>{classrooms.map((classroom) => <tr key={classroom.id} className="border-t border-slate-100 transition-colors hover:bg-slate-50 dark:border-white/5 dark:hover:bg-white/[0.02]"><td className="px-4 py-3 text-sm font-semibold text-slate-900 dark:text-slate-100"><span className="flex items-center gap-3"><span className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#8B6DF2]/20 bg-[#8B6DF2]/10"><GraduationCap size={15} className="text-[#8B6DF2]" /></span>{classLabel(classroom)}</span></td><td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">{classroom.grade?.name ?? classroom.grade_name ?? "—"}</td><td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300"><span className="rounded-md border border-blue-400/25 bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-600 dark:border-blue-400/20 dark:bg-blue-500/10 dark:text-blue-400">Section {classroom.section}</span></td><td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">{classroom.teacher_name || <span className="italic text-slate-400 dark:text-slate-500">Not assigned</span>}</td><td className="px-4 py-3"><span className={`rounded-md px-2 py-1 text-xs font-semibold ${classroom.teacher_name ? "border border-emerald-400/25 bg-emerald-50 text-emerald-600 dark:border-emerald-400/20 dark:bg-emerald-500/10 dark:text-emerald-400" : "border border-red-400/25 bg-red-50 text-red-500 dark:border-red-400/20 dark:bg-red-500/10 dark:text-red-400"}`}>{classroom.teacher_name ? "Assigned" : "Unassigned"}</span></td><td className="px-4 py-3"><div className="flex gap-1"><button type="button" title="View students" onClick={() => openStudents(classroom)} className={`${actionButtonClass} hover:bg-blue-500/10 hover:text-blue-500`}><Users size={16} /></button>{isAdmin && <><button type="button" title={classroom.teacher_name ? "Reassign teacher" : "Assign teacher"} onClick={() => openAssign(classroom)} className={`${actionButtonClass} hover:bg-[#8B6DF2]/10 hover:text-[#8B6DF2]`}><UserPlus size={16} /></button><button type="button" title="Delete classroom" onClick={() => setDeleteId(classroom.id)} className={`${actionButtonClass} hover:bg-red-500/10 hover:text-red-500`}><Trash2 size={16} /></button></>}</div></td></tr>)}</Fragment>)}</tbody></table></div>
+      </>}
 
-        {/* Search + grade filter */}
-        <Box sx={{ display: 'flex', gap: 1.5, mb: 2.5, flexDirection: { xs: 'column', sm: 'row' } }}>
-          <TextField
-            fullWidth placeholder="Search by class or teacher…"
-            value={search} size="small"
-            onChange={(e) => setSearch(e.target.value)} sx={inputSx}
-            InputProps={{ startAdornment: <Search sx={{ color: C.textSecondary, mr: 1, fontSize: 18 }} /> }}
-          />
-          <TextField
-            select size="small" label="Grade" value={gradeFilter}
-            onChange={(e) => setGradeFilter(e.target.value)}
-            sx={{ ...inputSx, minWidth: { xs: '100%', sm: 180 } }}
-            SelectProps={{ MenuProps: menuProps }}
-          >
-            <MenuItem value="all">All Grades</MenuItem>
-            {uniqueGrades.map(g => <MenuItem key={g} value={g}>{g}</MenuItem>)}
-          </TextField>
-        </Box>
-
-        {/* Content */}
-        {(loading || authLoading) ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-            <CircularProgress size={32} thickness={3} sx={{ color: C.accent }} />
-          </Box>
-        ) : filtered.length === 0 ? (
-          <EmptyState
-            icon={ClassOutlined}
-            message={search ? 'No classrooms match your search' : 'No classrooms found'}
-            actionLabel={isAdmin ? 'Add Classroom' : undefined}
-            onAction={() => setAddOpen(true)}
-          />
-        ) : isMobile ? (
-          /* ── Mobile cards grouped by grade ────────────────────── */
-          <Box>
-            {Object.entries(grouped).map(([grade, gradeClasses]) => gradeClasses.length === 0 ? null : (
-              <Box key={grade} sx={{ mb: 3 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-                  <SchoolOutlined sx={{ fontSize: 13, color: C.accent }} />
-                  <Typography sx={{ fontSize: '0.75rem', fontWeight: 700, color: C.accent, fontFamily: FONT, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-                    {grade}
-                  </Typography>
-                  <Box sx={{ flex: 1, height: '1px', backgroundColor: C.border, ml: 1 }} />
-                </Box>
-                {gradeClasses.map(cls => (
-                  <ClassCard key={cls.id} cls={cls} isAdmin={isAdmin}
-                    onAssign={() => openAssign(cls)}
-                    onDelete={() => setDeleteId(cls.id)}
-                    onViewStudents={() => { setStudentsClassId(cls.id); setStudentsClassName(classLabel(cls)); setStudentsOpen(true); }} />
-                ))}
-              </Box>
-            ))}
-            {ungrouped.map(cls => (
-              <ClassCard key={cls.id} cls={cls} isAdmin={isAdmin}
-                onAssign={() => openAssign(cls)}
-                onDelete={() => setDeleteId(cls.id)}
-                onViewStudents={() => { setStudentsClassId(cls.id); setStudentsClassName(classLabel(cls)); setStudentsOpen(true); }} />
-            ))}
-          </Box>
-        ) : (
-          /* ── Desktop table grouped by grade ───────────────────── */
-          <DataTable>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  {['Class', 'Grade', 'Section', 'Class Teacher', 'Status', 'Actions'].map(h => (
-                    <TableCell key={h} sx={thSx}>{h}</TableCell>
-                  ))}
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {Object.entries(grouped).map(([grade, gradeClasses]) => gradeClasses.length === 0 ? null : (
-                  <React.Fragment key={grade}>
-                    {/* Grade group header */}
-                    <TableRow>
-                      <TableCell colSpan={6} sx={{ borderColor: C.border, backgroundColor: 'rgba(245,158,11,0.05)', py: 1, px: 2 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <SchoolOutlined sx={{ fontSize: 13, color: C.accent }} />
-                          <Typography sx={{ fontSize: '0.72rem', fontWeight: 700, color: C.accent, fontFamily: FONT, letterSpacing: '0.07em', textTransform: 'uppercase' }}>
-                            {grade}
-                          </Typography>
-                          <Chip label={`${gradeClasses.length} section${gradeClasses.length !== 1 ? 's' : ''}`} size="small"
-                            sx={{ backgroundColor: C.accentDim, color: C.accent, fontFamily: FONT, fontWeight: 600, fontSize: '0.65rem', height: 18, border: `1px solid rgba(245,158,11,0.2)` }} />
-                        </Box>
-                      </TableCell>
-                    </TableRow>
-
-                    {gradeClasses.map((cls, i) => (
-                      <TableRow key={cls.id} sx={{ '&:hover': { backgroundColor: 'rgba(255,255,255,0.02)' }, transition: `background ${EASE}`, animation: `fadeUp 0.35s ${i * 35}ms ease both` }}>
-
-                        {/* Class name */}
-                        <TableCell sx={{ ...tdSx, fontWeight: 700 }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                            <Box sx={{ width: 32, height: 32, borderRadius: '9px', backgroundColor: C.accentDim, border: `1px solid rgba(245,158,11,0.18)`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                              <ClassOutlined sx={{ fontSize: 15, color: C.accent }} />
-                            </Box>
-                            <Typography sx={{ fontFamily: FONT, fontWeight: 700, fontSize: '0.875rem', color: C.textPrimary }}>
-                              {classLabel(cls)}
-                            </Typography>
-                          </Box>
-                        </TableCell>
-
-                        {/* Grade */}
-                        <TableCell sx={tdSx}>
-                          <Chip label={cls.grade?.name ?? cls.grade_name ?? '—'} size="small"
-                            sx={{ backgroundColor: C.purpleDim, color: C.purple, fontFamily: FONT, fontWeight: 600, fontSize: '0.7rem', height: 22, border: `1px solid ${C.purple}30` }} />
-                        </TableCell>
-
-                        {/* Section */}
-                        <TableCell sx={tdSx}>
-                          <Chip label={`Section ${cls.section}`} size="small"
-                            sx={{ backgroundColor: C.blueDim, color: C.blue, fontFamily: FONT, fontWeight: 600, fontSize: '0.7rem', height: 22, border: `1px solid ${C.blue}25` }} />
-                        </TableCell>
-
-                        {/* Teacher */}
-                        <TableCell sx={tdSx}>
-                          {cls.teacher_name ? (
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                              <Box sx={{ width: 26, height: 26, borderRadius: '50%', backgroundColor: C.greenDim, border: `1px solid ${C.green}25`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                <PersonOutlined sx={{ fontSize: 13, color: C.green }} />
-                              </Box>
-                              <Typography sx={{ fontFamily: FONT, fontSize: '0.855rem', color: C.textPrimary }}>{cls.teacher_name}</Typography>
-                            </Box>
-                          ) : (
-                            <Typography sx={{ fontFamily: FONT, fontSize: '0.78rem', color: C.textSecondary, fontStyle: 'italic' }}>Not assigned</Typography>
-                          )}
-                        </TableCell>
-
-                        {/* Status */}
-                        <TableCell sx={tdSx}>
-                          <Chip
-                            label={cls.teacher_name ? 'Assigned' : 'Unassigned'} size="small"
-                            sx={{ backgroundColor: cls.teacher_name ? C.greenDim : C.redDim, color: cls.teacher_name ? C.green : C.red, fontFamily: FONT, fontWeight: 600, fontSize: '0.7rem', height: 22, border: `1px solid ${cls.teacher_name ? C.green : C.red}25` }}
-                          />
-                        </TableCell>
-
-                        {/* Actions */}
-                        <TableCell sx={tdSx}>
-                          <Box sx={{ display: 'flex', gap: 0.5 }}>
-                            <Tooltip title="View Students" arrow>
-                              <IconButton size="small"
-                                onClick={() => { setStudentsClassId(cls.id); setStudentsClassName(classLabel(cls)); setStudentsOpen(true); }}
-                                sx={{ color: C.textSecondary, borderRadius: '8px', p: 0.75, '&:hover': { backgroundColor: C.blueDim, color: C.blue }, transition: `all ${EASE}` }}>
-                                <PeopleOutlined sx={{ fontSize: 15 }} />
-                              </IconButton>
-                            </Tooltip>
-
-                            {isAdmin && (
-                              <>
-                                <Tooltip title={cls.teacher_name ? 'Reassign Teacher' : 'Assign Teacher'} arrow>
-                                  <IconButton size="small" onClick={() => openAssign(cls)}
-                                    sx={{ color: C.textSecondary, borderRadius: '8px', p: 0.75, '&:hover': { backgroundColor: C.accentDim, color: C.accent }, transition: `all ${EASE}` }}>
-                                    <PersonAdd sx={{ fontSize: 15 }} />
-                                  </IconButton>
-                                </Tooltip>
-                                <Tooltip title="Delete Classroom" arrow>
-                                  <IconButton size="small" onClick={() => setDeleteId(cls.id)}
-                                    sx={{ color: C.textSecondary, borderRadius: '8px', p: 0.75, '&:hover': { backgroundColor: C.redDim, color: C.red }, transition: `all ${EASE}` }}>
-                                    <Delete sx={{ fontSize: 15 }} />
-                                  </IconButton>
-                                </Tooltip>
-                              </>
-                            )}
-                          </Box>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </React.Fragment>
-                ))}
-
-                {/* Ungrouped */}
-                {ungrouped.map(cls => (
-                  <TableRow key={cls.id} sx={{ '&:hover': { backgroundColor: 'rgba(255,255,255,0.02)' } }}>
-                    <TableCell sx={{ ...tdSx, fontWeight: 700 }}>{classLabel(cls)}</TableCell>
-                    <TableCell sx={{ ...tdSx, color: C.textSecondary }}>—</TableCell>
-                    <TableCell sx={tdSx}>{cls.section}</TableCell>
-                    <TableCell sx={tdSx}>{cls.teacher_name ?? <Typography sx={{ fontFamily: FONT, fontSize: '0.78rem', color: C.textSecondary, fontStyle: 'italic' }}>Not assigned</Typography>}</TableCell>
-                    <TableCell sx={tdSx}>
-                      <Chip label={cls.teacher_name ? 'Assigned' : 'Unassigned'} size="small"
-                        sx={{ backgroundColor: cls.teacher_name ? C.greenDim : C.redDim, color: cls.teacher_name ? C.green : C.red, fontFamily: FONT, fontWeight: 600, fontSize: '0.7rem', height: 22 }} />
-                    </TableCell>
-                    <TableCell sx={tdSx}>
-                      <Box sx={{ display: 'flex', gap: 0.5 }}>
-                        <IconButton size="small" onClick={() => { setStudentsClassId(cls.id); setStudentsClassName(classLabel(cls)); setStudentsOpen(true); }}
-                          sx={{ color: C.textSecondary, borderRadius: '8px', p: 0.75, '&:hover': { backgroundColor: C.blueDim, color: C.blue } }}>
-                          <PeopleOutlined sx={{ fontSize: 15 }} />
-                        </IconButton>
-                        {isAdmin && (
-                          <IconButton size="small" onClick={() => openAssign(cls)}
-                            sx={{ color: C.textSecondary, borderRadius: '8px', p: 0.75, '&:hover': { backgroundColor: C.accentDim, color: C.accent } }}>
-                            <PersonAdd sx={{ fontSize: 15 }} />
-                          </IconButton>
-                        )}
-                      </Box>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </DataTable>
-        )}
-
-        {/* Mobile FAB — admin only */}
-        {isMobile && isAdmin && (
-          <MobileFab onClick={() => setAddOpen(true)} />
-        )}
-
-        {/* ── Assign Teacher Dialog ──────────────────────────────── */}
-        <Dialog open={assignOpen} onClose={() => setAssignOpen(false)}
-          fullWidth maxWidth="xs" fullScreen={isMobile}
-          PaperProps={{ sx: { backgroundColor: C.surface, border: isMobile ? 'none' : `1px solid ${C.border}`, borderRadius: isMobile ? 0 : '16px', boxShadow: '0 24px 64px rgba(0,0,0,0.5)' } }}>
-          <DialogTitle sx={{ fontFamily: FONT, fontWeight: 700, fontSize: '1.05rem', color: C.textPrimary, borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            {selectedClass?.teacher_name ? 'Reassign Teacher' : 'Assign Teacher'}
-            {isMobile && <IconButton onClick={() => setAssignOpen(false)} sx={{ color: C.textSecondary }}><Close /></IconButton>}
-          </DialogTitle>
-          <DialogContent sx={{ pt: 2.5 }}>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {/* Class info pill */}
-              <Box sx={{ p: 1.75, borderRadius: '10px', backgroundColor: C.accentDim, border: `1px solid rgba(245,158,11,0.18)`, display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                <ClassOutlined sx={{ fontSize: 18, color: C.accent }} />
-                <Box>
-                  <Typography sx={{ fontSize: '0.68rem', color: C.accent, fontFamily: FONT, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' }}>Assigning to</Typography>
-                  <Typography sx={{ fontSize: '0.95rem', color: C.textPrimary, fontFamily: FONT, fontWeight: 700 }}>
-                    {selectedClass ? classLabel(selectedClass) : ''}
-                  </Typography>
-                </Box>
-              </Box>
-
-              {/* Current teacher chip */}
-              {selectedClass?.teacher_name && (
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Typography sx={{ fontSize: '0.78rem', color: C.textSecondary, fontFamily: FONT }}>Current:</Typography>
-                  <Chip label={selectedClass.teacher_name} size="small"
-                    sx={{ backgroundColor: C.greenDim, color: C.green, fontFamily: FONT, fontWeight: 600, fontSize: '0.72rem', height: 22, border: `1px solid ${C.green}25` }} />
-                </Box>
-              )}
-
-              {/* Teacher dropdown */}
-              <TextField select fullWidth label="Teacher" required sx={inputSx}
-                value={teacherId}
-                onChange={e => setTeacherId(Number(e.target.value))}
-                SelectProps={{ MenuProps: menuProps }}>
-                {teachers.map(t => (
-                  <MenuItem key={t.id} value={t.id}>
-                    <Box>
-                      <Typography sx={{ fontFamily: FONT, fontSize: '0.875rem' }}>{t.full_name}</Typography>
-                      <Typography sx={{ fontFamily: FONT, fontSize: '0.72rem', color: C.textSecondary }}>{t.email}</Typography>
-                    </Box>
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Box>
-          </DialogContent>
-          <DialogActions sx={{ px: 3, pb: 2.5, gap: 1, borderTop: `1px solid ${C.border}` }}>
-            <Button onClick={() => setAssignOpen(false)} disabled={assigning}
-              sx={{ color: C.textSecondary, fontFamily: FONT, textTransform: 'none', borderRadius: '8px' }}>Cancel</Button>
-            <Button variant="contained" onClick={submitAssign} disabled={assigning || !teacherId}
-              sx={{ backgroundColor: C.accent, color: '#111827', fontFamily: FONT, fontWeight: 600, textTransform: 'none', borderRadius: '10px', px: 3, '&:hover': { backgroundColor: '#FBBF24' }, '&.Mui-disabled': { backgroundColor: 'rgba(245,158,11,0.2)', color: 'rgba(17,24,39,0.4)' } }}>
-              {assigning ? 'Assigning…' : 'Save'}
-            </Button>
-          </DialogActions>
-        </Dialog>
-
-        {/* ── Add Classroom Dialog ───────────────────────────────── */}
-        <Dialog open={addOpen} onClose={() => setAddOpen(false)}
-          fullWidth maxWidth="xs" fullScreen={isMobile}
-          PaperProps={{ sx: { backgroundColor: C.surface, border: isMobile ? 'none' : `1px solid ${C.border}`, borderRadius: isMobile ? 0 : '16px', boxShadow: '0 24px 64px rgba(0,0,0,0.5)' } }}>
-          <DialogTitle sx={{ fontFamily: FONT, fontWeight: 700, fontSize: '1.05rem', color: C.textPrimary, borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            Add Classroom
-            {isMobile && <IconButton onClick={() => setAddOpen(false)} sx={{ color: C.textSecondary }}><Close /></IconButton>}
-          </DialogTitle>
-          <DialogContent sx={{ pt: 2.5 }}>
-            <Grid container spacing={2}>
-              <SectionLabel label="Class Details" />
-
-              {/* Grade */}
-              <Grid item xs={12}>
-                <TextField select fullWidth label="Grade" required sx={inputSx}
-                  value={form.grade_id}
-                  onChange={(e) => setForm({ ...form, grade_id: Number(e.target.value) })}
-                  SelectProps={{ MenuProps: menuProps }}>
-                  <MenuItem value="" disabled>Select Grade</MenuItem>
-                  {grades.map(g => <MenuItem key={g.id} value={g.id}>{g.name}</MenuItem>)}
-                </TextField>
-              </Grid>
-
-              {/* Section */}
-              <Grid item xs={12}>
-                <TextField fullWidth label="Section" required sx={inputSx}
-                  placeholder="e.g. A, B, C"
-                  value={form.section}
-                  inputProps={{ maxLength: 5 }}
-                  onChange={(e) => setForm({ ...form, section: e.target.value.toUpperCase() })} />
-              </Grid>
-            </Grid>
-          </DialogContent>
-          <DialogActions sx={{ px: 3, pb: 2.5, gap: 1, borderTop: `1px solid ${C.border}` }}>
-            <Button onClick={() => setAddOpen(false)} disabled={saving}
-              sx={{ color: C.textSecondary, fontFamily: FONT, textTransform: 'none', borderRadius: '8px' }}>Cancel</Button>
-            <Button variant="contained" onClick={submitAdd}
-              disabled={saving || !form.grade_id || !form.section.trim()}
-              sx={{ backgroundColor: C.accent, color: '#111827', fontFamily: FONT, fontWeight: 600, textTransform: 'none', borderRadius: '10px', px: 3, '&:hover': { backgroundColor: '#FBBF24' }, '&.Mui-disabled': { backgroundColor: 'rgba(245,158,11,0.2)', color: 'rgba(17,24,39,0.4)' } }}>
-              {saving ? 'Creating…' : 'Save Classroom'}
-            </Button>
-          </DialogActions>
-        </Dialog>
-
-        {/* ── Delete confirm ─────────────────────────────────────── */}
-        <DeleteDialog
-          open={!!deleteId} onClose={() => setDeleteId(null)}
-          onConfirm={confirmDelete} loading={deleting}
-          title="Delete Classroom?"
-          description="This will permanently delete the classroom and may affect enrolled students."
-        />
-
-        {/* ── Students viewer ────────────────────────────────────── */}
-        <StudentsDialog
-          open={studentsOpen}
-          onClose={() => setStudentsOpen(false)}
-          classId={studentsClassId}
-          className={studentsClassName}
-          isMobile={isMobile}
-        />
-
-      </Box>
-    </>
+      {assignOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="assign-teacher-title"><div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-5 shadow-xl dark:border-white/10 dark:bg-[#1a2233]"><div className="mb-5 flex items-center justify-between"><h2 id="assign-teacher-title" className="text-base font-bold text-slate-900 dark:text-slate-50">{selectedClass?.teacher_name ? "Reassign Teacher" : "Assign Teacher"}</h2><button type="button" onClick={() => setAssignOpen(false)} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5"><X size={18} /></button></div><div className="mb-4 rounded-lg border border-[#8B6DF2]/20 bg-[#8B6DF2]/10 p-3"><p className="text-[10px] font-bold uppercase tracking-wide text-[#8B6DF2]">Assigning to</p><p className="mt-0.5 text-sm font-semibold text-slate-900 dark:text-slate-100">{selectedClass && classLabel(selectedClass)}</p></div><label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">Teacher <span className="text-red-500">*</span><select value={teacherId} onChange={(event) => setTeacherId(Number(event.target.value))} className={`${inputClass} mt-1.5`}><option value="" disabled>Select teacher</option>{teachers.map((teacher) => <option key={teacher.id} value={teacher.id}>{teacher.full_name} · {teacher.email}</option>)}</select></label><div className="mt-6 flex justify-end gap-2"><button type="button" onClick={() => setAssignOpen(false)} disabled={assigning} className={secondaryButtonClass}>Cancel</button><button type="button" onClick={submitAssign} disabled={assigning || !teacherId} className="rounded-lg bg-[#8B6DF2] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-400 disabled:cursor-not-allowed disabled:opacity-40">{assigning ? "Assigning…" : "Save"}</button></div></div></div>}
+      {addOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="add-class-title"><div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-5 shadow-xl dark:border-white/10 dark:bg-[#1a2233]"><div className="mb-5 flex items-center justify-between"><h2 id="add-class-title" className="text-base font-bold text-slate-900 dark:text-slate-50">Add Classroom</h2><button type="button" onClick={() => setAddOpen(false)} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5"><X size={18} /></button></div><div className="space-y-4"><label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">Grade <span className="text-red-500">*</span><select value={form.grade_id} onChange={(event) => setForm({ ...form, grade_id: Number(event.target.value) })} className={`${inputClass} mt-1.5`}><option value="" disabled>Select grade</option>{grades.map((grade) => <option key={grade.id} value={grade.id}>{grade.name}</option>)}</select></label><label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">Section <span className="text-red-500">*</span><input value={form.section} maxLength={5} onChange={(event) => setForm({ ...form, section: event.target.value.toUpperCase() })} placeholder="e.g. A, B, C" className={`${inputClass} mt-1.5`} /></label></div><div className="mt-6 flex justify-end gap-2"><button type="button" onClick={() => setAddOpen(false)} disabled={saving} className={secondaryButtonClass}>Cancel</button><button type="button" onClick={submitAdd} disabled={saving || !form.grade_id || !form.section.trim()} className="rounded-lg bg-[#8B6DF2] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-400 disabled:cursor-not-allowed disabled:opacity-40">{saving ? "Creating…" : "Save Classroom"}</button></div></div></div>}
+      {deleteId !== null && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="delete-class-title"><div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-5 shadow-xl dark:border-white/10 dark:bg-[#1a2233]"><h2 id="delete-class-title" className="text-base font-bold text-slate-900 dark:text-slate-50">Delete classroom?</h2><p className="mt-2 text-sm text-slate-500 dark:text-slate-400">This will permanently delete the classroom and may affect enrolled students.</p><div className="mt-6 flex justify-end gap-2"><button type="button" onClick={() => setDeleteId(null)} disabled={deleting} className={secondaryButtonClass}>Cancel</button><button type="button" onClick={confirmDelete} disabled={deleting} className="rounded-lg bg-red-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-400 disabled:cursor-not-allowed disabled:opacity-40">{deleting ? "Deleting…" : "Delete"}</button></div></div></div>}
+      <StudentsDialog open={studentsOpen} onClose={() => setStudentsOpen(false)} classId={studentsClassId} className={studentsClassName} />
+    </div>
   );
 }
