@@ -512,7 +512,7 @@ export default function FeeManagementPage() {
               </button>
             </div>
           </div>
-        </Modal>
+        </Modal> 
       )}
     </div>
   );
