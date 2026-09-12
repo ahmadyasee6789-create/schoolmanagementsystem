@@ -71,6 +71,24 @@ export type ExamResult = {
   gpa: number | null;
 };
 
+export type ResultStudent = {
+  id: number;
+  first_name: string;
+  last_name: string;
+  admission_no: string | null;
+  roll_number: string | null;
+  grade_name: string | null;
+  section: string | null;
+  is_active?: boolean;
+  enrollment_id: number;
+};
+
+export const studentName = (student: Pick<ResultStudent, "first_name" | "last_name">) =>
+  `${student.first_name} ${student.last_name}`.trim();
+
+export const studentIdentifier = (student: Pick<ResultStudent, "admission_no" | "roll_number">) =>
+  student.roll_number ?? student.admission_no ?? "—";
+
 export const emptyExamForm: ExamForm = { name: "", start_date: "", end_date: "", weightage: 0, term_id: 0 };
 export const emptyPaperForm: PaperForm = { exam_id: 0, classroom_id: 0, subject_id: 0, total_marks: 100, pass_marks: 40 };
 

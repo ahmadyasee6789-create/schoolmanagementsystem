@@ -1,6 +1,8 @@
 # app/routers/students.py
-from fastapi import UploadFile, File
-from app.services.student_import_service import preview_student_import
+import json
+
+from fastapi import Form, UploadFile, File
+from app.services.student_import_service import confirm_student_import, preview_student_import
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
@@ -207,6 +209,27 @@ def import_students_preview(
 
     return preview_student_import(
         file=file,
+        db=db,
+        org_id=current_user.org_id,
+        session_id=active_session.id,
+    )
+@router.post("/import/confirm")
+def import_students_confirm(
+    file: UploadFile = File(...),
+    mapping: str = Form(...),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+    active_session=Depends(get_active_session),
+):
+    require_write_access(current_user)
+    try:
+        column_mapping = json.loads(mapping)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid mapping payload")
+
+    return confirm_student_import(
+        file=file,
+        mapping=column_mapping,
         db=db,
         org_id=current_user.org_id,
         session_id=active_session.id,

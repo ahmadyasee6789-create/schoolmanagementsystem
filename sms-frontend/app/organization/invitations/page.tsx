@@ -1,434 +1,81 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import {
-  Box, Chip, Grid, IconButton, MenuItem, Table, TableBody,
-  TableCell, TableHead, TableRow, TextField, Typography,
-  Tooltip, Button, useMediaQuery, useTheme,
-} from "@mui/material";
-import {
-  Delete, ContentCopy, EmailOutlined, SendOutlined,
-  CheckCircleOutlined, HourglassEmptyOutlined,
-  AdminPanelSettingsOutlined, SchoolOutlined, ManageAccountsOutlined,
-  PersonAddOutlined,
-} from "@mui/icons-material";
-import { useAuthStore } from "@/app/store/authStore";
-import { getInvitations, sendInvitation, deleteInvitation } from "@/app/lib/invitations";
+import { useEffect, useState } from "react";
+import { CheckCircle2, Clock3, Copy, Mail, Send, Trash2, UserPlus } from "lucide-react";
 import toast from "react-hot-toast";
-import {
-  C, FONT, EASE, inputSx, menuProps, thSx, tdSx,
-  GlobalStyles, PageHeader, EmptyState, DataTable, DeleteDialog,
-} from "@/components/ui";
 import DashboardLayout from "@/app/(dashboard)/layout";
+import { getInvitations, sendInvitation, deleteInvitation } from "@/app/lib/invitations";
+import { useAuthStore } from "@/app/store/authStore";
+import { EmptyState, LoadingState, Modal, PageHeader, StatGrid, inputClass, primaryButtonClass, secondaryButtonClass } from "@/components/exams/ExamUi";
+import { Badge, DataTable, errorMessage, tableCellClass, tableHeadClass } from "@/components/finance/FinanceUi";
 
-// ─── Types ──────────────────────────────────────────────────────────────
-type Invitation = {
-  id: number;
-  email: string;
-  role: string;
-  status: "pending" | "accepted";
-  token?: string;
-};
+type Invitation = { id: number; email: string; role: string; status: "pending" | "accepted"; token?: string };
+type Tone = "purple" | "blue" | "green" | "red";
+const roles = ["admin", "teacher", "accountant"];
+const roleTone = (role: string): Tone => ({ admin: "red", teacher: "green", accountant: "blue" }[role] ?? "purple") as Tone;
+const formatRole = (role: string) => role.charAt(0).toUpperCase() + role.slice(1);
 
-// ─── Config ──────────────────────────────────────────────────────────────
-const ROLES = ["admin", "teacher", "accountant"];
+function RoleBadge({ role }: { role: string }) { return <Badge tone={roleTone(role)}>{formatRole(role)}</Badge>; }
+function StatusBadge({ status }: { status: Invitation["status"] }) { return status === "accepted" ? <Badge tone="green"><CheckCircle2 size={13} />Accepted</Badge> : <Badge tone="purple"><Clock3 size={13} />Pending</Badge>; }
 
-const ROLE_CONFIG: Record<string, { color: string; dim: string; icon: any }> = {
-  admin:      { color: C.red,    dim: C.redDim,    icon: AdminPanelSettingsOutlined  },
-  teacher:    { color: C.green,  dim: C.greenDim,  icon: SchoolOutlined              },
-  accountant: { color: C.blue,   dim: C.blueDim,   icon: ManageAccountsOutlined      },
-};
-const roleConf = (r: string) => ROLE_CONFIG[r] ?? { color: C.accent, dim: C.accentDim, icon: PersonAddOutlined };
-
-// ─── Chips ────────────────────────────────────────────────────────────────
-function RoleChip({ role }: { role: string }) {
-  const cfg = roleConf(role);
-  return (
-    <Chip label={role.charAt(0).toUpperCase() + role.slice(1)} size="small" sx={{
-      backgroundColor: cfg.dim, color: cfg.color,
-      fontFamily: FONT, fontWeight: 600, fontSize: "0.7rem",
-      height: 22, border: `1px solid ${cfg.color}25`,
-    }} />
-  );
+function InviteCard({ invitation, onCopy, onDelete }: { invitation: Invitation; onCopy: () => void; onDelete: () => void }) {
+  return <article className="rounded-xl border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-white/[0.03]"><div className="flex items-start justify-between gap-3"><div className="flex min-w-0 items-center gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#8B6DF2]/20 bg-[#8B6DF2]/10"><Mail size={17} className="text-[#8B6DF2]" /></span><p className="truncate text-sm font-bold text-slate-900 dark:text-slate-50">{invitation.email}</p></div><div className="flex shrink-0 gap-1">{invitation.status === "pending" && <button type="button" title="Copy invite link" onClick={onCopy} className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-[#8B6DF2]/10 hover:text-[#8B6DF2] dark:text-slate-500"><Copy size={16} /></button>}<button type="button" title="Delete invitation" onClick={onDelete} className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:text-slate-500 dark:hover:bg-red-500/10 dark:hover:text-red-400"><Trash2 size={16} /></button></div></div><div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-3 dark:border-white/5"><RoleBadge role={invitation.role} /><StatusBadge status={invitation.status} /></div></article>;
 }
 
-function StatusChip({ status }: { status: string }) {
-  const accepted = status === "accepted";
-  return (
-    <Chip
-      icon={accepted
-        ? <CheckCircleOutlined      sx={{ fontSize: "13px !important", color: `${C.green}  !important` }} />
-        : <HourglassEmptyOutlined   sx={{ fontSize: "13px !important", color: `${C.accent} !important` }} />
-      }
-      label={accepted ? "Accepted" : "Pending"} size="small"
-      sx={{
-        backgroundColor: accepted ? C.greenDim  : C.accentDim,
-        color:           accepted ? C.green     : C.accent,
-        fontFamily: FONT, fontWeight: 600, fontSize: "0.7rem",
-        height: 22, border: `1px solid ${accepted ? C.green : C.accent}25`,
-        "& .MuiChip-icon": { ml: "6px" },
-      }}
-    />
-  );
-}
-
-// ─── Mobile invite card ───────────────────────────────────────────────────
-function InviteCard({ invite, onCopy, onDelete }: {
-  invite: Invitation; onCopy: () => void; onDelete: () => void;
-}) {
-  const cfg = roleConf(invite.role);
-  return (
-    <Box sx={{
-      backgroundColor: C.surface, border: `1px solid ${C.border}`,
-      borderRadius: "12px", p: 2, mb: 1.5,
-      transition: `border-color ${EASE}`,
-      "&:hover": { borderColor: `${cfg.color}30` },
-    }}>
-      <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", mb: 1.25 }}>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
-          <Box sx={{
-            width: 34, height: 34, borderRadius: "50%",
-            backgroundColor: cfg.dim, border: `1px solid ${cfg.color}25`,
-            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-          }}>
-            <EmailOutlined sx={{ fontSize: 16, color: cfg.color }} />
-          </Box>
-          <Box>
-            <Typography sx={{ fontWeight: 700, fontSize: "0.88rem", color: C.textPrimary, fontFamily: FONT, lineHeight: 1.2 }}>
-              {invite.email}
-            </Typography>
-            <Box sx={{ display: "flex", gap: 0.75, mt: 0.4 }}>
-              <RoleChip role={invite.role} />
-              <StatusChip status={invite.status} />
-            </Box>
-          </Box>
-        </Box>
-        <Box sx={{ display: "flex", gap: 0.5 }}>
-          {invite.status === "pending" && (
-            <IconButton size="small" onClick={onCopy} sx={{
-              color: C.textSecondary, borderRadius: "7px", p: 0.6,
-              "&:hover": { backgroundColor: C.accentDim, color: C.accent },
-              transition: `all ${EASE}`,
-            }}>
-              <ContentCopy sx={{ fontSize: 14 }} />
-            </IconButton>
-          )}
-          <IconButton size="small" onClick={onDelete} sx={{
-            color: C.textSecondary, borderRadius: "7px", p: 0.6,
-            "&:hover": { backgroundColor: C.redDim, color: C.red },
-            transition: `all ${EASE}`,
-          }}>
-            <Delete sx={{ fontSize: 14 }} />
-          </IconButton>
-        </Box>
-      </Box>
-    </Box>
-  );
-}
-
-// ─── Main Page ────────────────────────────────────────────────────────────
 export default function InvitationsPage() {
-  const theme    = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const { user } = useAuthStore();
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState("teacher");
+  const [sending, setSending] = useState(false);
+  const [invitations, setInvitations] = useState<Invitation[]>([]);
+  const [loadingInvites, setLoadingInvites] = useState(true);
+  const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
-  const [email,           setEmail]           = useState("");
-  const [role,            setRole]            = useState("teacher");
-  const [sending,         setSending]         = useState(false);
-  const [invitations,     setInvitations]     = useState<Invitation[]>([]);
-  const [loadingInvites,  setLoadingInvites]  = useState(true);
-  const [deleteId,        setDeleteId]        = useState<number | null>(null);
-  const [deleting,        setDeleting]        = useState(false);
+  const loadInvitations = async () => {
+    try { setInvitations(await getInvitations()); }
+    catch (requestError: unknown) { toast.error(errorMessage(requestError, "Failed to fetch invitations")); }
+    finally { setLoadingInvites(false); }
+  };
+  useEffect(() => { void loadInvitations(); }, []);
 
-  // ── Fetch ──────────────────────────────────────────────────────────
-  useEffect(() => {
-    (async () => {
-      try {
-        const data = await getInvitations();
-        setInvitations(data);
-      } catch (err: any) {
-        toast.error(err.response?.data?.detail || "Failed to fetch invitations");
-      } finally {
-        setLoadingInvites(false);
-      }
-    })();
-  }, []);
-
-  // ── Send invite ────────────────────────────────────────────────────
   const handleInvite = async () => {
-    if (!email)              return toast.error("Please enter an email address");
+    if (!email) return toast.error("Please enter an email address");
     if (!email.includes("@")) return toast.error("Please enter a valid email address");
     setSending(true);
     try {
       await sendInvitation({ email, role });
-      const updated = await getInvitations();
-      setInvitations(updated);
-      setEmail("");
+      await loadInvitations();
       toast.success(`Invitation sent to ${email}`);
-    } catch (err: any) {
-      toast.error(err.response?.data?.detail || "Failed to send invitation");
-    } finally { setSending(false); }
+      setEmail("");
+    } catch (requestError: unknown) { toast.error(errorMessage(requestError, "Failed to send invitation")); }
+    finally { setSending(false); }
   };
-
-  // ── Copy link ──────────────────────────────────────────────────────
   const copyInviteLink = (token?: string) => {
     if (!token) return toast.error("No invite token available");
     const link = `${window.location.origin}/signup?invite=${token}`;
-    navigator.clipboard.writeText(link)
-      .then(() => toast.success("Invite link copied to clipboard!"))
-      .catch(() => toast.error("Failed to copy invite link"));
+    void navigator.clipboard.writeText(link).then(() => toast.success("Invite link copied to clipboard!")).catch(() => toast.error("Failed to copy invite link"));
   };
-
-  // ── Delete ─────────────────────────────────────────────────────────
   const confirmDelete = async () => {
     if (!deleteId) return;
     setDeleting(true);
     try {
       await deleteInvitation(deleteId);
-      setInvitations(prev => prev.filter(i => i.id !== deleteId));
+      setInvitations((previous) => previous.filter((invitation) => invitation.id !== deleteId));
       setDeleteId(null);
       toast.success("Invitation deleted");
-    } catch (err: any) {
-      toast.error(err.response?.data?.detail || "Failed to delete invitation");
-    } finally { setDeleting(false); }
+    } catch (requestError: unknown) { toast.error(errorMessage(requestError, "Failed to delete invitation")); }
+    finally { setDeleting(false); }
   };
 
-  // ── Stats ──────────────────────────────────────────────────────────
-  const pending  = invitations.filter(i => i.status === "pending").length;
-  const accepted = invitations.filter(i => i.status === "accepted").length;
-
+  const pending = invitations.filter((invitation) => invitation.status === "pending").length;
+  const accepted = invitations.filter((invitation) => invitation.status === "accepted").length;
   if (!user) return null;
 
-  // ── Render ─────────────────────────────────────────────────────────
-  return (
-    <DashboardLayout>
-    <>
-      <GlobalStyles />
-
-      <Box sx={{ p: { xs: 1.5, sm: 2.5, md: 3 }, backgroundColor: C.bg, minHeight: "100%" }}>
-
-        {/* ── Header ──────────────────────────────────────────── */}
-        <PageHeader
-          title="Invitations"
-          subtitle="Invite team members to join your organization"
-          isMobile={isMobile}
-        />
-
-        {/* ── Send invite form ─────────────────────────────────── */}
-        <Box sx={{
-          backgroundColor: C.surface, border: `1px solid ${C.border}`,
-          borderRadius: "14px", p: { xs: 2, sm: 2.5 }, mb: 3,
-        }}>
-          {/* Section label */}
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
-            <SendOutlined sx={{ fontSize: 14, color: C.accent }} />
-            <Typography sx={{ fontFamily: '"DM Mono", monospace', fontSize: "0.7rem", fontWeight: 500, letterSpacing: "0.15em", textTransform: "uppercase", color: C.textSecondary }}>
-              Send Invitation
-            </Typography>
-          </Box>
-
-          <Grid container spacing={1.5} alignItems="center">
-            <Grid item xs={12} sm={5}>
-              <TextField
-                fullWidth size="small" label="Email Address" type="email"
-                placeholder="user@example.com" sx={inputSx}
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && email && handleInvite()}
-                InputProps={{ startAdornment: <EmailOutlined sx={{ fontSize: 16, color: C.textSecondary, mr: 0.75 }} /> }}
-              />
-            </Grid>
-
-            <Grid item xs={12} sm={3}>
-              <TextField
-                select fullWidth size="small" label="Role" sx={inputSx}
-                value={role}
-                onChange={e => setRole(e.target.value)}
-                SelectProps={{ MenuProps: menuProps }}
-              >
-                {ROLES.map(r => {
-                  const cfg = roleConf(r);
-                  return (
-                    <MenuItem key={r} value={r}>
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                        <Box sx={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: cfg.color }} />
-                        <Typography sx={{ fontFamily: FONT, fontSize: "0.875rem" }}>
-                          {r.charAt(0).toUpperCase() + r.slice(1)}
-                        </Typography>
-                      </Box>
-                    </MenuItem>
-                  );
-                })}
-              </TextField>
-            </Grid>
-
-            <Grid item xs={12} sm={4}>
-              <Button
-                fullWidth variant="contained"
-                onClick={handleInvite}
-                disabled={sending || !email}
-                startIcon={<SendOutlined sx={{ fontSize: 15 }} />}
-                sx={{
-                  backgroundColor: C.accent, color: "#111827",
-                  fontFamily: FONT, fontWeight: 600,
-                  textTransform: "none", borderRadius: "10px", height: 40,
-                  "&:hover": { backgroundColor: "#FBBF24" },
-                  "&.Mui-disabled": { backgroundColor: "rgba(245,158,11,0.2)", color: "rgba(17,24,39,0.4)" },
-                }}
-              >
-                {sending ? "Sending…" : "Send Invite"}
-              </Button>
-            </Grid>
-          </Grid>
-        </Box>
-
-        {/* ── Stats row ────────────────────────────────────────── */}
-        {!loadingInvites && invitations.length > 0 && (
-          <Box sx={{ display: "flex", gap: 1.5, mb: 2.5 }}>
-            {[
-              { label: "Total",    value: invitations.length, color: C.accent, dim: C.accentDim },
-              { label: "Pending",  value: pending,            color: C.accent, dim: C.accentDim },
-              { label: "Accepted", value: accepted,           color: C.green,  dim: C.greenDim  },
-            ].map(s => (
-              <Box key={s.label} sx={{
-                display: "flex", alignItems: "center", gap: 1,
-                backgroundColor: s.dim, border: `1px solid ${s.color}25`,
-                borderRadius: "10px", px: 1.75, py: 0.9,
-              }}>
-                <Typography sx={{ fontFamily: '"DM Mono", monospace', fontWeight: 700, fontSize: "1rem", color: s.color, lineHeight: 1 }}>
-                  {s.value}
-                </Typography>
-                <Typography sx={{ fontFamily: FONT, fontSize: "0.72rem", color: C.textSecondary }}>
-                  {s.label}
-                </Typography>
-              </Box>
-            ))}
-          </Box>
-        )}
-
-        {/* ── Content ─────────────────────────────────────────── */}
-        {loadingInvites ? (
-          <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
-            <Box sx={{
-              width: 32, height: 32, borderRadius: "50%",
-              border: `3px solid ${C.accentDim}`, borderTopColor: C.accent,
-              animation: "spin 0.7s linear infinite",
-              "@keyframes spin": { to: { transform: "rotate(360deg)" } },
-            }} />
-          </Box>
-
-        ) : invitations.length === 0 ? (
-          <EmptyState icon={PersonAddOutlined} message="No invitations found. Send one above to get started." />
-
-        ) : isMobile ? (
-          /* ── Mobile cards ──────────────────────────────────── */
-          <Box>
-            {invitations.map(invite => (
-              <InviteCard
-                key={invite.id}
-                invite={invite}
-                onCopy={() => copyInviteLink(invite.token)}
-                onDelete={() => setDeleteId(invite.id)}
-              />
-            ))}
-          </Box>
-
-        ) : (
-          /* ── Desktop table ──────────────────────────────────── */
-          <DataTable>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  {["Email", "Role", "Status", "Actions"].map(h => (
-                    <TableCell key={h} sx={thSx}>{h}</TableCell>
-                  ))}
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {invitations.map((invite, i) => (
-                  <TableRow
-                    key={invite.id}
-                    sx={{
-                      "&:hover": { backgroundColor: "rgba(255,255,255,0.02)" },
-                      transition: `background ${EASE}`,
-                      animation: `fadeUp 0.3s ${i * 30}ms ease both`,
-                      "@keyframes fadeUp": {
-                        from: { opacity: 0, transform: "translateY(8px)" },
-                        to:   { opacity: 1, transform: "translateY(0)" },
-                      },
-                    }}
-                  >
-                    {/* Email */}
-                    <TableCell sx={tdSx}>
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-                        <Box sx={{
-                          width: 30, height: 30, borderRadius: "50%",
-                          backgroundColor: roleConf(invite.role).dim,
-                          border: `1px solid ${roleConf(invite.role).color}20`,
-                          display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-                        }}>
-                          <EmailOutlined sx={{ fontSize: 14, color: roleConf(invite.role).color }} />
-                        </Box>
-                        <Typography sx={{ fontFamily: '"DM Mono", monospace', fontSize: "0.82rem", color: C.textPrimary }}>
-                          {invite.email}
-                        </Typography>
-                      </Box>
-                    </TableCell>
-
-                    {/* Role */}
-                    <TableCell sx={tdSx}>
-                      <RoleChip role={invite.role} />
-                    </TableCell>
-
-                    {/* Status */}
-                    <TableCell sx={tdSx}>
-                      <StatusChip status={invite.status} />
-                    </TableCell>
-
-                    {/* Actions */}
-                    <TableCell sx={tdSx}>
-                      <Box sx={{ display: "flex", gap: 0.5 }}>
-                        {invite.status === "pending" && (
-                          <Tooltip title="Copy invite link" arrow>
-                            <IconButton size="small" onClick={() => copyInviteLink(invite.token)} sx={{
-                              color: C.textSecondary, borderRadius: "8px", p: 0.75,
-                              "&:hover": { backgroundColor: C.accentDim, color: C.accent },
-                              transition: `all ${EASE}`,
-                            }}>
-                              <ContentCopy sx={{ fontSize: 15 }} />
-                            </IconButton>
-                          </Tooltip>
-                        )}
-                        <Tooltip title="Delete invitation" arrow>
-                          <IconButton size="small" onClick={() => setDeleteId(invite.id)} sx={{
-                            color: C.textSecondary, borderRadius: "8px", p: 0.75,
-                            "&:hover": { backgroundColor: C.redDim, color: C.red },
-                            transition: `all ${EASE}`,
-                          }}>
-                            <Delete sx={{ fontSize: 15 }} />
-                          </IconButton>
-                        </Tooltip>
-                      </Box>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </DataTable>
-        )}
-
-        {/* ── Delete Confirm ─────────────────────────────────── */}
-        <DeleteDialog
-          open={!!deleteId}
-          onClose={() => setDeleteId(null)}
-          onConfirm={confirmDelete}
-          loading={deleting}
-          title="Delete Invitation?"
-          description="This will permanently revoke the invitation. The invite link will no longer work."
-        />
-
-      </Box>
-    </>
-      </DashboardLayout>
-  );
+  return <DashboardLayout><div className="min-h-full bg-white p-4 dark:bg-[#0D1117] sm:p-6 md:p-8"><PageHeader title="Invitations" subtitle="Invite team members to join your organization" />
+    <section className="mb-6 rounded-xl border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-white/[0.03]"><div className="mb-3 flex items-center gap-2"><Send size={15} className="text-[#8B6DF2]" /><h2 className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Send Invitation</h2></div><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-12"><div className="relative lg:col-span-5"><Mail size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" /><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} onKeyDown={(event) => event.key === "Enter" && void handleInvite()} placeholder="user@example.com" className={`${inputClass} pl-9`} /></div><select value={role} onChange={(event) => setRole(event.target.value)} className={`${inputClass} lg:col-span-3`} aria-label="Invitation role">{roles.map((currentRole) => <option key={currentRole} value={currentRole}>{formatRole(currentRole)}</option>)}</select><button type="button" disabled={sending || !email} onClick={() => void handleInvite()} className={`${primaryButtonClass} inline-flex items-center justify-center gap-2 lg:col-span-4`}><Send size={16} />{sending ? "Sending…" : "Send Invite"}</button></div></section>
+    {!loadingInvites && invitations.length > 0 && <StatGrid stats={[{ label: "Total Invitations", value: invitations.length, Icon: UserPlus, tone: "border-[#8B6DF2]/20 bg-[#8B6DF2]/10 text-[#8B6DF2]" }, { label: "Pending", value: pending, Icon: Clock3, tone: "border-amber-400/20 bg-amber-50 text-amber-600 dark:border-amber-400/20 dark:bg-amber-500/10 dark:text-amber-400" }, { label: "Accepted", value: accepted, Icon: CheckCircle2, tone: "border-emerald-400/20 bg-emerald-50 text-emerald-600 dark:border-emerald-400/20 dark:bg-emerald-500/10 dark:text-emerald-400" }]} />}
+    {loadingInvites ? <LoadingState /> : invitations.length === 0 ? <EmptyState icon={UserPlus} message="No invitations found. Send one above to get started." /> : <><div className="grid gap-3 sm:hidden">{invitations.map((invitation) => <InviteCard key={invitation.id} invitation={invitation} onCopy={() => copyInviteLink(invitation.token)} onDelete={() => setDeleteId(invitation.id)} />)}</div><DataTable><thead className="bg-slate-50 dark:bg-white/[0.03]"><tr>{["Email", "Role", "Status", "Actions"].map((heading) => <th key={heading} className={tableHeadClass}>{heading}</th>)}</tr></thead><tbody>{invitations.map((invitation) => <tr key={invitation.id} className="border-t border-slate-100 transition-colors hover:bg-slate-50 dark:border-white/5 dark:hover:bg-white/[0.02]"><td className={`${tableCellClass} font-medium text-slate-900 dark:text-slate-100`}><span className="flex items-center gap-2"><span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#8B6DF2]/10"><Mail size={15} className="text-[#8B6DF2]" /></span>{invitation.email}</span></td><td className={tableCellClass}><RoleBadge role={invitation.role} /></td><td className={tableCellClass}><StatusBadge status={invitation.status} /></td><td className={tableCellClass}><span className="flex gap-1">{invitation.status === "pending" && <button type="button" title="Copy invite link" onClick={() => copyInviteLink(invitation.token)} className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-[#8B6DF2]/10 hover:text-[#8B6DF2] dark:text-slate-500"><Copy size={16} /></button>}<button type="button" title="Delete invitation" onClick={() => setDeleteId(invitation.id)} className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:text-slate-500 dark:hover:bg-red-500/10 dark:hover:text-red-400"><Trash2 size={16} /></button></span></td></tr>)}</tbody></DataTable></>}
+    {deleteId !== null && <Modal title="Delete Invitation?" onClose={() => !deleting && setDeleteId(null)}><div className="space-y-5"><p className="text-sm text-slate-600 dark:text-slate-300">This will permanently revoke the invitation. The invite link will no longer work.</p><div className="flex justify-end gap-2"><button type="button" disabled={deleting} onClick={() => setDeleteId(null)} className={secondaryButtonClass}>Cancel</button><button type="button" disabled={deleting} onClick={() => void confirmDelete()} className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-40">{deleting ? "Deleting…" : "Delete Invitation"}</button></div></div></Modal>}
+  </div></DashboardLayout>;
 }

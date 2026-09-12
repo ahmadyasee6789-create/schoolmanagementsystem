@@ -17,8 +17,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Schoolify - School Management System",
-  description: "Schoolify is a school management system that helps schools manage their operations more efficiently.",
+  title: "Schoolix - School Management System",
+  description: "Schoolix is a school management system that helps schools manage their operations more efficiently.",
 };
 
 export default function RootLayout({

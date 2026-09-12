@@ -1,248 +1,53 @@
 "use client";
 
 import { useState } from "react";
+import { CheckCircle2, Eye, EyeOff, KeyRound, MailCheck, UserRound } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import {
-  Box, Button, Grid, IconButton, InputAdornment,
-  TextField, Typography,
-} from "@mui/material";
-import {
-  PersonOutlined, LockOutlined, CheckCircleOutlined,
-  Visibility, VisibilityOff, MarkEmailReadOutlined,
-} from "@mui/icons-material";
-import { api } from "@/app/lib/api";
 import toast from "react-hot-toast";
-import { C, FONT, EASE, inputSx, GlobalStyles } from "@/components/ui";
+import { api } from "@/app/lib/api";
+import { inputClass, primaryButtonClass } from "@/components/exams/ExamUi";
+
+const inviteError = (error: unknown) => {
+  const request = error as { response?: { status?: number; data?: { detail?: string } }; request?: unknown; message?: string };
+  if (request.response?.status === 400) return request.response.data?.detail || "Invalid request data";
+  if (request.response?.status === 401) return "Unauthorized — invalid or expired invite link";
+  if (request.response?.status === 403) return "This invitation is no longer valid";
+  if (request.request) return "No response from server";
+  return request.message || "Something went wrong";
+};
 
 export default function AcceptInvitePage() {
-  const router       = useRouter();
+  const router = useRouter();
   const searchParams = useSearchParams();
-  const token        = searchParams.get("token");
-
-  const [name,            setName]            = useState("");
-  const [password,        setPassword]        = useState("");
+  const token = searchParams.get("token");
+  const [name, setName] = useState("");
+  const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [showPass,        setShowPass]        = useState(false);
-  const [showConfirm,     setShowConfirm]     = useState(false);
-  const [loading,         setLoading]         = useState(false);
-  const [success,         setSuccess]         = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
 
-  // ── Submit ───────────────────────────────────────────────────────
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
     if (password !== confirmPassword) return toast.error("Passwords do not match");
-    if (password.length < 6)          return toast.error("Password must be at least 6 characters");
-
+    if (password.length < 6) return toast.error("Password must be at least 6 characters");
     setLoading(true);
     try {
-      const res = await api.post("/organization/invitations/accept", { token, name, password });
-      localStorage.setItem("token", res.data.access_token);
-      localStorage.setItem("user",  JSON.stringify(res.data.user));
+      const response = await api.post("/organization/invitations/accept", { token, name, password });
+      localStorage.setItem("token", response.data.access_token);
+      localStorage.setItem("user", JSON.stringify(response.data.user));
       setSuccess(true);
       toast.success("Welcome! Redirecting to dashboard…");
-      setTimeout(() => router.push("/app/dashboard"), 1500);
-    } catch (err: any) {
-      const status = err.response?.status;
-      if (status === 400) toast.error(err.response.data?.detail || "Invalid request data");
-      else if (status === 401) toast.error("Unauthorized — invalid or expired invite link");
-      else if (status === 403) toast.error("This invitation is no longer valid");
-      else if (err.request)    toast.error("No response from server");
-      else                     toast.error(err.message || "Something went wrong");
-    } finally {
-      setLoading(false);
-    }
+      window.setTimeout(() => router.push("/app/dashboard"), 1500);
+    } catch (requestError: unknown) { toast.error(inviteError(requestError)); }
+    finally { setLoading(false); }
   };
 
-  // ── Render ────────────────────────────────────────────────────────
-  return (
-    <>
-      <GlobalStyles />
-
-      {/* Full-page centered layout */}
-      <Box sx={{
-        minHeight: "100vh",
-        backgroundColor: C.bg,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        p: 2,
-      }}>
-        <Box sx={{ width: "100%", maxWidth: 440 }}>
-
-          {/* ── Brand / icon ─────────────────────────────────── */}
-          <Box sx={{ textAlign: "center", mb: 3.5 }}>
-            <Box sx={{
-              width: 56, height: 56, borderRadius: "16px",
-              backgroundColor: C.accentDim, border: `1px solid rgba(245,158,11,0.25)`,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              mx: "auto", mb: 2,
-            }}>
-              <MarkEmailReadOutlined sx={{ fontSize: 26, color: C.accent }} />
-            </Box>
-            <Typography sx={{ fontFamily: '"DM Serif Display", serif', fontSize: "1.9rem", color: C.textPrimary, lineHeight: 1.1, letterSpacing: "-0.02em" }}>
-              Accept Invitation
-            </Typography>
-            <Typography sx={{ fontFamily: FONT, fontSize: "0.82rem", color: C.textSecondary, mt: 0.75, fontWeight: 300 }}>
-              Complete your profile to join the organization
-            </Typography>
-          </Box>
-
-          {/* ── Card ─────────────────────────────────────────── */}
-          <Box sx={{
-            backgroundColor: C.surface,
-            border: `1px solid ${C.border}`,
-            borderRadius: "16px",
-            p: { xs: 2.5, sm: 3.5 },
-            boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
-          }}>
-
-            {/* Success state */}
-            {success ? (
-              <Box sx={{ textAlign: "center", py: 3 }}>
-                <Box sx={{
-                  width: 52, height: 52, borderRadius: "50%",
-                  backgroundColor: C.greenDim, border: `1px solid ${C.green}30`,
-                  display: "flex", alignItems: "center", justifyContent: "center", mx: "auto", mb: 2,
-                }}>
-                  <CheckCircleOutlined sx={{ fontSize: 26, color: C.green }} />
-                </Box>
-                <Typography sx={{ fontFamily: FONT, fontWeight: 700, fontSize: "1rem", color: C.textPrimary, mb: 0.5 }}>
-                  Invitation accepted!
-                </Typography>
-                <Typography sx={{ fontFamily: FONT, fontSize: "0.82rem", color: C.textSecondary }}>
-                  Redirecting you to the dashboard…
-                </Typography>
-              </Box>
-            ) : (
-              <Box component="form" onSubmit={handleSubmit}>
-                <Grid container spacing={2}>
-
-                  {/* Full name */}
-                  <Grid item xs={12}>
-                    <TextField
-                      fullWidth required label="Full Name" sx={inputSx}
-                      placeholder="Your full name"
-                      value={name}
-                      autoFocus
-                      onChange={e => setName(e.target.value)}
-                      InputProps={{
-                        startAdornment: (
-                          <InputAdornment position="start">
-                            <PersonOutlined sx={{ fontSize: 17, color: C.textSecondary }} />
-                          </InputAdornment>
-                        ),
-                      }}
-                    />
-                  </Grid>
-
-                  {/* Password */}
-                  <Grid item xs={12}>
-                    <TextField
-                      fullWidth required label="Password" sx={inputSx}
-                      type={showPass ? "text" : "password"}
-                      placeholder="Min. 6 characters"
-                      value={password}
-                      onChange={e => setPassword(e.target.value)}
-                      InputProps={{
-                        startAdornment: (
-                          <InputAdornment position="start">
-                            <LockOutlined sx={{ fontSize: 17, color: C.textSecondary }} />
-                          </InputAdornment>
-                        ),
-                        endAdornment: (
-                          <InputAdornment position="end">
-                            <IconButton size="small" onClick={() => setShowPass(p => !p)} edge="end"
-                              sx={{ color: C.textSecondary, "&:hover": { color: C.accent } }}>
-                              {showPass ? <VisibilityOff sx={{ fontSize: 17 }} /> : <Visibility sx={{ fontSize: 17 }} />}
-                            </IconButton>
-                          </InputAdornment>
-                        ),
-                      }}
-                    />
-                  </Grid>
-
-                  {/* Confirm password */}
-                  <Grid item xs={12}>
-                    <TextField
-                      fullWidth required label="Confirm Password" sx={inputSx}
-                      type={showConfirm ? "text" : "password"}
-                      placeholder="Repeat your password"
-                      value={confirmPassword}
-                      onChange={e => setConfirmPassword(e.target.value)}
-                      // Inline match indicator
-                      helperText={
-                        confirmPassword && password !== confirmPassword
-                          ? "Passwords do not match"
-                          : confirmPassword && password === confirmPassword
-                          ? "✓ Passwords match"
-                          : ""
-                      }
-                      FormHelperTextProps={{
-                        sx: {
-                          fontFamily: FONT, fontSize: "0.72rem",
-                          color: confirmPassword && password === confirmPassword ? C.green : C.red,
-                          mt: 0.5,
-                        },
-                      }}
-                      InputProps={{
-                        startAdornment: (
-                          <InputAdornment position="start">
-                            <LockOutlined sx={{ fontSize: 17, color: C.textSecondary }} />
-                          </InputAdornment>
-                        ),
-                        endAdornment: (
-                          <InputAdornment position="end">
-                            <IconButton size="small" onClick={() => setShowConfirm(p => !p)} edge="end"
-                              sx={{ color: C.textSecondary, "&:hover": { color: C.accent } }}>
-                              {showConfirm ? <VisibilityOff sx={{ fontSize: 17 }} /> : <Visibility sx={{ fontSize: 17 }} />}
-                            </IconButton>
-                          </InputAdornment>
-                        ),
-                      }}
-                    />
-                  </Grid>
-
-                  {/* Submit */}
-                  <Grid item xs={12}>
-                    <Button
-                      type="submit" fullWidth variant="contained"
-                      disabled={loading || !name || !password || !confirmPassword}
-                      sx={{
-                        backgroundColor: C.accent, color: "#111827",
-                        fontFamily: FONT, fontWeight: 600, fontSize: "0.9rem",
-                        textTransform: "none", borderRadius: "10px",
-                        height: 44, mt: 0.5,
-                        "&:hover": { backgroundColor: "#FBBF24" },
-                        "&.Mui-disabled": { backgroundColor: "rgba(245,158,11,0.2)", color: "rgba(17,24,39,0.4)" },
-                        transition: `all ${EASE}`,
-                      }}
-                    >
-                      {loading ? (
-                        <Box sx={{
-                          width: 20, height: 20, borderRadius: "50%",
-                          border: "2px solid rgba(17,24,39,0.3)",
-                          borderTopColor: "#111827",
-                          animation: "spin 0.7s linear infinite",
-                          "@keyframes spin": { to: { transform: "rotate(360deg)" } },
-                        }} />
-                      ) : "Accept Invitation"}
-                    </Button>
-                  </Grid>
-
-                </Grid>
-              </Box>
-            )}
-          </Box>
-
-          {/* Footer note */}
-          {!success && (
-            <Typography sx={{ fontFamily: FONT, fontSize: "0.72rem", color: C.textSecondary, textAlign: "center", mt: 2.5 }}>
-              This invitation link is single-use and will expire after acceptance.
-            </Typography>
-          )}
-
-        </Box>
-      </Box>
-    </>
-  );
+  const passwordMatches = Boolean(confirmPassword) && password === confirmPassword;
+  const passwordMismatch = Boolean(confirmPassword) && password !== confirmPassword;
+  return <main className="flex min-h-screen items-center justify-center bg-slate-50 p-4 dark:bg-[#0D1117] sm:p-6"><div className="w-full max-w-md"><header className="mb-7 text-center"><span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-[#8B6DF2]/20 bg-[#8B6DF2]/10"><MailCheck size={27} className="text-[#8B6DF2]" /></span><h1 className="mt-4 text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-50">Accept Invitation</h1><p className="mt-2 text-sm text-slate-500 dark:text-slate-400">Complete your profile to join the organization</p></header>
+    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xl shadow-slate-200/40 dark:border-white/10 dark:bg-[#1a2233] dark:shadow-black/20 sm:p-7">{success ? <div className="py-8 text-center"><span className="mx-auto flex h-13 w-13 items-center justify-center rounded-full border border-emerald-400/25 bg-emerald-50 dark:border-emerald-400/20 dark:bg-emerald-500/10"><CheckCircle2 size={27} className="text-emerald-600 dark:text-emerald-400" /></span><h2 className="mt-4 text-lg font-bold text-slate-900 dark:text-slate-50">Invitation accepted!</h2><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Redirecting you to the dashboard…</p></div> : <form className="space-y-5" onSubmit={handleSubmit}><label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">Full Name<span className="ml-1 text-red-500">*</span><span className="relative mt-1.5 block"><UserRound size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" /><input autoFocus required value={name} onChange={(event) => setName(event.target.value)} placeholder="Your full name" className={`${inputClass} pl-9`} /></span></label><label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">Password<span className="ml-1 text-red-500">*</span><span className="relative mt-1.5 block"><KeyRound size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" /><input required type={showPassword ? "text" : "password"} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Min. 6 characters" className={`${inputClass} px-9`} /><button type="button" aria-label={showPassword ? "Hide password" : "Show password"} onClick={() => setShowPassword((visible) => !visible)} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-[#8B6DF2] dark:text-slate-500 dark:hover:bg-white/5"><>{showPassword ? <EyeOff size={16} /> : <Eye size={16} />}</></button></span></label><label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">Confirm Password<span className="ml-1 text-red-500">*</span><span className="relative mt-1.5 block"><KeyRound size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" /><input required type={showConfirm ? "text" : "password"} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Repeat your password" className={`${inputClass} px-9 ${passwordMismatch ? "border-red-400 focus:border-red-500" : passwordMatches ? "border-emerald-400 focus:border-emerald-500" : ""}`} /><button type="button" aria-label={showConfirm ? "Hide confirm password" : "Show confirm password"} onClick={() => setShowConfirm((visible) => !visible)} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-[#8B6DF2] dark:text-slate-500 dark:hover:bg-white/5"><>{showConfirm ? <EyeOff size={16} /> : <Eye size={16} />}</></button></span>{passwordMismatch && <span className="mt-1.5 block text-xs text-red-600 dark:text-red-400">Passwords do not match</span>}{passwordMatches && <span className="mt-1.5 block text-xs text-emerald-600 dark:text-emerald-400">Passwords match</span>}</label><button type="submit" disabled={loading || !name || !password || !confirmPassword} className={`${primaryButtonClass} flex h-11 w-full items-center justify-center gap-2`}>{loading && <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />}{loading ? "Accepting…" : "Accept Invitation"}</button></form>}</section>
+    {!success && <p className="mt-5 text-center text-xs text-slate-500 dark:text-slate-400">This invitation link is single-use and expires after acceptance.</p>}
+  </div></main>;
 }

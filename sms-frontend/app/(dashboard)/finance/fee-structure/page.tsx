@@ -1,296 +1,78 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import {
-  Box, Chip, Grid, IconButton, MenuItem, Table, TableBody,
-  TableCell, TableHead, TableRow, TextField, Typography,
-  Tooltip, useMediaQuery, useTheme,
-} from "@mui/material";
-import { Edit, AttachMoneyOutlined, ClassOutlined, SchoolOutlined, ReceiptOutlined } from "@mui/icons-material";
-import { api } from "@/app/lib/api";
+import { useEffect, useState } from "react";
+import { BookOpenCheck, Pencil, ReceiptText, School } from "lucide-react";
 import toast from "react-hot-toast";
-import {
-  C, FONT, EASE, inputSx, menuProps, thSx, tdSx,
-  GlobalStyles, PageHeader, EmptyState, DataTable, MobileFab,
-  ClassChip, DialogShell, SectionLabel, editIconSx,
-} from "@/components/ui";
+import { api } from "@/app/lib/api";
+import { EmptyState, LoadingState, Modal, PageHeader, inputClass, primaryButtonClass, secondaryButtonClass } from "@/components/exams/ExamUi";
+import { Badge, DataTable, errorMessage, LabeledField, Money, SectionLabel, tableCellClass, tableHeadClass } from "@/components/finance/FinanceUi";
 
-// ─── Types ───────────────────────────────────────────────────────────────
-type FeeStructure = {
-  id: number; class_id: number; class_name: string;
-  monthly_fee: number; admission_fee: number; exam_fee: number;
-  session_id: number;
-};
-type Classroom       = { id: number; section: string; grade_id?: number; grade_name?: string; grade?: { name: string } };
+type FeeStructure = { id: number; class_id: number; class_name: string; monthly_fee: number; admission_fee: number; exam_fee: number; session_id: number };
+type Classroom = { id: number; section: string; grade_id?: number; grade_name?: string; grade?: { name: string } };
 type AcademicSession = { id: number; name: string };
-type FeeForm         = { id: number; class_id: string; session_id: string; monthly_fee: string; admission_fee: string; exam_fee: string };
+type FeeForm = { id: number; class_id: string; session_id: string; monthly_fee: string; admission_fee: string; exam_fee: string };
 
 const emptyForm: FeeForm = { id: 0, class_id: "", session_id: "", monthly_fee: "", admission_fee: "", exam_fee: "" };
-
-const classLabel = (c: Classroom) => {
-  const grade = c.grade?.name ?? c.grade_name ?? "";
-  return grade ? `${grade} – ${c.section}` : c.section;
+const classLabel = (classroom: Classroom) => {
+  const grade = classroom.grade?.name ?? classroom.grade_name ?? "";
+  return grade ? `${grade} – ${classroom.section}` : classroom.section;
 };
-const fmt = (n: number) =>
-  new Intl.NumberFormat("en-PK", { style: "currency", currency: "PKR", maximumFractionDigits: 0 }).format(n);
 
-// ─── Fee amount chip ──────────────────────────────────────────────────────
-function FeeChip({ value, color, dim }: { value: number; color: string; dim: string }) {
-  return (
-    <Chip label={fmt(value)} size="small" sx={{
-      backgroundColor: dim, color,
-      fontFamily: '"DM Mono", monospace', fontWeight: 700,
-      fontSize: "0.72rem", height: 22, border: `1px solid ${color}25`,
-    }} />
-  );
+function FeeBreakdown({ structure }: { structure: FeeStructure }) {
+  return <div className="grid grid-cols-3 gap-2"><div><p className="text-[11px] text-slate-400 dark:text-slate-500">Monthly</p><Money value={structure.monthly_fee} className="mt-1 block text-[#8B6DF2]" /></div><div><p className="text-[11px] text-slate-400 dark:text-slate-500">Admission</p><Money value={structure.admission_fee} className="mt-1 block text-emerald-600 dark:text-emerald-400" /></div><div><p className="text-[11px] text-slate-400 dark:text-slate-500">Exam</p><Money value={structure.exam_fee} className="mt-1 block text-blue-600 dark:text-blue-400" /></div></div>;
 }
 
-// ─── Mobile card ──────────────────────────────────────────────────────────
-function FeeCard({ s, onEdit }: { s: FeeStructure; onEdit: () => void }) {
-  return (
-    <Box sx={{
-      backgroundColor: C.surface, border: `1px solid ${C.border}`,
-      borderRadius: "12px", p: 2, mb: 1.5,
-      transition: `border-color ${EASE}`,
-      "&:hover": { borderColor: "rgba(245,158,11,0.25)" },
-    }}>
-      <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", mb: 1.5 }}>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
-          <Box sx={{ width: 36, height: 36, borderRadius: "10px", backgroundColor: C.accentDim, border: `1px solid rgba(245,158,11,0.2)`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            <ClassOutlined sx={{ fontSize: 18, color: C.accent }} />
-          </Box>
-          <Box>
-            <Typography sx={{ fontWeight: 700, fontSize: "0.925rem", color: C.textPrimary, fontFamily: FONT, lineHeight: 1.2 }}>{s.class_name}</Typography>
-            <Typography sx={{ fontSize: "0.72rem", color: C.textSecondary, fontFamily: FONT }}>Fee Structure</Typography>
-          </Box>
-        </Box>
-        <IconButton size="small" onClick={onEdit} sx={editIconSx}>
-          <Edit sx={{ fontSize: 15 }} />
-        </IconButton>
-      </Box>
-
-      <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-        {[
-          { label: "Monthly",   value: s.monthly_fee,   color: C.accent, dim: C.accentDim },
-          { label: "Admission", value: s.admission_fee, color: C.green,  dim: C.greenDim  },
-          { label: "Exam",      value: s.exam_fee,      color: C.blue,   dim: C.blueDim   },
-        ].map(f => (
-          <Box key={f.label} sx={{ backgroundColor: f.dim, border: `1px solid ${f.color}25`, borderRadius: "8px", px: 1.25, py: 0.5 }}>
-            <Typography sx={{ fontFamily: FONT, fontSize: "0.68rem", color: C.textSecondary, letterSpacing: "0.05em", textTransform: "uppercase" }}>{f.label}</Typography>
-            <Typography sx={{ fontFamily: '"DM Mono", monospace', fontSize: "0.85rem", fontWeight: 700, color: f.color }}>{fmt(f.value)}</Typography>
-          </Box>
-        ))}
-      </Box>
-    </Box>
-  );
-}
-
-// ─── Main Page ────────────────────────────────────────────────────────────
 export default function FeeStructurePage() {
-  const theme    = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
-
-  const [classes,    setClasses]    = useState<Classroom[]>([]);
-  const [sessions,   setSessions]   = useState<AcademicSession[]>([]);
+  const [classes, setClasses] = useState<Classroom[]>([]);
+  const [sessions, setSessions] = useState<AcademicSession[]>([]);
   const [structures, setStructures] = useState<FeeStructure[]>([]);
-  const [loading,    setLoading]    = useState(false);
+  const [loading, setLoading] = useState(false);
   const [openDialog, setOpenDialog] = useState(false);
-  const [form,       setForm]       = useState<FeeForm>(emptyForm);
-  const [saving,     setSaving]     = useState(false);
+  const [form, setForm] = useState<FeeForm>(emptyForm);
+  const [saving, setSaving] = useState(false);
 
   const fetchStructures = async () => {
     setLoading(true);
     try {
-      const res = await api.get("/fee-structure");
-      setStructures(res.data);
+      const response = await api.get("/fee-structure");
+      setStructures(response.data ?? []);
     } catch { toast.error("Failed to load fee structures"); }
-    finally   { setLoading(false); }
+    finally { setLoading(false); }
   };
 
   useEffect(() => {
-    Promise.all([api.get("/classes"), api.get("/sessions")]).then(([c, s]) => {
-      setClasses(c.data); setSessions(s.data);
-    });
-    fetchStructures();
+    void Promise.all([api.get("/classes"), api.get("/sessions")]).then(([classesResponse, sessionsResponse]) => {
+      setClasses(classesResponse.data ?? []);
+      setSessions(sessionsResponse.data ?? []);
+    }).catch(() => toast.error("Failed to load class and session options"));
+    void fetchStructures();
   }, []);
 
-  const openAdd  = () => { setForm(emptyForm); setOpenDialog(true); };
-  const openEdit = (s: FeeStructure) => {
-    setForm({ id: s.id, class_id: String(s.class_id), session_id: String(s.session_id), monthly_fee: String(s.monthly_fee), admission_fee: String(s.admission_fee), exam_fee: String(s.exam_fee) });
+  const openAdd = () => { setForm(emptyForm); setOpenDialog(true); };
+  const openEdit = (structure: FeeStructure) => {
+    setForm({ id: structure.id, class_id: String(structure.class_id), session_id: String(structure.session_id), monthly_fee: String(structure.monthly_fee), admission_fee: String(structure.admission_fee), exam_fee: String(structure.exam_fee) });
     setOpenDialog(true);
   };
-
   const saveStructure = async () => {
-    if (!form.class_id || !form.session_id || !form.monthly_fee) {
-      toast.error("Please select class, session and enter monthly fee"); return;
-    }
+    if (!form.class_id || !form.session_id || !form.monthly_fee) return toast.error("Select class and session, then enter the monthly fee");
     setSaving(true);
-    const payload = {
-      class_id: Number(form.class_id), session_id: Number(form.session_id),
-      monthly_fee: Number(form.monthly_fee), admission_fee: Number(form.admission_fee || 0),
-      exam_fee: Number(form.exam_fee || 0),
-    };
+    const payload = { class_id: Number(form.class_id), session_id: Number(form.session_id), monthly_fee: Number(form.monthly_fee), admission_fee: Number(form.admission_fee || 0), exam_fee: Number(form.exam_fee || 0) };
     try {
       if (form.id) { await api.put(`/fee-structure/${form.id}`, payload); toast.success("Fee structure updated"); }
-      else         { await api.post("/fee-structure", payload);           toast.success("Fee structure created"); }
-      setOpenDialog(false); fetchStructures();
-    } catch (err: any) {
-      toast.error(err.response?.data?.detail || "Error saving fee structure");
-    } finally { setSaving(false); }
+      else { await api.post("/fee-structure", payload); toast.success("Fee structure created"); }
+      setOpenDialog(false);
+      await fetchStructures();
+    } catch (error: unknown) { toast.error(errorMessage(error, "Error saving fee structure")); }
+    finally { setSaving(false); }
   };
 
-  return (
-    <>
-      <GlobalStyles />
-      <Box sx={{ p: { xs: 1.5, sm: 2.5, md: 3 }, backgroundColor: C.bg, minHeight: "100%" }}>
+  return <div className="min-h-full bg-white p-4 dark:bg-[#0D1117] sm:p-6 md:p-8">
+    <PageHeader title="Fee Structure" subtitle="Manage class-wise fee structures per academic session" actionLabel="Add Fee Structure" onAction={openAdd} />
+    {loading ? <LoadingState /> : structures.length === 0 ? <EmptyState icon={ReceiptText} message="No fee structures found" actionLabel="Add Fee Structure" onAction={openAdd} /> : <>
+      <div className="grid gap-3 sm:hidden">{structures.map((structure) => <article key={structure.id} className="rounded-xl border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-white/[0.03]"><div className="mb-4 flex items-start justify-between gap-3"><div className="flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#8B6DF2]/20 bg-[#8B6DF2]/10"><BookOpenCheck size={18} className="text-[#8B6DF2]" /></span><div><p className="text-sm font-bold text-slate-900 dark:text-slate-50">{structure.class_name}</p><p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Fee structure</p></div></div><button type="button" title="Edit fee structure" onClick={() => openEdit(structure)} className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-[#8B6DF2]/10 hover:text-[#8B6DF2] dark:text-slate-500"><Pencil size={16} /></button></div><FeeBreakdown structure={structure} /></article>)}</div>
+      <DataTable><thead className="bg-slate-50 dark:bg-white/[0.03]"><tr>{["Class", "Monthly Fee", "Admission Fee", "Exam Fee", "Actions"].map((heading) => <th key={heading} className={tableHeadClass}>{heading}</th>)}</tr></thead><tbody>{structures.map((structure) => <tr key={structure.id} className="border-t border-slate-100 transition-colors hover:bg-slate-50 dark:border-white/5 dark:hover:bg-white/[0.02]"><td className={`${tableCellClass} font-semibold text-slate-900 dark:text-slate-100`}><span className="flex items-center gap-2"><span className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#8B6DF2]/20 bg-[#8B6DF2]/10"><BookOpenCheck size={15} className="text-[#8B6DF2]" /></span>{structure.class_name}</span></td><td className={tableCellClass}><Badge tone="purple"><Money value={structure.monthly_fee} className="text-[#8B6DF2]" /></Badge></td><td className={tableCellClass}><Badge tone="green"><Money value={structure.admission_fee} className="text-emerald-600 dark:text-emerald-400" /></Badge></td><td className={tableCellClass}><Badge tone="blue"><Money value={structure.exam_fee} className="text-blue-600 dark:text-blue-400" /></Badge></td><td className={tableCellClass}><button type="button" title="Edit fee structure" onClick={() => openEdit(structure)} className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-[#8B6DF2]/10 hover:text-[#8B6DF2] dark:text-slate-500"><Pencil size={16} /></button></td></tr>)}</tbody></DataTable>
+    </>}
 
-        {/* Header — using shared PageHeader */}
-        <PageHeader
-          title="Fee Structure"
-          subtitle="Manage class-wise fee structures per academic session"
-          actionLabel="Add Fee Structure"
-          onAction={openAdd}
-          isMobile={isMobile}
-        />
-
-        {/* Content */}
-        {loading ? (
-          <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
-            <Box sx={{ width: 32, height: 32, borderRadius: "50%", border: `3px solid ${C.accentDim}`, borderTopColor: C.accent, animation: "spin 0.7s linear infinite", "@keyframes spin": { to: { transform: "rotate(360deg)" } } }} />
-          </Box>
-
-        ) : structures.length === 0 ? (
-          /* Empty state — using shared EmptyState */
-          <EmptyState icon={ReceiptOutlined} message="No fee structures found" actionLabel="Add Fee Structure" onAction={openAdd} />
-
-        ) : isMobile ? (
-          <Box>{structures.map(s => <FeeCard key={s.id} s={s} onEdit={() => openEdit(s)} />)}</Box>
-
-        ) : (
-          /* Table — using shared DataTable */
-          <DataTable>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  {["Class", "Monthly Fee", "Admission Fee", "Exam Fee", "Actions"].map(h => (
-                    <TableCell key={h} sx={thSx}>{h}</TableCell>
-                  ))}
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {structures.map((s, i) => (
-                  <TableRow key={s.id} sx={{ "&:hover": { backgroundColor: "rgba(255,255,255,0.02)" }, transition: `background ${EASE}`, animation: `fadeUp 0.3s ${i * 30}ms ease both`, "@keyframes fadeUp": { from: { opacity: 0, transform: "translateY(8px)" }, to: { opacity: 1, transform: "translateY(0)" } } }}>
-
-                    {/* Class — using shared ClassChip */}
-                    <TableCell sx={tdSx}>
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-                        <Box sx={{ width: 32, height: 32, borderRadius: "9px", backgroundColor: C.accentDim, border: `1px solid rgba(245,158,11,0.18)`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                          <ClassOutlined sx={{ fontSize: 15, color: C.accent }} />
-                        </Box>
-                        <Typography sx={{ fontFamily: FONT, fontWeight: 700, fontSize: "0.875rem", color: C.textPrimary }}>{s.class_name}</Typography>
-                      </Box>
-                    </TableCell>
-
-                    {/* Fee chips — using shared FeeChip */}
-                    <TableCell sx={tdSx}><FeeChip value={s.monthly_fee}   color={C.accent} dim={C.accentDim} /></TableCell>
-                    <TableCell sx={tdSx}><FeeChip value={s.admission_fee} color={C.green}  dim={C.greenDim}  /></TableCell>
-                    <TableCell sx={tdSx}><FeeChip value={s.exam_fee}      color={C.blue}   dim={C.blueDim}   /></TableCell>
-
-                    {/* Edit — using shared editIconSx */}
-                    <TableCell sx={tdSx}>
-                      <Tooltip title="Edit Fee Structure" arrow>
-                        <IconButton size="small" onClick={() => openEdit(s)} sx={editIconSx}>
-                          <Edit sx={{ fontSize: 15 }} />
-                        </IconButton>
-                      </Tooltip>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </DataTable>
-        )}
-
-        {/* Mobile FAB — using shared MobileFab */}
-        {isMobile && <MobileFab onClick={openAdd} />}
-
-        {/* Dialog — using shared DialogShell */}
-        <DialogShell
-          open={openDialog}
-          onClose={() => setOpenDialog(false)}
-          title={form.id ? "Edit Fee Structure" : "Add Fee Structure"}
-          maxWidth="xs"
-          isMobile={isMobile}
-          saving={saving}
-          saveLabel={form.id ? "Save Changes" : "Add Structure"}
-          onSave={saveStructure}
-          saveDisabled={!form.class_id || !form.session_id || !form.monthly_fee}
-        >
-          <Grid container spacing={2} sx={{ mt: 0 }}>
-
-            <SectionLabel label="Class & Session" />
-
-            <Grid item xs={12}>
-              <TextField select fullWidth required label="Class" sx={inputSx}
-                value={form.class_id}
-                onChange={e => setForm({ ...form, class_id: e.target.value })}
-                SelectProps={{ MenuProps: menuProps }}>
-                <MenuItem value="" disabled>Select Class</MenuItem>
-                {classes.map(c => (
-                  <MenuItem key={c.id} value={c.id}>
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                      <ClassOutlined sx={{ fontSize: 14, color: C.accent }} />
-                      <Typography sx={{ fontFamily: FONT, fontSize: "0.875rem" }}>{classLabel(c)}</Typography>
-                    </Box>
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-
-            <Grid item xs={12}>
-              <TextField select fullWidth required label="Academic Session" sx={inputSx}
-                value={form.session_id}
-                onChange={e => setForm({ ...form, session_id: e.target.value })}
-                SelectProps={{ MenuProps: menuProps }}>
-                <MenuItem value="" disabled>Select Session</MenuItem>
-                {sessions.map(s => (
-                  <MenuItem key={s.id} value={s.id}>
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                      <SchoolOutlined sx={{ fontSize: 14, color: C.accent }} />
-                      <Typography sx={{ fontFamily: FONT, fontSize: "0.875rem" }}>{s.name}</Typography>
-                    </Box>
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-
-            <SectionLabel label="Fee Amounts" />
-
-            <Grid item xs={12}>
-              <TextField fullWidth required label="Monthly Fee" type="number" sx={inputSx}
-                placeholder="0" value={form.monthly_fee}
-                onChange={e => setForm({ ...form, monthly_fee: e.target.value })}
-                InputProps={{ startAdornment: <AttachMoneyOutlined sx={{ fontSize: 16, color: C.textSecondary, mr: 0.5 }} /> }}
-              />
-            </Grid>
-
-            <Grid item xs={6}>
-              <TextField fullWidth label="Admission Fee" type="number" sx={inputSx}
-                placeholder="0" value={form.admission_fee}
-                onChange={e => setForm({ ...form, admission_fee: e.target.value })}
-              />
-            </Grid>
-            <Grid item xs={6}>
-              <TextField fullWidth label="Exam Fee" type="number" sx={inputSx}
-                placeholder="0" value={form.exam_fee}
-                onChange={e => setForm({ ...form, exam_fee: e.target.value })}
-              />
-            </Grid>
-
-          </Grid>
-        </DialogShell>
-
-      </Box>
-    </>
-  );
+    {openDialog && <Modal title={form.id ? "Edit Fee Structure" : "Add Fee Structure"} onClose={() => !saving && setOpenDialog(false)}><div className="space-y-5"><section><SectionLabel icon={School}>Class & Session</SectionLabel><div className="space-y-4"><LabeledField label="Class" required><select value={form.class_id} onChange={(event) => setForm({ ...form, class_id: event.target.value })} className={inputClass}><option value="" disabled>Select class</option>{classes.map((classroom) => <option key={classroom.id} value={classroom.id}>{classLabel(classroom)}</option>)}</select></LabeledField><LabeledField label="Academic Session" required><select value={form.session_id} onChange={(event) => setForm({ ...form, session_id: event.target.value })} className={inputClass}><option value="" disabled>Select session</option>{sessions.map((session) => <option key={session.id} value={session.id}>{session.name}</option>)}</select></LabeledField></div></section><section><SectionLabel icon={ReceiptText}>Fee Amounts</SectionLabel><div className="grid gap-4 sm:grid-cols-2"><LabeledField label="Monthly Fee" required><input type="number" min={0} placeholder="0" value={form.monthly_fee} onChange={(event) => setForm({ ...form, monthly_fee: event.target.value })} className={inputClass} /></LabeledField><LabeledField label="Admission Fee"><input type="number" min={0} placeholder="0" value={form.admission_fee} onChange={(event) => setForm({ ...form, admission_fee: event.target.value })} className={inputClass} /></LabeledField><LabeledField label="Exam Fee"><input type="number" min={0} placeholder="0" value={form.exam_fee} onChange={(event) => setForm({ ...form, exam_fee: event.target.value })} className={inputClass} /></LabeledField></div></section><div className="flex justify-end gap-2 border-t border-slate-100 pt-4 dark:border-white/5"><button type="button" disabled={saving} onClick={() => setOpenDialog(false)} className={secondaryButtonClass}>Cancel</button><button type="button" disabled={saving || !form.class_id || !form.session_id || !form.monthly_fee} onClick={() => void saveStructure()} className={primaryButtonClass}>{saving ? "Saving…" : form.id ? "Save Changes" : "Add Structure"}</button></div></div></Modal>}
+  </div>;
 }

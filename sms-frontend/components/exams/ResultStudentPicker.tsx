@@ -1,0 +1,11 @@
+"use client";
+
+import { CheckCircle2, Search, UserRound } from "lucide-react";
+import { inputClass } from "./ExamUi";
+import type { ResultStudent } from "./types";
+import { studentIdentifier, studentName } from "./types";
+
+export default function ResultStudentPicker({ students, selectedStudent, search, onSearchChange, onSelect }: { students: ResultStudent[]; selectedStudent: number; search: string; onSearchChange: (value: string) => void; onSelect: (id: number) => void }) {
+  const filtered = students.filter((student) => studentName(student).toLowerCase().includes(search.toLowerCase()) || (student.admission_no ?? "").toLowerCase().includes(search.toLowerCase()));
+  return <div><div className="relative"><Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" /><input value={search} onChange={(event) => onSearchChange(event.target.value)} placeholder="Search by name or admission no…" className={`${inputClass} pl-9`} /></div><div className="mt-3 max-h-64 space-y-1 overflow-y-auto pr-1">{filtered.slice(0, 30).map((student) => <button key={student.id} type="button" onClick={() => onSelect(student.id)} className={`flex w-full items-center gap-3 rounded-lg border p-3 text-left transition-colors ${selectedStudent === student.id ? "border-[#8B6DF2] bg-[#8B6DF2]/10" : "border-slate-200 bg-white hover:border-[#8B6DF2]/40 dark:border-white/10 dark:bg-white/[0.03]"}`}><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-blue-400/20 bg-blue-50 text-blue-600 dark:border-blue-400/20 dark:bg-blue-500/10 dark:text-blue-400"><UserRound size={15} /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{studentName(student)}</span><span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">{studentIdentifier(student)}{student.grade_name ? ` · ${student.grade_name}${student.section ? ` – ${student.section}` : ""}` : ""}</span></span>{selectedStudent === student.id && <CheckCircle2 size={17} className="shrink-0 text-[#8B6DF2]" />}</button>)}{filtered.length === 0 && <p className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">No students found</p>}</div></div>;
+}

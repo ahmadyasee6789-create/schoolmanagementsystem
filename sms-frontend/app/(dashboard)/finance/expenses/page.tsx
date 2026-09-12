@@ -1,111 +1,55 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { usePaginatedQuery } from "@/app/hooks/usePaginatedQuery";
-import {
-  Box, Button, Chip, Grid, IconButton, MenuItem, Pagination, Table,
-  TableBody, TableCell, TableHead, TableRow, TextField,
-  Typography, Tooltip, useMediaQuery, useTheme,
-} from "@mui/material";
-import {
-  Delete, Search, AttachMoneyOutlined,
-  CategoryOutlined, ReceiptLongOutlined, AddOutlined,
-} from "@mui/icons-material";
-import { api } from "@/app/lib/api";
+import { useEffect, useState } from "react";
+import { DollarSign, ReceiptText, Search, Tags, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
-import {
-  C, FONT, EASE, inputSx, menuProps, thSx, tdSx,
-  GlobalStyles, PageHeader, EmptyState, DataTable,
-  DeleteDialog, MobileFab, DialogShell, SectionLabel,
-} from "@/components/ui";
+import { usePaginatedQuery } from "@/app/hooks/usePaginatedQuery";
+import { api } from "@/app/lib/api";
+import { EmptyState, LoadingState, Modal, PageHeader, inputClass, primaryButtonClass, secondaryButtonClass } from "@/components/exams/ExamUi";
+import { Badge, DataTable, errorMessage, LabeledField, Money, Pagination, SectionLabel, tableCellClass, tableHeadClass } from "@/components/finance/FinanceUi";
 
-// ─── Types ──────────────────────────────────────────────────────────────
-interface Expense {
-  id: number; category_id: number;
-  category: { id: number; name: string };
-  description: string; amount: number; created_at: string;
-}
-interface Category { id: number; name: string }
+type Expense = { id: number; category_id: number; category: { id: number; name: string }; description: string; amount: number; created_at: string };
+type ExpenseCategory = { id: number; name: string };
 
-// ─── Helpers ─────────────────────────────────────────────────────────────
-const fmt     = (n: number) => new Intl.NumberFormat("en-PK", { minimumFractionDigits: 0 }).format(n);
-const fmtDate = (d: string) => new Date(d).toLocaleDateString("en-PK", { day: "2-digit", month: "short", year: "numeric" });
+const formatDate = (value: string) => new Date(value).toLocaleDateString("en-PK", { day: "2-digit", month: "short", year: "numeric" });
+const toneForCategory = (id: number): "purple" | "blue" | "green" | "red" | "slate" => ["purple", "blue", "green", "red", "slate"][id % 5] as "purple" | "blue" | "green" | "red" | "slate";
 
-const CAT_COLORS = [
-  { color: C.accent, dim: C.accentDim },
-  { color: C.blue,   dim: C.blueDim   },
-  { color: C.green,  dim: C.greenDim  },
-  { color: C.purple, dim: C.purpleDim },
-  { color: C.red,    dim: C.redDim    },
-];
-const catColor = (id: number) => CAT_COLORS[id % CAT_COLORS.length];
-
-// ─── Mobile expense card ──────────────────────────────────────────────────
-function ExpenseCard({ e }: { e: Expense }) {
-  const cc = catColor(e.category_id);
-  return (
-    <Box sx={{ backgroundColor: C.surface, border: `1px solid ${C.border}`, borderRadius: "12px", p: 2, mb: 1.5, transition: `border-color ${EASE}`, "&:hover": { borderColor: "rgba(245,158,11,0.25)" } }}>
-      <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", mb: 1 }}>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
-          <Box sx={{ width: 36, height: 36, borderRadius: "10px", backgroundColor: cc.dim, border: `1px solid ${cc.color}25`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            <ReceiptLongOutlined sx={{ fontSize: 18, color: cc.color }} />
-          </Box>
-          <Box>
-            <Typography sx={{ fontWeight: 700, fontSize: "0.9rem", color: C.textPrimary, fontFamily: FONT, lineHeight: 1.2 }}>{e.description || "—"}</Typography>
-            <Typography sx={{ fontSize: "0.72rem", color: C.textSecondary, fontFamily: FONT }}>{fmtDate(e.created_at)}</Typography>
-          </Box>
-        </Box>
-        <Typography sx={{ fontFamily: '"DM Mono", monospace', fontWeight: 700, fontSize: "0.95rem", color: C.textPrimary }}>PKR {fmt(e.amount)}</Typography>
-      </Box>
-      <Chip label={e.category?.name} size="small" sx={{ backgroundColor: cc.dim, color: cc.color, fontFamily: FONT, fontWeight: 600, fontSize: "0.68rem", height: 20, border: `1px solid ${cc.color}25` }} />
-    </Box>
-  );
+function ExpenseCard({ expense }: { expense: Expense }) {
+  return <article className="rounded-xl border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-white/[0.03]"><div className="flex items-start justify-between gap-3"><div className="flex min-w-0 items-center gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#8B6DF2]/20 bg-[#8B6DF2]/10"><ReceiptText size={18} className="text-[#8B6DF2]" /></span><div className="min-w-0"><p className="truncate text-sm font-bold text-slate-900 dark:text-slate-50">{expense.description || "No description"}</p><p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{formatDate(expense.created_at)}</p></div></div><Money value={expense.amount} /></div><div className="mt-4 border-t border-slate-100 pt-3 dark:border-white/5"><Badge tone={toneForCategory(expense.category_id)}>{expense.category?.name ?? "Uncategorised"}</Badge></div></article>;
 }
 
-// ─── Main Page ─────────────────────────────────────────────────────────────
 export default function ExpensesPage() {
-  const theme    = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
-
-  const [categories,     setCategories]     = useState<Category[]>([]);
-  const [search,         setSearch]         = useState("");
+  const [categories, setCategories] = useState<ExpenseCategory[]>([]);
+  const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
-
-  // Add expense dialog
   const [expenseOpen, setExpenseOpen] = useState(false);
-  const [form,        setForm]        = useState({ category_id: "", description: "", amount: "" });
-  const [saving,      setSaving]      = useState(false);
-
-  // Manage categories dialog
+  const [form, setForm] = useState({ category_id: "", description: "", amount: "" });
+  const [saving, setSaving] = useState(false);
   const [categoryOpen, setCategoryOpen] = useState(false);
-  const [newCategory,  setNewCategory]  = useState("");
-  const [addingCat,    setAddingCat]    = useState(false);
-  const [deleteCatId,  setDeleteCatId]  = useState<number | null>(null);
-  const [deletingCat,  setDeletingCat]  = useState(false);
+  const [newCategory, setNewCategory] = useState("");
+  const [addingCategory, setAddingCategory] = useState(false);
+  const [deleteCategoryId, setDeleteCategoryId] = useState<number | null>(null);
+  const [deletingCategory, setDeletingCategory] = useState(false);
 
-  // ── Paginated query ────────────────────────────────────────────────
-  const { data: expenses, loading, page, totalPages, setPage, refetch } =
-    usePaginatedQuery({
-      fetcher: async ({ page, limit, search, category }) => {
-        const res = await api.get("/expenses", { params: { page, limit, search, category } });
-        return { data: res.data.data, totalPages: res.data.totalPages };
-      },
-      filters: {
-        search,
-        category: categoryFilter ? Number(categoryFilter) : undefined,
-      },
-      debounceKeys: ["search"],
-    });
+  const { data: expenses, loading, page, totalPages, setPage, refetch } = usePaginatedQuery({
+    fetcher: async ({ page: currentPage, limit, search: query, category }) => {
+      const response = await api.get("/expenses", { params: { page: currentPage, limit, search: query, category } });
+      return { data: response.data.data, totalPages: response.data.totalPages };
+    },
+    filters: { search, category: categoryFilter ? Number(categoryFilter) : undefined },
+    debounceKeys: ["search"],
+  });
+  const expenseItems = expenses as Expense[];
 
   const fetchCategories = async () => {
-    try { const res = await api.get("/expenses/categories"); setCategories(res.data); }
-    catch { console.error("Failed to load categories"); }
+    try {
+      const response = await api.get("/expenses/categories");
+      setCategories(response.data ?? []);
+    } catch { toast.error("Failed to load expense categories"); }
   };
+  useEffect(() => { void fetchCategories(); }, []);
 
-  useEffect(() => { fetchCategories(); }, []);
-
-  // ── Add expense ────────────────────────────────────────────────────
-  const handleSubmit = async () => {
+  const addExpense = async () => {
     if (!form.category_id || !form.amount) return toast.error("Category and amount are required");
     setSaving(true);
     try {
@@ -114,226 +58,42 @@ export default function ExpensesPage() {
       setExpenseOpen(false);
       setForm({ category_id: "", description: "", amount: "" });
       refetch();
-    } catch (err: any) { toast.error(err.response?.data?.detail || "Failed to add expense"); }
+    } catch (error: unknown) { toast.error(errorMessage(error, "Failed to add expense")); }
     finally { setSaving(false); }
   };
-
-  // ── Add category ───────────────────────────────────────────────────
-  const handleAddCategory = async () => {
+  const addCategory = async () => {
     if (!newCategory.trim()) return;
-    setAddingCat(true);
+    setAddingCategory(true);
     try {
-      await api.post("/expenses/categories", { name: newCategory });
+      await api.post("/expenses/categories", { name: newCategory.trim() });
       toast.success("Category added");
-      setNewCategory(""); fetchCategories();
-    } catch (err: any) { toast.error(err.response?.data?.detail || "Failed to add category"); }
-    finally { setAddingCat(false); }
+      setNewCategory("");
+      await fetchCategories();
+    } catch (error: unknown) { toast.error(errorMessage(error, "Failed to add category")); }
+    finally { setAddingCategory(false); }
   };
-
-  // ── Delete category ────────────────────────────────────────────────
-  const confirmDeleteCat = async () => {
-    if (!deleteCatId) return;
-    setDeletingCat(true);
+  const deleteCategory = async () => {
+    if (!deleteCategoryId) return;
+    setDeletingCategory(true);
     try {
-      await api.delete(`/expenses/categories/${deleteCatId}`);
+      await api.delete(`/expenses/categories/${deleteCategoryId}`);
       toast.success("Category deleted");
-      setDeleteCatId(null); fetchCategories();
-    } catch (err: any) { toast.error(err.response?.data?.detail || "Failed to delete category"); }
-    finally { setDeletingCat(false); }
+      setDeleteCategoryId(null);
+      await fetchCategories();
+    } catch (error: unknown) { toast.error(errorMessage(error, "Failed to delete category")); }
+    finally { setDeletingCategory(false); }
   };
 
-  const totalAmount = (expenses as Expense[]).reduce((s, e) => s + e.amount, 0);
+  const pageTotal = expenseItems.reduce((sum, expense) => sum + expense.amount, 0);
+  return <div className="min-h-full bg-white p-4 dark:bg-[#0D1117] sm:p-6 md:p-8">
+    <PageHeader title="Expenses" subtitle="Track and manage school expenditures by category" actionLabel="Add Expense" onAction={() => setExpenseOpen(true)} />
+    <div className="mb-6 flex flex-wrap items-center gap-3"><button type="button" onClick={() => setCategoryOpen(true)} className={`${secondaryButtonClass} inline-flex items-center gap-2`}><Tags size={16} />Manage Categories</button>{expenseItems.length > 0 && <span className="ml-auto inline-flex items-center gap-2 rounded-lg border border-[#8B6DF2]/20 bg-[#8B6DF2]/10 px-3 py-2 text-xs font-semibold text-[#8B6DF2]"><DollarSign size={15} />{new Intl.NumberFormat("en-PK").format(pageTotal)} <span className="font-medium text-slate-500 dark:text-slate-400">this page</span></span>}</div>
+    <div className="mb-6 grid gap-3 lg:grid-cols-12"><div className="relative lg:col-span-7"><Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by description…" className={`${inputClass} pl-9`} /></div><select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} className={`${inputClass} lg:col-span-5`} aria-label="Filter by category"><option value="">All Categories</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></div>
 
-  return (
-    <>
-      <GlobalStyles />
-      <Box sx={{ p: { xs: 1.5, sm: 2.5, md: 3 }, backgroundColor: C.bg, minHeight: "100%" }}>
+    {loading ? <LoadingState /> : expenseItems.length === 0 ? <EmptyState icon={ReceiptText} message="No expenses found" actionLabel="Add Expense" onAction={() => setExpenseOpen(true)} /> : <><div className="grid gap-3 sm:hidden">{expenseItems.map((expense) => <ExpenseCard key={expense.id} expense={expense} />)}</div><DataTable><thead className="bg-slate-50 dark:bg-white/[0.03]"><tr>{["#", "Category", "Description", "Amount", "Date"].map((heading) => <th key={heading} className={tableHeadClass}>{heading}</th>)}</tr></thead><tbody>{expenseItems.map((expense) => <tr key={expense.id} className="border-t border-slate-100 transition-colors hover:bg-slate-50 dark:border-white/5 dark:hover:bg-white/[0.02]"><td className={`${tableCellClass} font-mono text-xs text-slate-400 dark:text-slate-500`}>{String(expense.id).padStart(3, "0")}</td><td className={tableCellClass}><Badge tone={toneForCategory(expense.category_id)}>{expense.category?.name ?? "Uncategorised"}</Badge></td><td className={`${tableCellClass} font-medium text-slate-800 dark:text-slate-100`}>{expense.description || <span className="italic text-slate-400">No description</span>}</td><td className={tableCellClass}><Money value={expense.amount} /></td><td className={`${tableCellClass} text-xs text-slate-500 dark:text-slate-400`}>{formatDate(expense.created_at)}</td></tr>)}</tbody></DataTable><Pagination page={page} totalPages={totalPages} onChange={setPage} /></>}
 
-        {/* Header — shared PageHeader */}
-        <PageHeader
-          title="Expenses"
-          subtitle="Track and manage school expenditures by category"
-          isMobile={isMobile}
-        />
-
-        {/* Action buttons */}
-        <Box sx={{ display: "flex", gap: 1.5, mb: 2.5, flexWrap: "wrap" }}>
-          <Button variant="contained" onClick={() => setExpenseOpen(true)} startIcon={<AddOutlined sx={{ fontSize: 16 }} />}
-            sx={{ backgroundColor: C.accent, color: "#111827", fontFamily: FONT, fontWeight: 600, textTransform: "none", borderRadius: "10px", px: 2.5, "&:hover": { backgroundColor: "#FBBF24" } }}>
-            Add Expense
-          </Button>
-          <Button variant="outlined" onClick={() => setCategoryOpen(true)} startIcon={<CategoryOutlined sx={{ fontSize: 16 }} />}
-            sx={{ color: C.textSecondary, fontFamily: FONT, fontWeight: 600, textTransform: "none", borderRadius: "10px", px: 2.5, borderColor: C.border, "&:hover": { borderColor: C.accent, color: C.accent, backgroundColor: C.accentDim } }}>
-            Manage Categories
-          </Button>
-
-          {/* Running total */}
-          {(expenses as Expense[]).length > 0 && (
-            <Box sx={{ ml: "auto", display: "flex", alignItems: "center", gap: 1, backgroundColor: C.accentDim, border: `1px solid rgba(245,158,11,0.2)`, borderRadius: "10px", px: 1.75, py: 0.75 }}>
-              <AttachMoneyOutlined sx={{ fontSize: 15, color: C.accent }} />
-              <Typography sx={{ fontFamily: '"DM Mono", monospace', fontSize: "0.82rem", fontWeight: 700, color: C.accent }}>PKR {fmt(totalAmount)}</Typography>
-              <Typography sx={{ fontFamily: FONT, fontSize: "0.7rem", color: C.textSecondary }}>this page</Typography>
-            </Box>
-          )}
-        </Box>
-
-        {/* Filters */}
-        <Grid container spacing={1.5} sx={{ mb: 2.5 }}>
-          <Grid item xs={12} sm={7}>
-            <TextField fullWidth size="small" placeholder="Search by description…" sx={inputSx} value={search} onChange={e => setSearch(e.target.value)} InputProps={{ startAdornment: <Search sx={{ color: C.textSecondary, mr: 1, fontSize: 18 }} /> }} />
-          </Grid>
-          <Grid item xs={12} sm={5}>
-            <TextField select fullWidth size="small" label="Category" sx={inputSx} value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} SelectProps={{ MenuProps: menuProps }}>
-              <MenuItem value="">All Categories</MenuItem>
-              {categories.map(cat => (
-                <MenuItem key={cat.id} value={cat.id}>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                    <Box sx={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: catColor(cat.id).color }} />
-                    <Typography sx={{ fontFamily: FONT, fontSize: "0.875rem" }}>{cat.name}</Typography>
-                  </Box>
-                </MenuItem>
-              ))}
-            </TextField>
-          </Grid>
-        </Grid>
-
-        {/* Content */}
-        {loading ? (
-          <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
-            <Box sx={{ width: 32, height: 32, borderRadius: "50%", border: `3px solid ${C.accentDim}`, borderTopColor: C.accent, animation: "spin 0.7s linear infinite", "@keyframes spin": { to: { transform: "rotate(360deg)" } } }} />
-          </Box>
-
-        ) : (expenses as Expense[]).length === 0 ? (
-          /* Empty state — shared EmptyState */
-          <EmptyState icon={ReceiptLongOutlined} message="No expenses found" actionLabel="Add Expense" onAction={() => setExpenseOpen(true)} />
-
-        ) : isMobile ? (
-          <Box>{(expenses as Expense[]).map(e => <ExpenseCard key={e.id} e={e} />)}</Box>
-
-        ) : (
-          /* Table — shared DataTable */
-          <DataTable>
-            <Table>
-              <TableHead>
-                <TableRow>{["#","Category","Description","Amount","Date"].map(h => <TableCell key={h} sx={thSx}>{h}</TableCell>)}</TableRow>
-              </TableHead>
-              <TableBody>
-                {(expenses as Expense[]).map((e, i) => {
-                  const cc = catColor(e.category_id);
-                  return (
-                    <TableRow key={e.id} sx={{ "&:hover": { backgroundColor: "rgba(255,255,255,0.02)" }, transition: `background ${EASE}`, animation: `fadeUp 0.3s ${i * 25}ms ease both`, "@keyframes fadeUp": { from: { opacity: 0, transform: "translateY(6px)" }, to: { opacity: 1, transform: "translateY(0)" } } }}>
-                      <TableCell sx={{ ...tdSx, fontFamily: '"DM Mono", monospace', color: C.textSecondary, width: 70 }}>{String(e.id).padStart(3, "0")}</TableCell>
-                      <TableCell sx={tdSx}>
-                        <Chip label={e.category?.name} size="small" sx={{ backgroundColor: cc.dim, color: cc.color, fontFamily: FONT, fontWeight: 600, fontSize: "0.7rem", height: 22, border: `1px solid ${cc.color}25` }} />
-                      </TableCell>
-                      <TableCell sx={tdSx}>
-                        <Typography sx={{ fontFamily: FONT, fontSize: "0.855rem", color: C.textPrimary }}>
-                          {e.description || <span style={{ color: C.textSecondary, fontStyle: "italic" }}>No description</span>}
-                        </Typography>
-                      </TableCell>
-                      <TableCell sx={tdSx}>
-                        <Typography sx={{ fontFamily: '"DM Mono", monospace', fontWeight: 700, fontSize: "0.855rem", color: C.textPrimary }}>PKR {fmt(e.amount)}</Typography>
-                      </TableCell>
-                      <TableCell sx={{ ...tdSx, fontFamily: '"DM Mono", monospace', fontSize: "0.78rem", color: C.textSecondary }}>{fmtDate(e.created_at)}</TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-
-            {totalPages > 1 && (
-              <Box sx={{ display: "flex", justifyContent: "center", py: 2, borderTop: `1px solid ${C.border}` }}>
-                <Pagination count={totalPages} page={page} onChange={(_, v) => setPage(v)}
-                  sx={{ "& .MuiPaginationItem-root": { fontFamily: FONT, color: C.textSecondary, borderColor: C.border }, "& .Mui-selected": { backgroundColor: `${C.accent} !important`, color: "#111827 !important" } }} />
-              </Box>
-            )}
-          </DataTable>
-        )}
-
-        {isMobile && <MobileFab onClick={() => setExpenseOpen(true)} />}
-
-        {/* Add Expense Dialog — shared DialogShell */}
-        <DialogShell
-          open={expenseOpen} onClose={() => setExpenseOpen(false)}
-          title="Add Expense" maxWidth="xs" isMobile={isMobile}
-          saving={saving} saveLabel="Add Expense" onSave={handleSubmit}
-          saveDisabled={!form.category_id || !form.amount}
-        >
-          <Grid container spacing={2} sx={{ mt: 0 }}>
-            <SectionLabel label="Expense Details" />
-            <Grid item xs={12}>
-              <TextField select fullWidth required label="Category" sx={inputSx} value={form.category_id} onChange={e => setForm({ ...form, category_id: e.target.value })} SelectProps={{ MenuProps: menuProps }}>
-                <MenuItem value="" disabled>Select Category</MenuItem>
-                {categories.map(cat => (
-                  <MenuItem key={cat.id} value={cat.id}>
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                      <Box sx={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: catColor(cat.id).color }} />
-                      <Typography sx={{ fontFamily: FONT, fontSize: "0.875rem" }}>{cat.name}</Typography>
-                    </Box>
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-            <Grid item xs={12}>
-              <TextField fullWidth label="Description" sx={inputSx} placeholder="What was this expense for?" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
-            </Grid>
-            <Grid item xs={12}>
-              <TextField fullWidth required label="Amount" type="number" sx={inputSx} placeholder="0" value={form.amount}
-                onKeyDown={e => e.key === "Enter" && handleSubmit()}
-                onChange={e => setForm({ ...form, amount: e.target.value })}
-                InputProps={{ startAdornment: <AttachMoneyOutlined sx={{ fontSize: 16, color: C.textSecondary, mr: 0.5 }} /> }} />
-            </Grid>
-          </Grid>
-        </DialogShell>
-
-        {/* Manage Categories Dialog — shared DialogShell (no save button, just close) */}
-        <DialogShell
-          open={categoryOpen} onClose={() => setCategoryOpen(false)}
-          title="Manage Categories" maxWidth="xs" isMobile={isMobile}
-        >
-          {/* Add new category */}
-          <Box sx={{ display: "flex", gap: 1, mb: 3 }}>
-            <TextField fullWidth size="small" label="New Category" sx={inputSx} placeholder="e.g. Utilities" value={newCategory}
-              onKeyDown={e => e.key === "Enter" && handleAddCategory()}
-              onChange={e => setNewCategory(e.target.value)} />
-            <Button variant="contained" onClick={handleAddCategory} disabled={addingCat || !newCategory.trim()}
-              sx={{ backgroundColor: C.accent, color: "#111827", fontFamily: FONT, fontWeight: 600, textTransform: "none", borderRadius: "10px", px: 2, whiteSpace: "nowrap", "&:hover": { backgroundColor: "#FBBF24" }, "&.Mui-disabled": { backgroundColor: "rgba(245,158,11,0.2)", color: "rgba(17,24,39,0.4)" } }}>
-              {addingCat ? "Adding…" : "Add"}
-            </Button>
-          </Box>
-
-          {/* Category list */}
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-            {categories.length === 0 ? (
-              <Typography sx={{ fontFamily: FONT, fontSize: "0.82rem", color: C.textSecondary, textAlign: "center", py: 2, fontStyle: "italic" }}>No categories yet</Typography>
-            ) : categories.map(cat => {
-              const cc = catColor(cat.id);
-              return (
-                <Box key={cat.id} sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", p: 1.25, borderRadius: "10px", backgroundColor: C.bg, border: `1px solid ${C.border}`, transition: `border-color ${EASE}`, "&:hover": { borderColor: cc.color + "40" } }}>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
-                    <Box sx={{ width: 10, height: 10, borderRadius: "50%", backgroundColor: cc.color, flexShrink: 0 }} />
-                    <Typography sx={{ fontFamily: FONT, fontSize: "0.875rem", color: C.textPrimary, fontWeight: 500 }}>{cat.name}</Typography>
-                  </Box>
-                  <Tooltip title="Delete Category" arrow>
-                    <IconButton size="small" onClick={() => setDeleteCatId(cat.id)} sx={{ color: C.textSecondary, borderRadius: "7px", p: 0.6, "&:hover": { backgroundColor: C.redDim, color: C.red }, transition: `all ${EASE}` }}>
-                      <Delete sx={{ fontSize: 14 }} />
-                    </IconButton>
-                  </Tooltip>
-                </Box>
-              );
-            })}
-          </Box>
-        </DialogShell>
-
-        {/* Delete Category Confirm — shared DeleteDialog */}
-        <DeleteDialog
-          open={!!deleteCatId} onClose={() => setDeleteCatId(null)}
-          onConfirm={confirmDeleteCat} loading={deletingCat}
-          title="Delete Category?"
-          description="This will permanently delete the category. Existing expenses may be affected."
-        />
-
-      </Box>
-    </>
-  );
+    {expenseOpen && <Modal title="Add Expense" onClose={() => !saving && setExpenseOpen(false)}><div className="space-y-5"><section><SectionLabel icon={Tags}>Expense Details</SectionLabel><div className="space-y-4"><LabeledField label="Category" required><select value={form.category_id} onChange={(event) => setForm({ ...form, category_id: event.target.value })} className={inputClass}><option value="" disabled>Select category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></LabeledField><LabeledField label="Description"><input value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder="What was this expense for?" className={inputClass} /></LabeledField><LabeledField label="Amount" required><input type="number" min={0} value={form.amount} onKeyDown={(event) => event.key === "Enter" && void addExpense()} onChange={(event) => setForm({ ...form, amount: event.target.value })} placeholder="0" className={inputClass} /></LabeledField></div></section><div className="flex justify-end gap-2 border-t border-slate-100 pt-4 dark:border-white/5"><button type="button" disabled={saving} onClick={() => setExpenseOpen(false)} className={secondaryButtonClass}>Cancel</button><button type="button" disabled={saving || !form.category_id || !form.amount} onClick={() => void addExpense()} className={primaryButtonClass}>{saving ? "Saving…" : "Add Expense"}</button></div></div></Modal>}
+    {categoryOpen && <Modal title="Manage Categories" onClose={() => setCategoryOpen(false)}><div className="space-y-5"><div className="flex gap-2"><input value={newCategory} onKeyDown={(event) => event.key === "Enter" && void addCategory()} onChange={(event) => setNewCategory(event.target.value)} placeholder="e.g. Utilities" className={inputClass} /><button type="button" disabled={addingCategory || !newCategory.trim()} onClick={() => void addCategory()} className={`${primaryButtonClass} shrink-0`}>{addingCategory ? "Adding…" : "Add"}</button></div><div className="space-y-2">{categories.length === 0 ? <p className="py-3 text-center text-sm italic text-slate-500 dark:text-slate-400">No categories yet</p> : categories.map((category) => <div key={category.id} className="flex items-center justify-between rounded-lg border border-slate-200 p-3 dark:border-white/10"><Badge tone={toneForCategory(category.id)}>{category.name}</Badge><button type="button" title="Delete category" onClick={() => setDeleteCategoryId(category.id)} className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:text-slate-500 dark:hover:bg-red-500/10 dark:hover:text-red-400"><Trash2 size={16} /></button></div>)}</div></div></Modal>}
+    {deleteCategoryId !== null && <Modal title="Delete Category?" onClose={() => !deletingCategory && setDeleteCategoryId(null)}><div className="space-y-5"><p className="text-sm text-slate-600 dark:text-slate-300">This will permanently delete the category. Existing expenses may be affected.</p><div className="flex justify-end gap-2"><button type="button" disabled={deletingCategory} onClick={() => setDeleteCategoryId(null)} className={secondaryButtonClass}>Cancel</button><button type="button" disabled={deletingCategory} onClick={() => void deleteCategory()} className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-40">{deletingCategory ? "Deleting…" : "Delete Category"}</button></div></div></Modal>}
+  </div>;
 }

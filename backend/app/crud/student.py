@@ -17,24 +17,40 @@ from app.schemas.student import StudentCreate, StudentUpdate
 # --------------------------------------------------
 from sqlalchemy import func
 
+# --------------------------------------------------
+# CREATE STUDENT
+# --------------------------------------------------
+from datetime import datetime
+from sqlalchemy import func
+
+
 def create_student(db: Session, student: StudentCreate, org_id: int) -> Student:
     """Create a student record with auto-generated admission number."""
-    current_year=datetime.now().year
+
+    current_year = datetime.now().year
+    prefix = f"ADM-{current_year}-"
+
+    # Get the latest admission number for this organization/year
     last_student = (
         db.query(Student)
-        .filter(Student.organization_id == org_id,
-                Student.admission_no.ilike(f"ADM-{current_year}-%"))
+        .filter(
+            Student.organization_id == org_id,
+            Student.admission_no.ilike(f"{prefix}%"),
+        )
         .order_by(Student.id.desc())
         .first()
     )
 
     if last_student and last_student.admission_no:
-        last_number = int(last_student.admission_no.split("-")[-1])
-        next_number = last_number + 1
+        try:
+            last_number = int(last_student.admission_no.split("-")[-1])
+            next_number = last_number + 1
+        except (ValueError, IndexError):
+            next_number = 1
     else:
         next_number = 1
 
-    admission_no = f"ADM-{current_year}-{next_number:05d}"
+    admission_no = f"{prefix}{next_number:05d}"
 
     db_student = Student(
         organization_id=org_id,
@@ -59,11 +75,10 @@ def create_student(db: Session, student: StudentCreate, org_id: int) -> Student:
 
     return db_student
 
+
 # --------------------------------------------------
 # ENROLL STUDENT
 # --------------------------------------------------
-from sqlalchemy import func
-
 def enroll_student(
     db: Session,
     student_id: int,
@@ -73,17 +88,32 @@ def enroll_student(
     discount_percent: float = 0.0,
 ) -> StudentEnrollment:
 
-    # Get highest roll number in this class for this session
-    last_roll = (
-        db.query(func.max(StudentEnrollment.roll_number))
+    # Get existing roll numbers for this class/session
+    existing_roll_numbers = (
+        db.query(StudentEnrollment.roll_number)
         .filter(
             StudentEnrollment.classroom_id == classroom_id,
-            StudentEnrollment.session_id == session_id
+            StudentEnrollment.session_id == session_id,
+            StudentEnrollment.roll_number.isnot(None),
         )
-        .scalar()
+        .all()
     )
 
-    roll_number = (int(last_roll) if last_roll is not None else 0) + 1
+    # Convert string roll numbers to integers
+    numeric_roll_numbers = []
+
+    for (roll_number,) in existing_roll_numbers:
+        try:
+            numeric_roll_numbers.append(int(roll_number))
+        except (TypeError, ValueError):
+            continue
+
+    # Generate next roll number
+    next_roll_number = (
+        max(numeric_roll_numbers) + 1
+        if numeric_roll_numbers
+        else 1
+    )
 
     enrollment = StudentEnrollment(
         student_id=student_id,
@@ -91,8 +121,8 @@ def enroll_student(
         session_id=session_id,
         enrollment_date=enrollment_date,
         is_active=True,
-        roll_number=roll_number,
-        discount_percent=discount_percent,
+        roll_number=str(next_roll_number),
+        discount_percent=discount_percent or 0.0,
     )
 
     db.add(enrollment)
