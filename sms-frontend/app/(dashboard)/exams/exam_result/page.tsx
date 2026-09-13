@@ -433,6 +433,11 @@ export default function ExamResultsPage() {
             />
           ) : studentsLoading ? (
             <LoadingState />
+          ) : !currentPaper ? (
+            <EmptyState
+              icon={ClipboardList}
+              message="Select a paper to view results"
+            />
           ) : (
             <>
               <div className="mb-4 flex flex-col gap-3 sm:flex-row">
