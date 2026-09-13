@@ -1,236 +1,160 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import {
-  Box, Button, Grid, IconButton, InputAdornment,
-  TextField, Typography,
-} from "@mui/material";
-import {
-  EmailOutlined, LockOutlined,
-  Visibility, VisibilityOff, SchoolOutlined,
-} from "@mui/icons-material";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useAuthStore } from "../../store/authStore";
+import { Eye, EyeOff, GraduationCap, Lock, Mail } from "lucide-react";
 import toast from "react-hot-toast";
-import { C, FONT, EASE, inputSx, GlobalStyles } from "@/components/ui";
+import { useAuthStore } from "../../store/authStore";
+
+type ApiError = { response?: { data?: { detail?: string } } };
+
+const inputClass =
+  "w-full rounded-lg border border-slate-200 bg-white py-2.5 pl-9 pr-3 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-[#8B6DF2] dark:border-white/10 dark:bg-white/5 dark:text-slate-100 dark:placeholder:text-slate-500";
 
 export default function SignInPage() {
   const router = useRouter();
   const { hydrated, user } = useAuthStore();
 
-  const [email,    setEmail]    = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [showPass, setShowPass] = useState(false);
-  const [loading,  setLoading]  = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  // ── Redirect if already logged in ─────────────────────────────────
+  // Redirect if already logged in
   useEffect(() => {
     if (!hydrated) return;
     if (user) {
-      if(user.is_superadmin){
-        router.replace("/superadmin");
-      }
-      else{
-        router.replace("/");
-      }
+      router.replace(user.is_superadmin ? "/superadmin" : "/");
     }
   }, [hydrated, user, router]);
 
- 
-const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
-  if (!email || !password)
-    return toast.error("All fields are required");
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
-    return toast.error("Invalid email format");
-
-  setLoading(true);
-  try {
-    // login() now returns the redirect path
-    const redirect = await useAuthStore.getState().login(email, password);
-
-    // Use backend's redirect decision
-    router.replace(redirect ?? "/");
-
-  } catch (err: any) {
-    const msg = err.response?.data?.detail || "Invalid email or password";
-      console.log("FULL ERROR:", err);
-
-    // Show special message for trial/suspended
-    if (msg.includes("expired")) {
-      toast.error("⏳ " + msg, { duration: 6000 });
-    } else if (msg.includes("suspended")) {
-      toast.error("🚫 " + msg, { duration: 6000 });
-    } else {
-      toast.error(msg);
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!email || !password) {
+      toast.error("All fields are required");
+      return;
     }
-  } finally {
-    setLoading(false);
-  }
-};
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      toast.error("Invalid email format");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const redirect = await useAuthStore.getState().login(email, password);
+      router.replace(redirect ?? "/");
+    } catch (error: unknown) {
+      const msg =
+        (error as ApiError).response?.data?.detail || "Invalid email or password";
+      if (msg.includes("expired")) {
+        toast.error(`⏳ ${msg}`, { duration: 6000 });
+      } else if (msg.includes("suspended")) {
+        toast.error(`🚫 ${msg}`, { duration: 6000 });
+      } else {
+        toast.error(msg);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   if (!hydrated) return null;
 
   return (
-    <>
-      <GlobalStyles />
+    <div className="flex min-h-screen items-center justify-center bg-white p-4 dark:bg-[#0D1117]">
+      <div className="w-full max-w-[420px]">
+        {/* Brand header */}
+        <div className="mb-7 text-center">
+          <span className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-[#8B6DF2]/20 bg-[#8B6DF2]/10">
+            <GraduationCap size={28} className="text-[#8B6DF2]" />
+          </span>
+          <h1 className="text-[2rem] font-bold leading-tight tracking-tight text-slate-900 dark:text-slate-50">
+            Welcome back
+          </h1>
+          <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">
+            Sign in to your school dashboard
+          </p>
+        </div>
 
-      <Box sx={{
-        minHeight: "100vh",
-        backgroundColor: C.bg,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        p: 2,
-      }}>
-        <Box sx={{ width: "100%", maxWidth: 420 }}>
+        {/* Card */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xl dark:border-white/10 dark:bg-white/[0.03] sm:p-7">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
+              Email
+              <div className="relative mt-1.5">
+                <Mail
+                  size={16}
+                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500"
+                />
+                <input
+                  type="email"
+                  required
+                  autoFocus
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="you@example.com"
+                  className={inputClass}
+                />
+              </div>
+            </label>
 
-          {/* ── Brand header ────────────────────────────────── */}
-          <Box sx={{ textAlign: "center", mb: 3.5 }}>
-            <Box sx={{
-              width: 56, height: 56, borderRadius: "16px",
-              backgroundColor: C.accentDim, border: `1px solid rgba(245,158,11,0.25)`,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              mx: "auto", mb: 2,
-            }}>
-              <SchoolOutlined sx={{ fontSize: 28, color: C.accent }} />
-            </Box>
-            <Typography sx={{
-              fontFamily: '"DM Serif Display", serif',
-              fontSize: "2rem", color: C.textPrimary,
-              lineHeight: 1.1, letterSpacing: "-0.02em",
-            }}>
-              Welcome back
-            </Typography>
-            <Typography sx={{
-              fontFamily: FONT, fontSize: "0.82rem",
-              color: C.textSecondary, mt: 0.75, fontWeight: 300,
-            }}>
-              Sign in to your school dashboard
-            </Typography>
-          </Box>
+            <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
+              Password
+              <div className="relative mt-1.5">
+                <Lock
+                  size={16}
+                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500"
+                />
+                <input
+                  type={showPassword ? "text" : "password"}
+                  required
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder="Your password"
+                  className={`${inputClass} pr-9`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition-colors hover:text-[#8B6DF2] dark:text-slate-500"
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </label>
 
-          {/* ── Card ────────────────────────────────────────── */}
-          <Box sx={{
-            backgroundColor: C.surface,
-            border: `1px solid ${C.border}`,
-            borderRadius: "16px",
-            p: { xs: 2.5, sm: 3.5 },
-            boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
-          }}>
-            <Box component="form" onSubmit={handleSubmit}>
-              <Grid container spacing={2}>
+            <div className="flex justify-end">
+              <Link
+                href="/forgot-password"
+                className="text-xs font-medium text-slate-500 transition-colors hover:text-[#8B6DF2] dark:text-slate-400"
+              >
+                Forgot password?
+              </Link>
+            </div>
 
-                {/* Email */}
-                <Grid item xs={12}>
-                  <TextField
-                    fullWidth required label="Email" type="email" sx={inputSx}
-                    placeholder="you@example.com"
-                    value={email}
-                    autoFocus
-                    onChange={e => setEmail(e.target.value)}
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <EmailOutlined sx={{ fontSize: 17, color: C.textSecondary }} />
-                        </InputAdornment>
-                      ),
-                    }}
-                  />
-                </Grid>
+            <button
+              type="submit"
+              disabled={loading || !email || !password}
+              className="flex w-full items-center justify-center rounded-lg bg-[#8B6DF2] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-indigo-400 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {loading ? (
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+              ) : (
+                "Sign In"
+              )}
+            </button>
+          </form>
+        </div>
 
-                {/* Password */}
-                <Grid item xs={12}>
-                  <TextField
-                    fullWidth required label="Password" sx={inputSx}
-                    type={showPass ? "text" : "password"}
-                    placeholder="Your password"
-                    value={password}
-                    onChange={e => setPassword(e.target.value)}
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <LockOutlined sx={{ fontSize: 17, color: C.textSecondary }} />
-                        </InputAdornment>
-                      ),
-                      endAdornment: (
-                        <InputAdornment position="end">
-                          <IconButton size="small" onClick={() => setShowPass(p => !p)} edge="end"
-                            sx={{ color: C.textSecondary, "&:hover": { color: C.accent } }}>
-                            {showPass
-                              ? <VisibilityOff sx={{ fontSize: 17 }} />
-                              : <Visibility    sx={{ fontSize: 17 }} />}
-                          </IconButton>
-                        </InputAdornment>
-                      ),
-                    }}
-                  />
-                </Grid>
-
-                {/* Forgot password */}
-                <Grid item xs={12} sx={{ pt: "4px !important", textAlign: "right" }}>
-                  <Typography
-                    component="span"
-                    onClick={() => router.push("/forgot-password")}
-                    sx={{
-                      fontFamily: FONT, fontSize: "0.78rem",
-                      color: C.textSecondary, cursor: "pointer",
-                      "&:hover": { color: C.accent },
-                      transition: `color ${EASE}`,
-                    }}
-                  >
-                    Forgot password?
-                  </Typography>
-                </Grid>
-
-                {/* Submit */}
-                <Grid item xs={12}>
-                  <Button
-                    type="submit" fullWidth variant="contained"
-                    disabled={loading || !email || !password}
-                    sx={{
-                      backgroundColor: C.accent, color: "#111827",
-                      fontFamily: FONT, fontWeight: 600, fontSize: "0.9rem",
-                      textTransform: "none", borderRadius: "10px", height: 44,
-                      "&:hover": { backgroundColor: "#FBBF24" },
-                      "&.Mui-disabled": { backgroundColor: "rgba(245,158,11,0.2)", color: "rgba(17,24,39,0.4)" },
-                      transition: `all ${EASE}`,
-                    }}
-                  >
-                    {loading ? (
-                      <Box sx={{
-                        width: 20, height: 20, borderRadius: "50%",
-                        border: "2px solid rgba(17,24,39,0.3)",
-                        borderTopColor: "#111827",
-                        animation: "spin 0.7s linear infinite",
-                        "@keyframes spin": { to: { transform: "rotate(360deg)" } },
-                      }} />
-                    ) : "Sign In"}
-                  </Button>
-                </Grid>
-
-              </Grid>
-            </Box>
-          </Box>
-
-          {/* ── Footer ──────────────────────────────────────── */}
-          <Typography sx={{
-            fontFamily: FONT, fontSize: "0.78rem",
-            color: C.textSecondary, textAlign: "center", mt: 2.5,
-          }}>
-            Don't have an account?{" "}
-            <Link href="/signup" style={{
-              color: C.accent,
-              fontWeight: 600,
-              textDecoration: "none",
-            }}>
-              Sign Up
-            </Link>
-          </Typography>
-
-        </Box>
-      </Box>
-    </>
+        {/* Footer */}
+        <p className="mt-5 text-center text-xs text-slate-500 dark:text-slate-400">
+          Don&apos;t have an account?{" "}
+          <Link href="/signup" className="font-semibold text-[#8B6DF2] hover:text-indigo-400">
+            Sign Up
+          </Link>
+        </p>
+      </div>
+    </div>
   );
 }

@@ -238,7 +238,7 @@ def signup(payload: UserCreate, db: Session = Depends(get_db)):
             name=payload.organization_name,
             status=        "trial",          # instant access!
            plan=          "trial",
-           trial_ends_at= datetime.utcnow() + timedelta(days=14),
+           trial_ends_at= datetime.utcnow() + timedelta(days=3),
         )
         db.add(new_org)
         db.flush()
