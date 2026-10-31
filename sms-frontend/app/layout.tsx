@@ -5,6 +5,7 @@ import { Toaster } from "react-hot-toast";
 import AuthHydration from "./providers/AuthHydration";
 import AuthProvider from "./providers/AuthProvider";
 import { ThemeProvider } from "./context/ThemeContext";
+import QueryProvider from "./providers/QueryProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -33,7 +34,7 @@ export default function RootLayout({
           <AuthProvider>
             <ThemeProvider>
               <Toaster />
-              {children}
+              <QueryProvider>{children}</QueryProvider>
             </ThemeProvider>
           </AuthProvider>
         </AuthHydration>

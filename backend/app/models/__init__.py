@@ -1,6 +1,7 @@
 # app/models/__init__.py
 from .users import User, Organization, OrganizationMember, Invitation
 from .students import Student
+from .student_import import StudentImportBatch
 from app.models.student_enrollment import StudentEnrollment
 
 from app.models.classroom import Classroom

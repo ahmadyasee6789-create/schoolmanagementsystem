@@ -17,6 +17,7 @@ from app.models.student_fee import StudentFee
 from app.models.fee_transection import FeeTransaction
 from app.schemas.reports import FeeReportItem,FeeReportResponse,ExamReport
 from app.models.classroom import Classroom,Grade
+from app.financial_permissions import require_financial_permission
 
 
 router = APIRouter(prefix="/reports", tags=["Reports"])
@@ -131,7 +132,7 @@ def payroll_report(
     current_user: OrganizationMember = Depends(get_current_user),
     active_session=Depends(get_active_session)
 ):
-
+    require_financial_permission(current_user, "view_fees")
     salaries = db.query(TeacherSalary).filter(
         TeacherSalary.teacher_id == teacher_id,
         TeacherSalary.organization_id == current_user.org_id,
@@ -161,6 +162,7 @@ def get_fee_report(
     current_user=Depends(get_current_user),
     active_session=Depends(get_active_session),
 ):
+    require_financial_permission(current_user, "view_fees")
     query = (
         db.query(StudentFee, Student, Grade, Classroom)
         .join(Student, StudentFee.student_id == Student.id)

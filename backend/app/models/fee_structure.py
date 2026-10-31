@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, ForeignKey, Numeric, String, UniqueConstraint
+from sqlalchemy import Column, Integer, ForeignKey, Numeric, String, UniqueConstraint, CheckConstraint
 from sqlalchemy.orm import relationship
 
 from app.db.base import Base
@@ -20,6 +20,7 @@ class FeeStructure(Base):
 
     # One fee structure per class per organization
     __table_args__ = (
+        CheckConstraint("admission_fee BETWEEN 0 AND 99999999.99 AND monthly_fee BETWEEN 0 AND 99999999.99 AND exam_fee BETWEEN 0 AND 99999999.99", name="ck_fee_structure_amounts"),
         UniqueConstraint("organization_id", "class_id", "session_id", name="uq_fee_structure_org_class"),
     )
 

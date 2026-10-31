@@ -1,5 +1,5 @@
 from app.db.base import Base
-from sqlalchemy import Column, Integer, String, ForeignKey, Float, Numeric
+from sqlalchemy import Column, Integer, String, ForeignKey, Numeric, UniqueConstraint, CheckConstraint
 from sqlalchemy.orm import relationship
 
 
@@ -9,33 +9,44 @@ class StudentFee(Base):
     id = Column(Integer, primary_key=True)
     class_id = Column(Integer, ForeignKey("classrooms.id"), nullable=False)
 
-    student_id = Column(Integer, ForeignKey("students.id"), nullable=False)
+    student_id = Column(Integer, ForeignKey("students.id", ondelete="RESTRICT"), nullable=False)
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False)
     session_id = Column(Integer, ForeignKey("academic_sessions.id"), nullable=False)
 
     month = Column(String, nullable=False)
 
     # Fee Breakdown
-    admission_fee = Column(Integer, default=0)
-    monthly_fee = Column(Integer, default=0)
+    admission_fee = Column(Numeric(14, 2), default=0, nullable=False)
+    monthly_fee = Column(Numeric(14, 2), default=0, nullable=False)
 
-    exam_fee = Column(Integer, default=0)
+    exam_fee = Column(Numeric(14, 2), default=0, nullable=False)
 
-    total_amount = Column(Integer, nullable=False)
-    discount_percent = Column(Numeric(5,2), default=0)
-    discount_amount = Column(Numeric, default=0)
-    final_amount = Column(Numeric, default=0)
-    paid_amount = Column(Integer, default=0)
+    total_amount = Column(Numeric(14, 2), nullable=False)
+    discount_percent = Column(Numeric(5,2), default=0, nullable=False)
+    discount_amount = Column(Numeric(14, 2), default=0, nullable=False)
+    final_amount = Column(Numeric(14, 2), default=0, nullable=False)
+    paid_amount = Column(Numeric(14, 2), default=0, nullable=False)
     
 
-    status = Column(String, default="unpaid")  # unpaid, partial, paid
+    status = Column(String, default="unpaid", nullable=False)  # unpaid, partial, paid
+
+    __table_args__ = (
+        UniqueConstraint("organization_id", "student_id", "session_id", "month", name="uq_student_fee_period"),
+        CheckConstraint("admission_fee BETWEEN 0 AND 999999999999.99 AND monthly_fee BETWEEN 0 AND 999999999999.99 AND exam_fee BETWEEN 0 AND 999999999999.99 AND total_amount BETWEEN 0 AND 999999999999.99", name="ck_student_fee_charges"),
+        CheckConstraint("discount_percent >= 0 AND discount_percent <= 100", name="ck_student_fee_discount_percent"),
+        CheckConstraint("total_amount = admission_fee + monthly_fee + exam_fee", name="ck_student_fee_gross"),
+        CheckConstraint("discount_amount >= 0 AND discount_amount <= total_amount AND final_amount = total_amount - discount_amount", name="ck_student_fee_net"),
+        CheckConstraint("paid_amount >= 0 AND paid_amount <= final_amount", name="ck_student_fee_paid"),
+        CheckConstraint("status IN ('unpaid', 'partial', 'paid')", name="ck_student_fee_status"),
+    )
 
     # Relationships
     student = relationship("Student", back_populates="fees")
     transactions = relationship(
         "FeeTransaction",
         back_populates="student_fee",
-        cascade="all, delete-orphan"
+        cascade="save-update, merge",
+        passive_deletes="all",
     )
     classroom = relationship("Classroom", back_populates="student_fees")
     session= relationship("AcademicSession")

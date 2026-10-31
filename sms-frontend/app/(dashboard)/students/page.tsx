@@ -2,12 +2,17 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/app/lib/api";
-import { usePaginatedQuery } from "@/app/hooks/usePaginatedQuery";
+import { useQueryClient } from "@tanstack/react-query";
+import { studentKeys, useStudents } from "@/app/hooks/useStudents";
+import { studentApiError } from "@/app/lib/studentApi";
+import EditStudentDialog from "@/components/students/EditStudentDialog";
+import { StudentError } from "@/components/students/StudentDetailStates";
 import { useAuthStore } from "@/app/store/authStore";
 import toast from "react-hot-toast";
 import StudentImportPreview, {
   ImportPreviewData,
 } from "@/components/students/StudentImportPreview";
+import { importError } from "@/components/students/importTypes";
 import StudentToolbar from "@/components/students/Studenttoolbar";
 import StudentTable from "@/components/students/Studenttable";
 import Pagination from "@/components/students/Pagination";
@@ -17,12 +22,13 @@ import {
   ApiError,
   Classroom,
   Grade,
-  Student,
   StudentFormData,
   emptyStudentForm,
 } from "@/components/students/types";
 
 export default function StudentsPage() {
+  const queryClient = useQueryClient();
+  const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [gradeFilter, setGradeFilter] = useState<string | "all">("all");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -39,7 +45,6 @@ export default function StudentsPage() {
   const [importPreview, setImportPreview] = useState<ImportPreviewData | null>(
     null,
   );
-  const [importFile, setImportFile] = useState<File | null>(null);
 
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -62,37 +67,12 @@ export default function StudentsPage() {
       .finally(() => setLoadingClasses(false));
   }, [user, hydrated]);
 
-  const {
-    data: students = [],
-    loading,
-    refetch,
-    page,
-    totalPages,
-    setPage,
-  } = usePaginatedQuery({
-    fetcher: async ({
-      page: currentPage,
-      limit,
-      search: query,
-      grade_name,
-    }) => {
-      const response = await api.get("/students", {
-        params: { page: currentPage, limit, search: query, grade_name },
-      });
-      const data = Array.isArray(response.data)
-        ? response.data
-        : (response.data.items ?? []);
-      const pageCount = Array.isArray(response.data)
-        ? 1
-        : (response.data.total_pages ?? 1);
-      return { data, totalPages: pageCount };
-    },
-    filters: {
-      search,
-      grade_name: gradeFilter !== "all" ? gradeFilter : undefined,
-    },
-    debounceKeys: ["search"],
-  });
+  const studentQuery = useStudents({ page, search, grade: gradeFilter });
+  const students = studentQuery.data?.items ?? [];
+  const totalPages = studentQuery.data?.total_pages ?? 1;
+  const refetch = () => {
+    void queryClient.invalidateQueries({ queryKey: studentKeys.lists });
+  };
 
   const updateForm = <K extends keyof StudentFormData>(
     key: K,
@@ -105,62 +85,24 @@ export default function StudentsPage() {
     setDialogOpen(true);
   };
 
-  const openEditDialog = (student: Student) => {
-    setForm({
-      id: student.id,
-      first_name: student.first_name,
-      last_name: student.last_name,
-      phone: student.phone || "",
-      email: student.email || "",
-      father_name: student.father_name || "",
-      father_phone: student.father_phone || "",
-      mother_name: student.mother_name || "",
-      guardian_name: student.guardian_name || "",
-      guardian_phone: student.guardian_phone || "",
-      gender: student.gender,
-      date_of_birth: student.date_of_birth,
-      classroom_id: 0,
-      discount_percent: student.discount_percent || 0,
-      enrollment_date: new Date().toISOString().split("T")[0],
-    });
-    setEditingId(student.id);
-    setDialogOpen(true);
-  };
-
   const saveStudent = async () => {
     setSaving(true);
     try {
-      if (editingId) {
-        await api.put(`/students/${editingId}`, {
-          first_name: form.first_name,
-          last_name: form.last_name,
-          phone: form.phone || null,
-          email: form.email || null,
-          father_name: form.father_name || null,
-          father_phone: form.father_phone || null,
-          mother_name: form.mother_name || null,
-          guardian_name: form.guardian_name || null,
-          guardian_phone: form.guardian_phone || null,
-          gender: form.gender,
-          date_of_birth: form.date_of_birth || null,
-        });
-      } else {
-        await api.post("/students/with-enrollment", {
-          ...form,
-          phone: form.phone || null,
-          email: form.email || null,
-          father_name: form.father_name || null,
-          father_phone: form.father_phone || null,
-          mother_name: form.mother_name || null,
-          guardian_name: form.guardian_name || null,
-          guardian_phone: form.guardian_phone || null,
-          date_of_birth: form.date_of_birth || null,
-          classroom_id: Number(form.classroom_id),
-          session_id: activeSessionId,
-          discount_percent: Number(form.discount_percent) || 0,
-        });
-      }
-      toast.success(editingId ? "Student updated" : "Student added");
+      await api.post("/students/with-enrollment", {
+        ...form,
+        phone: form.phone || null,
+        email: form.email || null,
+        father_name: form.father_name || null,
+        father_phone: form.father_phone || null,
+        mother_name: form.mother_name || null,
+        guardian_name: form.guardian_name || null,
+        guardian_phone: form.guardian_phone || null,
+        date_of_birth: form.date_of_birth || null,
+        classroom_id: Number(form.classroom_id),
+        session_id: activeSessionId,
+        discount_percent: Number(form.discount_percent) || 0,
+      });
+      toast.success("Student added");
       setDialogOpen(false);
       refetch();
     } catch (error: unknown) {
@@ -177,6 +119,7 @@ export default function StudentsPage() {
     setDeleting(true);
     try {
       await api.delete(`/students/${deleteId}`);
+      queryClient.removeQueries({ queryKey: studentKeys.detail(deleteId) });
       toast.success("Student deleted");
       setDeleteId(null);
       refetch();
@@ -190,64 +133,16 @@ export default function StudentsPage() {
     }
   };
 
-  // Step 1 of the import flow: upload the file, get a preview back so the
-  // user can review/map columns before anything is written to the database.
+  // Upload stages the file; the dialog owns mapping, validation and confirmation.
   const handleImportFile = async (file: File) => {
-    setImportFile(file);
     const formData = new FormData();
     formData.append("file", file);
     setImporting(true);
     try {
-      const response = await api.post("/students/import/preview", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      const response = await api.post<ImportPreviewData>("/students/import/preview", formData);
       setImportPreview(response.data);
-      toast.success("Import preview loaded");
     } catch (error: unknown) {
-      toast.error(
-        (error as ApiError).response?.data?.detail || "Import failed",
-      );
-      setImportFile(null);
-    } finally {
-      setImporting(false);
-    }
-  };
-
-  // Step 2 (the fix): actually commit the import using the file from step 1
-  // plus whatever column mapping the preview dialog produced. Previously
-  // this just console.log'd the mapping and never touched the backend.
-  //
-  // NOTE: adjust the endpoint path / payload shape to match your real
-  // backend contract for confirming an import if it differs from this.
-  const confirmImport = async (mapping: Record<string, string>) => {
-    if (!importFile) {
-      toast.error("No file to import — please re-upload and try again");
-      return;
-    }
-    setImporting(true);
-    const formData = new FormData();
-    formData.append("file", importFile);
-    formData.append("mapping", JSON.stringify(mapping));
-    if (activeSessionId) formData.append("session_id", String(activeSessionId));
-
-    try {
-      const response = await api.post("/students/import/confirm", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-      const imported = response.data?.imported ?? 0;
-      const skipped = response.data?.skipped ?? 0;
-      toast.success(
-        skipped
-          ? `Imported ${imported} student${imported === 1 ? "" : "s"}, skipped ${skipped}`
-          : `Imported ${imported} student${imported === 1 ? "" : "s"}`,
-      );
-      setImportPreview(null);
-      setImportFile(null);
-      refetch();
-    } catch (error: unknown) {
-      toast.error(
-        (error as ApiError).response?.data?.detail || "Import failed",
-      );
+      toast.error(importError(error));
     } finally {
       setImporting(false);
     }
@@ -255,7 +150,6 @@ export default function StudentsPage() {
 
   const closeImportPreview = () => {
     setImportPreview(null);
-    setImportFile(null);
   };
 
   return (
@@ -277,13 +171,13 @@ export default function StudentsPage() {
         onAdd={openAddDialog}
       />
 
-      <StudentTable
-        students={students as Student[]}
-        loading={loading}
-        onEdit={openEditDialog}
+      {studentQuery.isError ? <StudentError message={studentApiError(studentQuery.error, "Unable to load students. Please try again.").message} retry={refetch} /> : <StudentTable
+        students={students}
+        loading={studentQuery.isPending}
+        onEdit={(student) => setEditingId(student.id)}
         onDelete={setDeleteId}
         onAddFirst={openAddDialog}
-      />
+      />}
 
       <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
 
@@ -291,7 +185,7 @@ export default function StudentsPage() {
         open={dialogOpen}
         form={form}
         updateForm={updateForm}
-        editingId={editingId}
+        editingId={null}
         saving={saving}
         classes={classes}
         loadingClasses={loadingClasses}
@@ -300,11 +194,14 @@ export default function StudentsPage() {
         onSave={saveStudent}
       />
 
+      {editingId !== null && <EditStudentDialog studentId={editingId} onClose={() => setEditingId(null)} />}
+
       {importPreview && (
         <StudentImportPreview
+          key={importPreview.batch_id}
           data={importPreview}
           onClose={closeImportPreview}
-          onImport={confirmImport}
+          onImported={refetch}
         />
       )}
 

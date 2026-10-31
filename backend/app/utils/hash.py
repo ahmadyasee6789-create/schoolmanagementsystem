@@ -1,12 +1,14 @@
 from passlib.context import CryptContext
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from jose import jwt
 from typing import Optional
+from app.security import (
+    ACCESS_TOKEN_EXPIRE_MINUTES,
+    ALGORITHM,
+    REFRESH_TOKEN_EXPIRE_DAYS,
+    get_signing_key,
+)
 
-# ---------------- Config ----------------
-SECRET_KEY = "your-secret-key"
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 15
 
 # ---------------- Password Hashing ----------------
 pwd_context = CryptContext(
@@ -33,12 +35,14 @@ def verify_password(plain: str, hashed: str) -> bool:
 # ---------------- JWT ----------------
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
-    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=15))
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    lifetime = expires_delta if expires_delta is not None else timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    expire = datetime.now(timezone.utc) + lifetime
+    to_encode.update({"exp": expire, "type": "access"})
+    return jwt.encode(to_encode, get_signing_key(), algorithm=ALGORITHM)
 
 def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
-    expire = datetime.utcnow() + (expires_delta or timedelta(days=7))
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    lifetime = expires_delta if expires_delta is not None else timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    expire = datetime.now(timezone.utc) + lifetime
+    to_encode.update({"exp": expire, "type": "refresh"})
+    return jwt.encode(to_encode, get_signing_key(), algorithm=ALGORITHM)

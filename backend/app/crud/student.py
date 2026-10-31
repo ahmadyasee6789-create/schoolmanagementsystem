@@ -1,14 +1,18 @@
 # app/crud/student.py
 from typing import Optional
 
-from sqlalchemy.orm import Session, aliased
+from sqlalchemy.orm import Session, aliased, joinedload
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy import or_
 from fastapi import Depends, HTTPException
 from datetime import datetime
+from decimal import Decimal
 from app.models.students import Student
 from app.models.student_enrollment import StudentEnrollment
 from app.models.classroom import Classroom, Grade
-from app.schemas.student import StudentCreate, StudentUpdate
+from app.models.student_fee import StudentFee
+from app.schemas.student import DiscountPercent, StudentCreate, StudentUpdate
+from pydantic import TypeAdapter, ValidationError
 
 
 
@@ -85,8 +89,14 @@ def enroll_student(
     classroom_id: int,
     session_id: int,
     enrollment_date,
-    discount_percent: float = 0.0,
+    discount_percent: Decimal = Decimal("0"),
+    roll_number: Optional[str] = None,
 ) -> StudentEnrollment:
+
+    try:
+        discount_percent = TypeAdapter(DiscountPercent).validate_python(discount_percent)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail="Discount must be between 0 and 100 with at most two decimal places") from exc
 
     # Get existing roll numbers for this class/session
     existing_roll_numbers = (
@@ -102,9 +112,9 @@ def enroll_student(
     # Convert string roll numbers to integers
     numeric_roll_numbers = []
 
-    for (roll_number,) in existing_roll_numbers:
+    for (existing_roll_number,) in existing_roll_numbers:
         try:
-            numeric_roll_numbers.append(int(roll_number))
+            numeric_roll_numbers.append(int(existing_roll_number))
         except (TypeError, ValueError):
             continue
 
@@ -121,8 +131,8 @@ def enroll_student(
         session_id=session_id,
         enrollment_date=enrollment_date,
         is_active=True,
-        roll_number=str(next_roll_number),
-        discount_percent=discount_percent or 0.0,
+        roll_number=roll_number if roll_number is not None else str(next_roll_number),
+        discount_percent=discount_percent,
     )
 
     db.add(enrollment)
@@ -247,6 +257,41 @@ def get_student_by_id(db: Session, student_id: int, org_id: int) -> Optional[Stu
         .filter(Student.id == student_id, Student.organization_id == org_id)
         .first()
     )
+def get_student_details(
+    db: Session,
+    student_id: int,
+    org_id: int,
+    session_id: Optional[int],
+):
+    student = (
+        db.query(Student)
+        .filter(
+            Student.id == student_id,
+            Student.organization_id == org_id,
+        )
+        .first()
+    )
+
+    if not student:
+        return None
+
+    if session_id is None:
+        return student, None
+
+    enrollment = (
+        db.query(StudentEnrollment)
+        .options(
+            joinedload(StudentEnrollment.classroom).joinedload(Classroom.grade),
+            joinedload(StudentEnrollment.session),
+        )
+        .filter(
+            StudentEnrollment.student_id == student.id,
+            StudentEnrollment.session_id == session_id,
+        )
+        .first()
+    )
+
+    return student, enrollment
 
 
 # --------------------------------------------------
@@ -271,13 +316,24 @@ def update_student(
 # DELETE STUDENT
 # --------------------------------------------------
 def delete_student(db: Session, student_id: int, org_id: int) -> bool:
-    student = get_student_by_id(db, student_id, org_id)
+    student = db.query(Student).filter(
+        Student.id == student_id, Student.organization_id == org_id,
+    ).with_for_update().first()
     if not student:
         return False
 
-    db.query(StudentEnrollment).filter(
-        StudentEnrollment.student_id == student_id
-    ).delete()
-    db.delete(student)
-    db.commit()
+    try:
+        if db.query(StudentFee.id).filter(StudentFee.student_id == student_id).first() is not None:
+            raise HTTPException(status_code=409, detail="Students with fee history cannot be deleted. Mark the student inactive instead.")
+        db.query(StudentEnrollment).filter(
+            StudentEnrollment.student_id == student_id
+        ).delete()
+        db.delete(student)
+        db.commit()
+    except HTTPException:
+        db.rollback()
+        raise
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Student history prevents deletion. Mark the student inactive instead.") from exc
     return True

@@ -1,6 +1,10 @@
 "use client";
 
 import type { LucideIcon } from "lucide-react";
+import { useEffect, useId, useRef } from "react";
+
+let openModals = 0;
+let originalBodyOverflow = "";
 
 export const inputClass = "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-[#8B6DF2] dark:border-white/10 dark:bg-white/5 dark:text-slate-100 dark:placeholder:text-slate-500 disabled:cursor-not-allowed disabled:opacity-50";
 export const secondaryButtonClass = "rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5";
@@ -22,6 +26,42 @@ export function StatGrid({ stats }: { stats: { label: string; value: string | nu
   return <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">{stats.map(({ label, value, Icon, tone }) => <div key={label} className="rounded-xl border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-white/[0.03]"><div className="flex items-center justify-between gap-2"><span className={`flex h-9 w-9 items-center justify-center rounded-lg border ${tone}`}><Icon size={18} /></span><span className="text-2xl font-bold text-slate-900 dark:text-slate-50">{value}</span></div><p className="mt-3 text-xs font-medium text-slate-500 dark:text-slate-400">{label}</p></div>)}</div>;
 }
 
-export function Modal({ title, children, onClose, size = "sm" }: { title: string; children: React.ReactNode; onClose: () => void; size?: "sm" | "md" }) {
-  return <div className="fixed inset-0 z-50 overflow-y-auto bg-black/40 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={title}><div className={`mx-auto my-6 w-full ${size === "md" ? "max-w-2xl" : "max-w-sm"} rounded-2xl border border-slate-200 bg-white p-5 shadow-xl dark:border-white/10 dark:bg-[#1a2233]`}><div className="mb-5 flex items-center justify-between gap-3"><h2 className="text-base font-bold text-slate-900 dark:text-slate-50">{title}</h2><button type="button" onClick={onClose} className="rounded-lg p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-white/5 dark:hover:text-slate-300" aria-label="Close"><span aria-hidden>×</span></button></div>{children}</div></div>;
+export function Modal({ title, children, onClose, size = "sm", busy = false }: { title: string; children: React.ReactNode; onClose: () => void; size?: "sm" | "md"; busy?: boolean }) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
+  useEffect(() => {
+    const element = dialog.current;
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    if (openModals === 0) originalBodyOverflow = document.body.style.overflow;
+    openModals++;
+    element?.showModal();
+    document.body.style.overflow = "hidden";
+    return () => {
+      element?.close();
+      openModals--;
+      if (openModals === 0) document.body.style.overflow = originalBodyOverflow;
+      opener?.focus();
+    };
+  }, []);
+  return <dialog ref={dialog} aria-labelledby={titleId} aria-modal="true" tabIndex={-1}
+    onKeyDown={(event) => {
+      if (event.key !== "Tab" || (event.target as HTMLElement).closest("dialog") !== event.currentTarget) return;
+      const focusable = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'))
+        .filter((element) => element.getClientRects().length > 0 && element.closest("dialog") === event.currentTarget);
+      const first = focusable[0], last = focusable.at(-1);
+      if (!first) { event.preventDefault(); event.currentTarget.focus(); }
+      else if (event.shiftKey && (document.activeElement === first || document.activeElement === event.currentTarget)) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    }}
+    onCancel={(event) => { event.preventDefault(); event.stopPropagation(); if (!busy) onClose(); }}
+    onClick={(event) => { if (event.target === event.currentTarget && !busy) onClose(); }}
+    className={`m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] ${size === "md" ? "max-w-2xl" : "max-w-sm"} overflow-hidden rounded-2xl border border-slate-200 bg-white p-0 text-slate-900 shadow-xl backdrop:bg-black/40 backdrop:backdrop-blur-sm dark:border-white/10 dark:bg-[#1a2233] dark:text-slate-100`}>
+    <div className="flex max-h-[calc(100dvh-2rem)] flex-col">
+      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 p-5 dark:border-white/10">
+        <h2 id={titleId} className="text-base font-bold text-slate-900 dark:text-slate-50">{title}</h2>
+        <button type="button" onClick={onClose} disabled={busy} className="rounded-lg p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 disabled:opacity-40 dark:hover:bg-white/5 dark:hover:text-slate-300" aria-label="Close"><span aria-hidden>×</span></button>
+      </div>
+      <div className="min-h-0 overflow-y-auto p-5">{children}</div>
+    </div>
+  </dialog>;
 }

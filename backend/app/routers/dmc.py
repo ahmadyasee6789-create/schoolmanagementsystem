@@ -1,15 +1,8 @@
-"""
-app/routers/dmc.py
-------------------
-Bulk DMC generation — one PDF per class, one page per student.
-GET /dmc/exam/{exam_id}/class/{classroom_id}
-"""
-
 import io
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-
+from app.models import Organization
 from app.db.session import get_db
 from app.routers.auth import get_current_user
 from app.models import (
@@ -19,7 +12,7 @@ from app.models import (
 from app.models.exams import GradeScale
 from app.services.dmc_generator import generate_bulk_dmc  
 from app.dependencies import get_active_session 
-
+from app.services.school_logo import organization_logo  
 router = APIRouter(prefix="/dmc", tags=["DMC"])
 
 
@@ -82,7 +75,7 @@ def bulk_dmc(
     for enrollment in enrollments:
         student = db.query(Student).filter(
             Student.id == enrollment.student_id,
-            
+            Student.organization_id == current_user.org_id
             ).first()
         if not student:
             continue
@@ -97,7 +90,16 @@ def bulk_dmc(
                 ExamResult.student_enrollment_id == enrollment.id,
             ).first()
 
-            obtained = result.obtained_marks if result else 0
+            if result is None or result.obtained_marks is None:
+               raise HTTPException(
+        status_code=409,
+        detail=(
+            f"Marks missing for {student.first_name} "
+            f"in {paper.subject.name}. Enter marks before generating DMC."
+        )
+    )
+
+            obtained = result.obtained_marks
             subjects.append({
                 "name":     paper.subject.name,
                 "total":    paper.total_marks,
@@ -134,29 +136,70 @@ def bulk_dmc(
     if not students_data:
         raise HTTPException(404, "No student data found")
 
-    # ── 7. Compute positions (rank by obtained_total desc) ────────────
-    ranked = sorted(students_data, key=lambda x: x["obtained_total"], reverse=True)
-    positions = {}
-    for rank, s in enumerate(ranked, 1):
-        positions[s["roll_no"]] = rank
+    
+    # ── 7. Compute student positions ──────────────────────
+    # Students with equal marks receive the same rank.
+    ranked = sorted(
+        students_data,
+        key=lambda s: s["obtained_total"],
+        reverse=True
+    )
 
-    for s in students_data:
-        s["position"] = f"{positions[s['roll_no']]}{'st' if positions[s['roll_no']] == 1 else 'nd' if positions[s['roll_no']] == 2 else 'rd' if positions[s['roll_no']] == 3 else 'th'}"
+    previous_marks = None
+    previous_rank = 0
 
-    # ── 8. Generate PDF ───────────────────────────────────────────────
+    for index, student in enumerate(ranked, start=1):
+        marks = student["obtained_total"]
+
+        if marks != previous_marks:
+            previous_rank = index
+
+        student["position"] = previous_rank
+        previous_marks = marks
+
+    # ── 8. Fetch school information ───────────────────────
+    org = db.query(Organization).filter(
+        Organization.id == current_user.org_id
+    ).first()
+
+    if not org:
+        raise HTTPException(
+            status_code=404,
+            detail="School organization not found"
+        )
+
+    # ── 9. Prepare DMC metadata ───────────────────────────
     meta = {
-        "school_name": "UJALA MODEL SCHOOL JEHANGIRA",   # TODO: pull from org settings
-        "exam_name":   exam.name,
+        "school_name": org.name,
+        "exam_name": exam.name,
         "class_label": class_label,
+        "logo_image": organization_logo(org),
     }
 
+    # ── 10. Generate PDF ──────────────────────────────────
     buf = io.BytesIO()
-    generate_bulk_dmc(buf, meta, students_data)
+
+    generate_bulk_dmc(
+        buf,
+        meta,
+        students_data
+    )
+
     buf.seek(0)
 
-    filename = f"DMC_{exam.name}_{class_label}.pdf".replace(" ", "_").replace("–", "-")
+    # ── 11. Return printable PDF ──────────────────────────
+    filename = (
+        f"DMC_{exam.name}_{class_label}.pdf"
+        .replace(" ", "_")
+        .replace("–", "-")
+    )
+
     return StreamingResponse(
         buf,
         media_type="application/pdf",
-        headers={"Content-Disposition": f"inline; filename={filename}"},
+        headers={
+            "Content-Disposition": (
+                f'inline; filename="{filename}"'
+            )
+        },
     )

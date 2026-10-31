@@ -1,5 +1,5 @@
 from sqlalchemy import (
-    String, Boolean, ForeignKey, Text, DateTime, UniqueConstraint
+    String, Boolean, ForeignKey, Text, DateTime, UniqueConstraint, LargeBinary
 )
 from sqlalchemy.orm import (
     Mapped, mapped_column, relationship
@@ -61,6 +61,7 @@ class Organization(Base):
     __tablename__ = "organizations"
     id:Mapped[int] = mapped_column( primary_key=True, index=True)
     name:Mapped[str] = mapped_column(String, nullable=False)
+    logo: Mapped[Optional[bytes]] = mapped_column(LargeBinary, nullable=True, deferred=True)
     status: Mapped[str] = mapped_column(String, default="trial")
     plan: Mapped[str] = mapped_column(String, default="trial")
     trial_ends_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)

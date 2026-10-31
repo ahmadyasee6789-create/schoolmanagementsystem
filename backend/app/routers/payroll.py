@@ -17,8 +17,14 @@ from app.schemas.payroll import (
     SalaryPaymentResponse
 )
 from app.dependencies import get_active_session
+from app.financial_permissions import require_financial_permission
 
-router = APIRouter(prefix="/payroll", tags=["Payroll"])
+
+def require_payroll_access(current_user=Depends(get_current_user)):
+    require_financial_permission(current_user, "view_fees")
+
+
+router = APIRouter(prefix="/payroll", tags=["Payroll"], dependencies=[Depends(require_payroll_access)])
 
 
 @router.get(
@@ -275,9 +281,15 @@ def pay_salary(
     deductions = Decimal(str(payload.deductions or 0))
     bonus = Decimal(str(payload.bonus or 0))
 
+    net = gross - deductions + bonus
+    if (not gross.is_finite() or not net.is_finite()
+            or not Decimal("0") <= gross <= Decimal("99999999.99")
+            or not Decimal("0") <= net <= Decimal("99999999.99")):
+        raise HTTPException(status_code=422, detail="Salary payment must have a valid nonnegative net amount")
+
     payment.deductions = deductions
     payment.bonus = bonus
-    payment.net_amount = gross - deductions + bonus
+    payment.net_amount = net
     payment.payment_method = payload.payment_method
     payment.paid_date = date.today()
     payment.status = "paid"

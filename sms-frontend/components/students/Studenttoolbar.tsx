@@ -36,11 +36,11 @@ export default function StudentToolbar({
         <div className="flex flex-wrap items-center gap-2">
           <label className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5">
             <Upload size={16} />
-            {importing ? "Importing…" : "Import Students"}
+            {importing ? "Uploading…" : "Import Students"}
             <input
               hidden
               type="file"
-              accept=".xlsx,.csv"
+              accept=".xlsx,.csv,.tsv"
               disabled={importing}
               onChange={(event) => {
                 const file = event.target.files?.[0];

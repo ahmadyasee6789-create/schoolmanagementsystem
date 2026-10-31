@@ -7,26 +7,51 @@ export type Classroom = {
   grade_name: string;
 };
 
-export type Student = {
+export type StudentProfile = {
   id: number;
   admission_no: string;
   first_name: string;
-  last_name: string;
-  phone: string;
-  email: string;
+  last_name: string | null;
+  phone: string | null;
+  email: string | null;
   father_name: string | null;
   father_phone: string | null;
   mother_name: string | null;
   guardian_name: string | null;
   guardian_phone: string | null;
-  gender: string;
-  date_of_birth: string;
+  gender: string | null;
+  date_of_birth: string | null;
   is_active: boolean;
-  grade_name?: string;
-  section?: string;
-  roll_number?: number;
-  discount_percent?: number;
 };
+
+export type Student = StudentProfile & {
+  grade_name?: string | null;
+  section?: string | null;
+  roll_number?: string | null;
+  discount_percent?: number | null;
+};
+
+export type StudentEnrollment = {
+  id: number;
+  session_id: number;
+  session_name: string | null;
+  classroom_id: number | null;
+  class_name: string | null;
+  grade_name: string | null;
+  section: string | null;
+  roll_number: string | null;
+  discount_percent: number;
+  enrollment_date: string;
+  withdrawal_date: string | null;
+  is_active: boolean;
+};
+
+export type StudentDetails = StudentProfile & {
+  active_session: { id: number; name: string } | null;
+  current_enrollment: StudentEnrollment | null;
+};
+
+export type StudentUpdate = Partial<Omit<StudentProfile, "id" | "admission_no">>;
 
 export type StudentFormData = {
   id: number;

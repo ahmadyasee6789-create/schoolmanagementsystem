@@ -14,10 +14,36 @@ from app.models.salary_payments import SalaryPayment
 from app.models.student_fee import StudentFee
 from app.routers.auth import get_current_user
 from app.dependencies import get_active_session
+from app.financial_permissions import has_financial_permission
 from app.routers.classes import validate_teacher_class
 from app.models.attendance import Attendance
-
+from app.db.redis import redis_client
+import json
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
+
+
+def redact_dashboard_financials(response, current_user):
+    """Keep the dashboard shape without exposing amounts to nonfinancial roles."""
+    if has_financial_permission(current_user, "view_fees"):
+        return response
+    financials = response.get("financials", {})
+    return {
+        **response,
+        "financials": {
+            "year": financials.get("year"),
+            "revenue": {"yearTotal": 0},
+            "expenses": {
+                "yearTotal": 0, "salaryYearTotal": 0,
+                "pendingSalaryTotal": 0, "combinedYearTotal": 0,
+            },
+            "net": {"yearTotal": 0},
+            "monthlyComparison": [
+                {"month": item["month"], "revenue": 0, "expense": 0,
+                 "salary": 0, "total_expense": 0, "net": 0}
+                for item in financials.get("monthlyComparison", [])
+            ],
+        },
+    }
 
 
 @router.get("/stats")
@@ -28,17 +54,23 @@ def get_dashboard_stats(
 ):
     # ── Validate membership ───────────────────────────────────────────
     membership = db.query(OrganizationMember).filter(
-        OrganizationMember.user_id == current_user.id
+        OrganizationMember.user_id == current_user.id,
+        OrganizationMember.organization_id == current_user.org_id,
     ).first()
 
     if not membership:
         raise HTTPException(status_code=403, detail="User does not belong to any school")
 
     org_id = membership.organization_id
+    cache_key = f"dashboard:stats:{org_id}:{active_session.id}:{membership.role}"
+
+    cached_data = redis_client.get(cache_key)
+
+    if cached_data:
+        return redact_dashboard_financials(json.loads(cached_data), current_user)
     current_year = datetime.utcnow().year
 
     # ── School overview ───────────────────────────────────────────────
-
 
     total_teachers = db.query(OrganizationMember).filter(
         OrganizationMember.organization_id == org_id,
@@ -210,7 +242,7 @@ def get_dashboard_stats(
     net_year_total = total_year_revenue - total_year_total_expense
 
     # ── Response ──────────────────────────────────────────────────────
-    return {
+    response= {
         "overview": {
             "students": {
                 "total":    total_students,
@@ -254,3 +286,6 @@ for row in students_per_class
             "monthlyComparison": monthly_comparison,
         },
     }
+    response = redact_dashboard_financials(response, current_user)
+    redis_client.set(cache_key,json.dumps(response),ex=30)
+    return response

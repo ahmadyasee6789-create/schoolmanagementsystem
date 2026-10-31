@@ -15,7 +15,7 @@ Usage:
 import requests
 
 BASE_URL = "http://127.0.0.1:8000"  # change if your backend runs elsewhere
-TOKEN = "  eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjo3LCJleHAiOjE3ODkyMzY3MjB9.7FwLzGP9S1cNcwYbTBtjZrYOntYVbIOG4Z1egBkuVUY"  # the JWT/session token your frontend sends
+TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjo3LCJleHAiOjE3OTE2MzkxNTR9.i5EmtuFPmlREdt93MVANYZpL6iR7zX6Ld2RRbl0ToiA"  # the JWT/session token your frontend sends
 
 headers = {"Authorization": f"Bearer {TOKEN}"}
 

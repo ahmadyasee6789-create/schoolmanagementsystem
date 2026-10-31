@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { isAxiosError } from "axios";
 import {
   CheckCircle2,
   CircleDollarSign,
+  FileText,
   ReceiptText,
   RefreshCw,
   UserRound,
@@ -11,6 +13,8 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { api } from "@/app/lib/api";
+import { useAuthStore } from "@/app/store/authStore";
+import FeeVoucherDialog from "@/components/finance/FeeVoucherDialog";
 import {
   EmptyState,
   LoadingState,
@@ -54,6 +58,22 @@ type Classroom = {
   grade_name?: string;
 };
 type AcademicSession = { id: number; name: string; start_date: string };
+type PendingPayment = { key: string; feeId: number; amount: string };
+
+function readPendingPayment(storageKey: string): PendingPayment | null {
+  const saved = sessionStorage.getItem(storageKey);
+  if (!saved) return null;
+  const value: unknown = JSON.parse(saved);
+  if (!value || typeof value !== "object" || !("key" in value) ||
+      typeof value.key !== "string" || !/^[A-Za-z0-9_.:-]{8,128}$/.test(value.key) ||
+      !("feeId" in value) || typeof value.feeId !== "number" ||
+      !Number.isSafeInteger(value.feeId) || value.feeId <= 0 ||
+      !("amount" in value) || typeof value.amount !== "string" ||
+      !/^\d{1,12}\.\d{2}$/.test(value.amount) || Number(value.amount) <= 0) {
+    throw new Error("The saved payment needs review before another payment can be submitted.");
+  }
+  return { key: value.key, feeId: value.feeId, amount: value.amount };
+}
 
 const months = [
   "January",
@@ -103,7 +123,19 @@ function PaymentProgress({ paid, total }: { paid: number; total: number }) {
   );
 }
 
-function FeeCard({ fee, onCollect }: { fee: Fee; onCollect: () => void }) {
+function VoucherButton({ fee, onClick }: { fee: Fee; onClick: () => void }) {
+  const unavailable = fee.paid_amount > 0;
+  return (
+    <button type="button" onClick={onClick} disabled={unavailable}
+      title={unavailable ? "Vouchers can only be issued before payment" : "Preview and print fee voucher"}
+      aria-label={`Voucher for ${fee.student_name}`}
+      className={`${secondaryButtonClass} inline-flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-40`}>
+      <FileText size={14} />Voucher
+    </button>
+  );
+}
+
+function FeeCard({ fee, onCollect, onVoucher }: { fee: Fee; onCollect: () => void; onVoucher: () => void }) {
   return (
     <article className="rounded-xl border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-white/[0.03]">
       <div className="flex items-start justify-between gap-3">
@@ -136,6 +168,7 @@ function FeeCard({ fee, onCollect }: { fee: Fee; onCollect: () => void }) {
       <div className="mt-3">
         <PaymentProgress paid={fee.paid_amount} total={fee.final_amount} />
       </div>
+      <div className="mt-4"><VoucherButton fee={fee} onClick={onVoucher} /></div>
       {fee.status !== "paid" && (
         <button
           type="button"
@@ -150,6 +183,11 @@ function FeeCard({ fee, onCollect }: { fee: Fee; onCollect: () => void }) {
 }
 
 export default function FeeManagementPage() {
+  const user = useAuthStore((state) => state.user);
+  const paymentStorageKey = user?.org_id && user.id
+    ? `pending-fee-payment:${user.org_id}:${user.id}` : null;
+  const paymentInFlight = useRef(false);
+  const [pendingPayment, setPendingPayment] = useState<PendingPayment | null>(null);
   const [classes, setClasses] = useState<Classroom[]>([]);
   const [classId, setClassId] = useState("");
   const [month, setMonth] = useState("");
@@ -162,16 +200,30 @@ export default function FeeManagementPage() {
   const [selectedFee, setSelectedFee] = useState<Fee | null>(null);
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paying, setPaying] = useState(false);
+  const [voucherFee, setVoucherFee] = useState<Fee | null>(null);
+  const [bulkVoucher, setBulkVoucher] = useState<{ classId: number; month: string; classroom: string } | null>(null);
 
   useEffect(() => {
-    void Promise.all([api.get("/classes"), api.get("/sessions")])
+    setPendingPayment(null);
+    if (!paymentStorageKey) return;
+    try {
+      setPendingPayment(readPendingPayment(paymentStorageKey));
+    } catch {
+      toast.error("Unable to read the saved payment. Check this tab's payment before submitting again.");
+    }
+  }, [paymentStorageKey]);
+
+  useEffect(() => {
+    void Promise.all([api.get("/classes"), api.get("/sessions/active")])
       .then(([classesResponse, sessionsResponse]) => {
         setClasses(classesResponse.data);
         const activeSession: AcademicSession | undefined =
-          sessionsResponse.data[0];
+          sessionsResponse.data;
         if (activeSession?.start_date) {
-          const start = new Date(activeSession.start_date).getMonth();
-          setOrderedMonths([...months.slice(start), ...months.slice(0, start)]);
+          const start = Number(activeSession.start_date.slice(5, 7)) - 1;
+          if (start >= 0 && start < 12) {
+            setOrderedMonths([...months.slice(start), ...months.slice(0, start)]);
+          }
         }
       })
       .catch(() => toast.error("Failed to load fee options"));
@@ -207,31 +259,81 @@ export default function FeeManagementPage() {
       toast.success(response.data.message);
       setPage(1);
       await fetchLedger(1);
-    } catch (error: any) {
-      toast.error(error.response?.data?.detail || "Failed to generate fees");
+    } catch (error: unknown) {
+      toast.error(isAxiosError(error) && typeof error.response?.data?.detail === "string" ? error.response.data.detail : "Failed to generate fees");
     } finally {
       setGenerating(false);
     }
   };
 
-  const handleCollect = async () => {
-    if (!selectedFee) return;
-    const amount = Number(paymentAmount);
-    if (!amount || amount <= 0) return toast.error("Enter a valid amount");
-    if (amount > selectedFee.due_amount)
-      return toast.error(
-        `Amount exceeds due of PKR ${new Intl.NumberFormat("en-PK").format(selectedFee.due_amount)}`,
-      );
-    setPaying(true);
+  const openPayment = (fee: Fee) => {
+    if (pendingPayment && pendingPayment.feeId !== fee.id) {
+      toast.error("Retry the pending payment before starting another payment in this tab.");
+      return;
+    }
+    setSelectedFee(fee);
+    setPaymentAmount(pendingPayment?.amount ?? String(fee.due_amount));
+  };
+
+  const handleCollect = async (retryPending = false) => {
+    if (paymentInFlight.current) return;
+    if (!paymentStorageKey) return toast.error("Sign in to your school before collecting payment.");
+    paymentInFlight.current = true;
+    let submitted = false;
+    let wasPending = false;
     try {
-      await api.post(`/fees/${selectedFee.id}/collect`, { amount });
+      // Read storage again so closing/reopening the dialog cannot lose an uncertain request.
+      let attempt = readPendingPayment(paymentStorageKey);
+      wasPending = attempt !== null;
+      if (attempt) {
+        if (!retryPending && (selectedFee?.id !== attempt.feeId || Number(paymentAmount) !== Number(attempt.amount))) {
+          toast.error("Retry the original pending payment before changing the amount.");
+          return;
+        }
+      } else {
+        if (!selectedFee || retryPending) return;
+        const amount = Number(paymentAmount);
+        if (!/^\d{1,12}(\.\d{1,2})?$/.test(paymentAmount) || !Number.isFinite(amount) || amount <= 0) {
+          toast.error("Enter a positive amount with at most two decimal places.");
+          return;
+        }
+        if (amount > selectedFee.due_amount) {
+          toast.error(`Amount exceeds due of PKR ${new Intl.NumberFormat("en-PK").format(selectedFee.due_amount)}`);
+          return;
+        }
+        attempt = { key: crypto.randomUUID(), feeId: selectedFee.id, amount: amount.toFixed(2) };
+        // Persist before sending; if storage is unavailable, no payment is sent.
+        sessionStorage.setItem(paymentStorageKey, JSON.stringify(attempt));
+      }
+      setPendingPayment(attempt);
+      setPaymentAmount(attempt.amount);
+      setPaying(true);
+      submitted = true;
+      await api.post(`/fees/${attempt.feeId}/collect`, { amount: attempt.amount }, {
+        headers: { "Idempotency-Key": attempt.key },
+        timeout: 30000,
+      });
+      sessionStorage.removeItem(paymentStorageKey);
+      setPendingPayment(null);
       toast.success("Payment collected successfully");
       setSelectedFee(null);
       setPaymentAmount("");
       await fetchLedger(page);
-    } catch (error: any) {
-      toast.error(error.response?.data?.detail || "Failed to collect payment");
+    } catch (error: unknown) {
+      const status = isAxiosError(error) ? error.response?.status : undefined;
+      // A 400 from collection means the server checked this key and rejected an
+      // unrecorded payment. Auth/validation failures cannot resolve an older request.
+      if (submitted && (status === 400 || (!wasPending && [401, 403, 404, 422].includes(status ?? 0)))) {
+        sessionStorage.removeItem(paymentStorageKey);
+        setPendingPayment(null);
+      }
+      const detail = isAxiosError(error) && typeof error.response?.data?.detail === "string"
+        ? error.response.data.detail : submitted
+          ? "Payment confirmation was not received. Retry the pending payment; do not enter it again."
+          : "Unable to save the payment safely in this tab. No new payment was sent.";
+      toast.error(detail);
     } finally {
+      paymentInFlight.current = false;
       setPaying(false);
     }
   };
@@ -240,13 +342,23 @@ export default function FeeManagementPage() {
   const totalDue = fees.reduce((sum, fee) => sum + fee.due_amount, 0);
   const paidCount = fees.filter((fee) => fee.status === "paid").length;
   const pendingCount = fees.length - paidCount;
+  const selectedClassroom = classes.find((item) => String(item.id) === classId);
 
   return (
     <div className="min-h-full bg-white p-4 dark:bg-[#0D1117] sm:p-6 md:p-8">
       <PageHeader
         title="Fee Management"
-        subtitle="Generate and collect student fee payments by class and month"
+        subtitle="Generate fees, print vouchers and collect payments by class and month"
       />
+
+      {pendingPayment && (
+        <div role="status" className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100">
+          <p>Payment of PKR {pendingPayment.amount} for fee #{pendingPayment.feeId} is awaiting confirmation. Retry to confirm the same payment and keep this tab open until confirmed.</p>
+          <button type="button" disabled={paying} onClick={() => void handleCollect(true)} className={secondaryButtonClass}>
+            {paying ? "Confirming…" : "Retry pending payment"}
+          </button>
+        </div>
+      )}
 
       <section className="mb-6 grid gap-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-white/[0.03] sm:grid-cols-2 lg:grid-cols-12">
         <select
@@ -255,7 +367,7 @@ export default function FeeManagementPage() {
             setClassId(event.target.value);
             setPage(1);
           }}
-          className={`${inputClass} lg:col-span-5`}
+          className={`${inputClass} lg:col-span-4`}
           aria-label="Class"
         >
           <option value="" disabled>
@@ -273,7 +385,7 @@ export default function FeeManagementPage() {
             setMonth(event.target.value);
             setPage(1);
           }}
-          className={`${inputClass} lg:col-span-4`}
+          className={`${inputClass} lg:col-span-3`}
           aria-label="Month"
         >
           <option value="" disabled>
@@ -285,15 +397,22 @@ export default function FeeManagementPage() {
             </option>
           ))}
         </select>
-        <button
-          type="button"
-          onClick={handleGenerate}
-          disabled={generating || !classId || !month}
-          className={`${primaryButtonClass} flex items-center justify-center gap-2 lg:col-span-3`}
-        >
-          <RefreshCw size={16} className={generating ? "animate-spin" : ""} />
-          {generating ? "Generating…" : "Generate Fees"}
-        </button>
+        <div className="flex flex-wrap gap-2 sm:col-span-2 lg:col-span-5">
+          <button
+            type="button"
+            onClick={handleGenerate}
+            disabled={generating || !classId || !month}
+            className={`${primaryButtonClass} flex flex-1 items-center justify-center gap-2 whitespace-nowrap`}
+          >
+            <RefreshCw size={16} className={generating ? "animate-spin" : ""} />
+            {generating ? "Generating…" : "Generate Fees"}
+          </button>
+          <button type="button" disabled={generating || loading || !selectedClassroom || !month}
+            onClick={() => selectedClassroom && setBulkVoucher({ classId: selectedClassroom.id, month, classroom: classLabel(selectedClassroom) })}
+            className={`${secondaryButtonClass} flex flex-1 items-center justify-center gap-2 whitespace-nowrap`}>
+            <FileText size={16} />Bulk vouchers
+          </button>
+        </div>
       </section>
 
       {fees.length > 0 && (
@@ -345,10 +464,8 @@ export default function FeeManagementPage() {
               <FeeCard
                 key={fee.id}
                 fee={fee}
-                onCollect={() => {
-                  setSelectedFee(fee);
-                  setPaymentAmount(String(fee.due_amount));
-                }}
+                onVoucher={() => setVoucherFee(fee)}
+                onCollect={() => openPayment(fee)}
               />
             ))}
           </div>
@@ -424,18 +541,18 @@ export default function FeeManagementPage() {
                     <FeeStatus status={fee.status} />
                   </td>
                   <td className={tableCellClass}>
-                    {fee.status !== "paid" && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedFee(fee);
-                          setPaymentAmount(String(fee.due_amount));
-                        }}
-                        className="rounded-lg border border-emerald-400/30 px-3 py-1.5 text-xs font-semibold text-emerald-600 transition-colors hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-500/10"
-                      >
-                        Collect
-                      </button>
-                    )}
+                    <div className="flex items-center gap-2">
+                      <VoucherButton fee={fee} onClick={() => setVoucherFee(fee)} />
+                      {fee.status !== "paid" && (
+                        <button
+                          type="button"
+                          onClick={() => openPayment(fee)}
+                          className="rounded-lg border border-emerald-400/30 px-3 py-1.5 text-xs font-semibold text-emerald-600 transition-colors hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-500/10"
+                        >
+                          Collect
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -443,6 +560,17 @@ export default function FeeManagementPage() {
           </DataTable>
           <Pagination page={page} totalPages={totalPages} onChange={setPage} />
         </>
+      )}
+
+      {bulkVoucher && (
+        <FeeVoucherDialog bulk={bulkVoucher} classroom={bulkVoucher.classroom}
+          onClose={() => setBulkVoucher(null)} />
+      )}
+
+      {voucherFee && (
+        <FeeVoucherDialog key={voucherFee.id} fee={voucherFee}
+          classroom={selectedClassroom ? classLabel(selectedClassroom) : ""}
+          onClose={() => setVoucherFee(null)} />
       )}
 
       {selectedFee && (
@@ -483,8 +611,10 @@ export default function FeeManagementPage() {
               <input
                 autoFocus
                 type="number"
-                min={1}
-                max={selectedFee.due_amount}
+                min="0.01"
+                step="0.01"
+                max={pendingPayment ? undefined : selectedFee.due_amount}
+                disabled={paying || pendingPayment !== null}
                 value={paymentAmount}
                 onKeyDown={(event) =>
                   event.key === "Enter" && void handleCollect()
@@ -508,7 +638,7 @@ export default function FeeManagementPage() {
                 onClick={() => void handleCollect()}
                 className={primaryButtonClass}
               >
-                {paying ? "Processing…" : "Submit Payment"}
+                {paying ? "Processing…" : pendingPayment ? "Retry pending payment" : "Submit Payment"}
               </button>
             </div>
           </div>

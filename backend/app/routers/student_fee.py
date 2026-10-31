@@ -1,23 +1,25 @@
 # app/routers/fees.py
 import math
-from datetime import date, datetime
-from decimal import Decimal
-from typing import Optional
+from decimal import Decimal, ROUND_HALF_UP
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models.academic_session import AcademicSession
+from app.models.classroom import Classroom, Grade
 from app.models.fee_structure import FeeStructure
 from app.models.fee_transection import FeeTransaction
 from app.models.student_enrollment import StudentEnrollment
 from app.models.student_fee import StudentFee
 from app.models.students import Student
 from app.routers.auth import get_current_user
-from app.routers.receptTemp import create_fee_receipt
+from app.routers.receptTemp import render_fee_receipt
 from app.schemas.student_fee import PaymentCreate
 from app.dependencies import get_active_session
+from app.financial_permissions import require_financial_permission
+from app.services.fee_collection import CENT, collect_fee_payment, lock_financial_organization, money
 
 router = APIRouter(prefix="/fees", tags=["Fees"])
 
@@ -32,21 +34,6 @@ NUMBER_TO_MONTH = {v: k for k, v in MONTH_TO_NUMBER.items()}
 
 
 
-def generate_receipt_number(db: Session, organization_id: int) -> str:
-    year = datetime.now().year
-    last_txn = (
-        db.query(FeeTransaction)
-        .filter(
-            FeeTransaction.organization_id == organization_id,
-            FeeTransaction.receipt_no.like(f"%{year}%"),
-        )
-        .order_by(FeeTransaction.id.desc())
-        .first()
-    )
-    last_number = int(last_txn.receipt_no.split("-")[-1]) if last_txn and last_txn.receipt_no else 0
-    return f"REC-{year}-{str(last_number + 1).zfill(4)}"
-
-
 def get_enrolled_students(class_id: int, org_id: int, db: Session,
                           active_session):
     """Return list of (Student, StudentEnrollment) for a class."""
@@ -58,6 +45,7 @@ def get_enrolled_students(class_id: int, org_id: int, db: Session,
             StudentEnrollment.is_active == True,
             StudentEnrollment.session_id == active_session.id,   
             Student.organization_id == org_id,
+            Student.is_active == True,
         )
         .all()
     )
@@ -75,144 +63,127 @@ def generate_monthly_fees(
     current_user=Depends(get_current_user),
     active_session=Depends(get_active_session)
 ):
+    require_financial_permission(current_user, "generate_fees")
     org_id = current_user.org_id
-
-    month_number = MONTH_TO_NUMBER.get(month)
-    if not month_number:
+    if month not in MONTH_TO_NUMBER:
         raise HTTPException(400, "Invalid month name")
 
-    # Get students via enrollments
-    enrolled = get_enrolled_students(class_id, org_id, db,active_session)
-    if not enrolled:
-        raise HTTPException(404, "No enrolled students found for this class")
-
-    # Get fee structure
-    structure = db.query(FeeStructure).filter(
-        FeeStructure.class_id == class_id,
-        FeeStructure.organization_id == org_id,
-        FeeStructure.session_id == active_session.id,
-    ).first()
-    if not structure:
-        raise HTTPException(404, "Fee structure not found for this class and session")
-
-    created = 0
-
-    for student, enrollment in enrolled:
-        # Skip if fee already generated for this month
-        existing = db.query(StudentFee).filter(
-            StudentFee.student_id == student.id,
-            StudentFee.month == month,
-            StudentFee.session_id == active_session.id,
-            StudentFee.organization_id == org_id,
+    try:
+        lock_financial_organization(db, org_id)
+        classroom = db.query(Classroom).join(Grade).filter(
+            Classroom.id == class_id, Classroom.organization_id == org_id,
+            Grade.organization_id == org_id,
+            Classroom.academic_year_id == active_session.id,
         ).first()
-        if existing:
-            continue
-
-        # Admission fee only once per session per student
-        already_has_admission = db.query(StudentFee).filter(
-            StudentFee.student_id == student.id,
-            StudentFee.session_id == active_session.id,
-            StudentFee.admission_fee > 0,
-            StudentFee.organization_id == org_id,
+        session = db.query(AcademicSession).filter(
+            AcademicSession.id == active_session.id,
+            AcademicSession.organization_id == org_id,
         ).first()
+        if classroom is None or session is None:
+            raise HTTPException(404, "Classroom or academic session not found")
+        enrolled = get_enrolled_students(class_id, org_id, db, active_session)
+        if not enrolled:
+            raise HTTPException(404, "No enrolled students found for this class")
+        structure = db.query(FeeStructure).filter(
+            FeeStructure.class_id == class_id,
+            FeeStructure.organization_id == org_id,
+            FeeStructure.session_id == active_session.id,
+        ).populate_existing().first()
+        if structure is None:
+            raise HTTPException(404, "Fee structure not found for this class and session")
+        # Validate all components, even when a charge is excluded this month.
+        admission_fee = money(structure.admission_fee)
+        monthly = money(structure.monthly_fee)
+        exam_fee = money(structure.exam_fee)
+        created = 0
+        for student, enrollment in enrolled:
+            existing = db.query(StudentFee.id).filter(
+                StudentFee.student_id == student.id,
+                StudentFee.month == month,
+                StudentFee.session_id == active_session.id,
+                StudentFee.organization_id == org_id,
+            ).first()
+            if existing:
+                continue
+            already_has_admission = db.query(StudentFee.id).filter(
+                StudentFee.student_id == student.id,
+                StudentFee.session_id == active_session.id,
+                StudentFee.admission_fee > 0,
+                StudentFee.organization_id == org_id,
+            ).first()
+            admission = admission_fee if not already_has_admission else Decimal("0.00")
+            exam = exam_fee if include_exam_fee else Decimal("0.00")
+            total = money(admission + monthly + exam)
+            discount_percent = money(enrollment.discount_percent if enrollment.discount_percent is not None else 0)
+            if discount_percent > 100:
+                raise HTTPException(409, "Invalid enrollment discount; correct it before generating fees")
+            # Currency is rounded once, to cents, using half-up rounding.
+            discount_amount = (monthly * discount_percent / 100).quantize(CENT, rounding=ROUND_HALF_UP)
+            final_amount = total - discount_amount
+            db.add(StudentFee(
+                class_id=class_id, student_id=student.id, organization_id=org_id,
+                month=month, admission_fee=admission, monthly_fee=monthly,
+                exam_fee=exam, total_amount=total, discount_percent=discount_percent,
+                discount_amount=discount_amount, final_amount=final_amount,
+                paid_amount=Decimal("0.00"), status="paid" if final_amount == 0 else "unpaid",
+                session_id=active_session.id,
+            ))
+            created += 1
+        result = {"message": f"{created} fees generated for {month} in session {session.name}"}
+        db.commit()
+        return result
+    except HTTPException:
+        db.rollback()
+        raise
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(409, "Fee generation conflicted with another operation; retry the request") from exc
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(503, "Fee generation could not be confirmed; retry the request") from exc
 
-        admission = Decimal(str(structure.admission_fee)) if not already_has_admission else Decimal(0)
-        monthly = Decimal(str(structure.monthly_fee))
-        exam = Decimal(str(structure.exam_fee)) if include_exam_fee else Decimal(0)
-        total = admission + monthly + exam
 
-        discount_percent = Decimal(str(enrollment.discount_percent or 0))
-        discount_amount = (monthly * discount_percent) / 100
-        final_amount = total - discount_amount
-
-        fee = StudentFee(
-            class_id=class_id,
-            student_id=student.id,
-            organization_id=org_id,
-            month=month,
-            admission_fee=admission,
-            monthly_fee=monthly,
-            exam_fee=exam,
-            total_amount=total,
-            discount_percent=enrollment.discount_percent,
-            discount_amount=discount_amount,
-            final_amount=final_amount,
-            paid_amount=Decimal(0),
-            status="unpaid",
-            session_id=active_session.id,
-        )
-        db.add(fee)
-        created += 1
-
-    db.commit()
-    return {"message": f"{created} fees generated for {month} in session {active_session.name}"}
-
-
-# -------------------------------------------------------------------
-# COLLECT PAYMENT
-# -------------------------------------------------------------------
 @router.post("/{fee_id}/collect")
 def collect_payment(
     fee_id: int,
     payment: PaymentCreate,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-
+    idempotency_key: str = Header(..., alias="Idempotency-Key", min_length=8, max_length=128),
 ):
-    fee = db.query(StudentFee).filter(
-        StudentFee.id == fee_id,
+    return collect_fee_payment(db, current_user, fee_id, payment.amount, idempotency_key)
+
+
+@router.get("/payments/{transaction_id}/receipt")
+def download_payment_receipt(
+    transaction_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    require_financial_permission(current_user, "view_fees")
+    transaction = db.query(FeeTransaction).join(StudentFee).join(Student).filter(
+        FeeTransaction.id == transaction_id,
+        FeeTransaction.organization_id == current_user.org_id,
         StudentFee.organization_id == current_user.org_id,
+        Student.organization_id == current_user.org_id,
     ).first()
-    if not fee:
-        raise HTTPException(404, "Fee not found")
-
-    if payment.amount <= 0:
-        raise HTTPException(400, "Payment amount must be greater than zero")
-
-    remaining = fee.final_amount - fee.paid_amount
-    if Decimal(str(payment.amount)) > remaining:
-        raise HTTPException(400, f"Payment exceeds remaining balance of {float(remaining)}")
-
-    fee.paid_amount += Decimal(str(payment.amount))
-    fee.status = "paid" if fee.paid_amount >= fee.final_amount else "partial"
-
-    receipt_no = generate_receipt_number(db, current_user.org_id)
-    transaction = FeeTransaction(
-        student_fee_id=fee.id,
-        organization_id=fee.organization_id,
-        amount=payment.amount,
-        payment_date=date.today(),
-        receipt_no=receipt_no,
-        created_by=current_user.id,
-    )
-
-    try:
-        db.add(transaction)
-        db.commit()
-        db.refresh(fee)
-        db.refresh(transaction)
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(500, f"Failed to process payment: {str(e)}")
-
+    if transaction is None:
+        raise HTTPException(404, "Payment not found")
+    fee = transaction.student_fee
     student = fee.student
-    student_name = f"{student.first_name} {student.last_name}"
-    org_name = student.organization.name if hasattr(student, "organization") else ""
-
-    pdf_file = create_fee_receipt(
-        fee=fee,
-        transaction=transaction,
-        student_name=student_name,
-        org_name=org_name,
-    )
-
-    return {
-        "fee_id": fee.id,
-        "receipt_no": receipt_no,
-        "status": fee.status,
-        "paid_amount": float(fee.paid_amount),
-        "receipt_pdf": pdf_file,
-    }
+    try:
+        pdf = render_fee_receipt(
+            fee=fee, transaction=transaction,
+            student_name=f"{student.first_name} {student.last_name or ''}".strip(),
+            org_name=student.organization.name,
+        )
+    except Exception as exc:
+        # Rendering is read-only and can be retried without collecting again.
+        raise HTTPException(503, "Receipt generation failed. The recorded payment is unchanged; retry this receipt download.") from exc
+    return Response(pdf, media_type="application/pdf", headers={
+        "Content-Disposition": f'attachment; filename="payment-{transaction.id}.pdf"',
+        "Cache-Control": "private, no-store",
+    })
 
 
 # -------------------------------------------------------------------
@@ -228,6 +199,7 @@ def get_fee_ledger(
     current_user=Depends(get_current_user),
     active_session=Depends(get_active_session)
 ):
+    require_financial_permission(current_user, "view_fees")
     query = (
         db.query(StudentFee)
         .join(Student, StudentFee.student_id == Student.id)
@@ -235,6 +207,9 @@ def get_fee_ledger(
         .filter(
             StudentEnrollment.classroom_id == class_id,
             StudentEnrollment.is_active == True,
+            StudentEnrollment.session_id == active_session.id,
+            StudentFee.class_id == class_id,
+            Student.organization_id == current_user.org_id,
             StudentFee.month == month,
             StudentFee.organization_id == current_user.org_id,
             StudentFee.session_id==active_session.id
@@ -256,7 +231,7 @@ def get_fee_ledger(
 
         items.append({
             "id": fee.id,
-            "student_name": f"{student.first_name} {student.last_name}",
+            "student_name": f"{student.first_name} {student.last_name or ''}".strip(),
             "month": fee.month,
             "admission_fee": float(fee.admission_fee),
             "monthly_fee": float(fee.monthly_fee),

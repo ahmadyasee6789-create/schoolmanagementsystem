@@ -49,6 +49,10 @@ def list_invitations(
 ):
     logger.info(f"Listing invitations for user: {current_user.id}")
     membership = get_user_organization(current_user, db)
+    # Invitation tokens grant the invited role when accepted. Treat listing them
+    # as an administrative action, just like creating or revoking invitations.
+    if membership.role != "admin":
+        raise HTTPException(status_code=403, detail="Only organization admins can list invitations")
     return db.query(Invitation).filter(Invitation.organization_id == membership.organization_id).all()
 
 

@@ -1,14 +1,14 @@
 # app/routers/students.py
-import json
-
-from fastapi import Form, UploadFile, File
-from app.services.student_import_service import confirm_student_import, preview_student_import
+from fastapi import UploadFile, File
+from app.services.student_import_service import confirm_student_import, preview_student_import, validate_student_import
+from app.schemas.student_import import StudentImportValidation, StudentImportConfirmation
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select
 from datetime import date
+from decimal import Decimal
 
 from app.db.session import get_db
 from app.schemas.student import (
@@ -18,6 +18,7 @@ from app.schemas.student import (
     StudentWithEnrollment,
     StudentWithEnrollmentCreate,
     StudentEnrollmentOut,
+    StudentDetailOut,
 )
 from app.crud import student as student_crud
 from app.models.classroom import Classroom, Grade
@@ -26,6 +27,7 @@ from app.models.students import Student
 from app.models.academic_session import AcademicSession
 from app.routers.auth import get_current_user
 from app.dependencies import get_active_session
+from app.financial_permissions import require_discount_access
 
 import logging
 
@@ -95,6 +97,7 @@ def create_student_with_enrollment(
     
     """Create a new student and enroll them in a class within a single transaction."""
     require_write_access(current_user)
+    require_discount_access(current_user, data.discount_percent)
 
     try:
         # Validate academic session
@@ -114,6 +117,7 @@ def create_student_with_enrollment(
             select(Classroom).where(
                 Classroom.id == data.classroom_id,
                 Classroom.organization_id == current_user.org_id,
+                Classroom.academic_year_id == data.session_id,
             )
         ).scalar_one_or_none()
 
@@ -212,27 +216,33 @@ def import_students_preview(
         db=db,
         org_id=current_user.org_id,
         session_id=active_session.id,
+        user_id=current_user.id,
     )
-@router.post("/import/confirm")
-def import_students_confirm(
-    file: UploadFile = File(...),
-    mapping: str = Form(...),
+@router.post("/import/validate")
+def import_students_validate(
+    request: StudentImportValidation,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
     active_session=Depends(get_active_session),
 ):
     require_write_access(current_user)
-    try:
-        column_mapping = json.loads(mapping)
-    except json.JSONDecodeError:
-        raise HTTPException(status_code=400, detail="Invalid mapping payload")
+    return validate_student_import(request, db, current_user.org_id, active_session.id, current_user.id)
 
+
+@router.post("/import/confirm")
+def import_students_confirm(
+    request: StudentImportConfirmation,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+    active_session=Depends(get_active_session),
+):
+    require_write_access(current_user)
     return confirm_student_import(
-        file=file,
-        mapping=column_mapping,
+        request=request,
         db=db,
         org_id=current_user.org_id,
         session_id=active_session.id,
+        user_id=current_user.id,
     )
 # -------------------------------------------------------------------
 # GET SINGLE STUDENT
@@ -250,6 +260,64 @@ def get_student(
     if not student:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found")
     return student
+@router.get(
+    "/{student_id}/details",
+    response_model=StudentDetailOut
+)
+def get_student_details_endpoint(
+    student_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    # Profiles remain available even before an academic session is activated.
+    active_session = db.query(AcademicSession).filter(
+        AcademicSession.organization_id == current_user.org_id,
+        AcademicSession.is_active == True,
+    ).first()
+    result = student_crud.get_student_details(
+        db=db,
+        student_id=student_id,
+        org_id=current_user.org_id,
+        session_id=active_session.id if active_session else None,
+    )
+
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Student not found"
+        )
+
+    student, enrollment = result
+
+    response = StudentOut.model_validate(student).model_dump()
+
+    enrollment_data = None
+
+    if enrollment:
+        enrollment_data = {
+            "id": enrollment.id,
+            "session_id": enrollment.session_id,
+            "session_name": enrollment.session.name,
+            "classroom_id": enrollment.classroom_id,
+            "class_name": (
+                f"{enrollment.classroom.grade.name} – {enrollment.classroom.section}"
+                if enrollment.classroom
+                else None
+            ),
+            "grade_name": enrollment.classroom.grade.name if enrollment.classroom else None,
+            "section": enrollment.classroom.section if enrollment.classroom else None,
+            "roll_number": enrollment.roll_number,
+            "discount_percent": enrollment.discount_percent or 0,
+            "enrollment_date": enrollment.enrollment_date,
+            "withdrawal_date": enrollment.withdrawal_date,
+            "is_active": enrollment.is_active,
+        }
+
+    return {
+        **response,
+        "active_session": active_session,
+        "current_enrollment": enrollment_data,
+    }
 
 
 # -------------------------------------------------------------------
@@ -281,7 +349,7 @@ def delete_student(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Delete a student and their enrollments."""
+    """Delete an unbilled student; students with financial history must be archived."""
     require_delete_access(current_user)
     deleted = student_crud.delete_student(
         db=db, student_id=student_id, org_id=current_user.org_id
@@ -300,12 +368,13 @@ def enroll_student(
     session_id: int = Query(...),
     enrollment_date: date = Query(...),
     roll_number: Optional[str] = None,
-    discount_percent: float = 0.0,
+    discount_percent: Decimal = Query(default=Decimal("0"), ge=0, le=100, max_digits=5, decimal_places=2, allow_inf_nan=False),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     """Enroll an existing student in a class."""
     require_write_access(current_user)
+    require_discount_access(current_user, discount_percent)
 
     student = student_crud.get_student_by_id(
         db=db, student_id=student_id, org_id=current_user.org_id
@@ -316,19 +385,34 @@ def enroll_student(
     classroom = db.query(Classroom).filter(
         Classroom.id == classroom_id,
         Classroom.organization_id == current_user.org_id,
+        Classroom.academic_year_id == session_id,
     ).first()
     if not classroom:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Classroom not found")
 
-    return student_crud.enroll_student(
-        db=db,
-        student_id=student_id,
-        classroom_id=classroom_id,
-        session_id=session_id,
-        enrollment_date=enrollment_date,
-        roll_number=roll_number,
-        discount_percent=discount_percent,
-    )
+    session = db.query(AcademicSession).filter(
+        AcademicSession.id == session_id,
+        AcademicSession.organization_id == current_user.org_id,
+    ).first()
+    if not session:
+        raise HTTPException(status_code=400, detail="Invalid academic session")
+
+    try:
+        enrollment = student_crud.enroll_student(
+            db=db,
+            student_id=student_id,
+            classroom_id=classroom_id,
+            session_id=session_id,
+            enrollment_date=enrollment_date,
+            roll_number=roll_number,
+            discount_percent=discount_percent,
+        )
+        db.commit()
+        db.refresh(enrollment)
+        return enrollment
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Student is already enrolled or enrollment conflicts with an existing record") from exc
 
 
 # -------------------------------------------------------------------

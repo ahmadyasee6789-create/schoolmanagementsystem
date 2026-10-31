@@ -1,13 +1,12 @@
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
-import os
+from io import BytesIO
 
-def create_fee_receipt(fee, transaction, student_name, org_name="My School"):
+def render_fee_receipt(fee, transaction, student_name, org_name="My School"):
     receipt_no = transaction.receipt_no
-    filename = f"receipts/{receipt_no}.pdf"
-    os.makedirs("receipts", exist_ok=True)
+    output = BytesIO()
 
-    c = canvas.Canvas(filename, pagesize=A4)
+    c = canvas.Canvas(output, pagesize=A4)
     width, height = A4
 
     # Header
@@ -25,10 +24,13 @@ def create_fee_receipt(fee, transaction, student_name, org_name="My School"):
     # Amount
     c.drawString(50, height - 220, f"Paid Amount: Rs. {transaction.amount}")
     c.drawString(50, height - 240, f"Total Fee: Rs. {fee.final_amount}")
-    c.drawString(50, height - 260, f"Status: {fee.status}")
+    status = transaction.fee_status_after
+    # A historical balance cannot be reconstructed from legacy receipt fields.
+    if status:
+        c.drawString(50, height - 260, f"Status after payment: {status}")
 
     c.drawString(50, height - 300, "Signature: _____________________")
     c.showPage()
     c.save()
 
-    return filename
+    return output.getvalue()

@@ -1,6 +1,7 @@
 "use client";
 
-import { Pencil, Trash2, Users } from "lucide-react";
+import { Eye, Pencil, Trash2, Users } from "lucide-react";
+import Link from "next/link";
 import { Student } from "./types";
 import StudentCard from "./Studentcard";
 
@@ -122,6 +123,7 @@ export default function StudentTable({
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex gap-1">
+                    <Link href={`/students/${student.id}`} aria-label={`View student ${student.first_name} ${student.last_name ?? ""}`} title="View student" className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-[#8B6DF2]/10 hover:text-[#8B6DF2] dark:text-slate-500"><Eye size={16} /></Link>
                     <button
                       type="button"
                       title="Edit student"

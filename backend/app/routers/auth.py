@@ -1,9 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status,Body
 from sqlalchemy.orm import Session
-from jose import jwt, JWTError, ExpiredSignatureError
+from jose import JWTError, ExpiredSignatureError
 
 from datetime import datetime, timedelta
-import os
 from app.crud.classroom import seed_grades
 from  app.db.session import get_db
 from  app.models.users import User, OrganizationMember, Organization
@@ -13,21 +12,19 @@ from  app.utils.hash import create_refresh_token, hash_password, verify_password
 from fastapi_limiter.depends import RateLimiter
 import logging
 from  app.schemas.auth import RefreshTokenIn, CurrentUser
+from app.security import (
+    ACCESS_TOKEN_EXPIRE_MINUTES,
+    REFRESH_TOKEN_EXPIRE_DAYS,
+    decode_token,
+)
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
 # ---------------- CONFIG ----------------
-SECRET_KEY = os.environ.get("SECRET_KEY", "your-secret-key")
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 15
-REFRESH_TOKEN_EXPIRE_DAYS = 7
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 # ---------------- AUTH DEPENDENCY ----------------
-from jose import JWTError, ExpiredSignatureError
-
-
 from sqlalchemy.orm import joinedload
 
 def get_current_user(
@@ -36,7 +33,7 @@ def get_current_user(
 
 )->CurrentUser:
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = decode_token(token, "access")
         user_id = payload.get("user_id")
 
         if not user_id:
@@ -49,8 +46,8 @@ def get_current_user(
             .first()
         )
 
-        if not user:
-            raise HTTPException(status_code=401, detail="User not found")
+        if not user or not user.is_active:
+            raise HTTPException(status_code=401, detail="User not found or inactive")
 
         org_member = (
             user.organization_memberships[0]
@@ -76,7 +73,7 @@ def get_current_user(
 def login(data: UserLogin, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == data.email).first()
 
-    if not user or not verify_password(data.password, user.hashed_password):
+    if not user or not user.is_active or not verify_password(data.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     # Default values
@@ -181,7 +178,7 @@ def login(data: UserLogin, db: Session = Depends(get_db)):
 @router.get("/me")
 def me(db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
     try:
-       payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+       payload = decode_token(token, "access")
        user_id = payload.get("user_id")
        if user_id is None:
             raise HTTPException(status_code=401, detail="Invalid token")
@@ -191,8 +188,8 @@ def me(db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
         raise HTTPException(status_code=401, detail="Invalid token")
 
     user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+    if not user or not user.is_active:
+        raise HTTPException(status_code=401, detail="User not found or inactive")
 
     org_member = db.query(OrganizationMember).filter(
         OrganizationMember.user_id == user.id
@@ -276,17 +273,17 @@ def signup(payload: UserCreate, db: Session = Depends(get_db)):
    
     
 @router.post("/refresh")
-def refresh_token(payload: RefreshTokenIn):
+def refresh_token(payload: RefreshTokenIn, db: Session = Depends(get_db)):
     try:
-        payload_data = jwt.decode(
-            payload.refresh_token,
-            SECRET_KEY,
-            algorithms=[ALGORITHM]
-        )
+        payload_data = decode_token(payload.refresh_token, "refresh")
 
         user_id = payload_data.get("user_id")
         if not user_id:
             raise HTTPException(status_code=401, detail="Invalid refresh token")
+
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user or not user.is_active:
+            raise HTTPException(status_code=401, detail="User not found or inactive")
 
         new_access_token = create_access_token(
             data={"user_id": user_id},

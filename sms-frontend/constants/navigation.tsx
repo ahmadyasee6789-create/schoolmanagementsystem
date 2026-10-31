@@ -57,7 +57,7 @@ export const navigation: NavigationItem[] = [
   { label: "DMC Generator", href: "/exams/dmc_generator", icon: FileText, section: "Examinations" },
 
   // ── Finance ──────────────────────────────
-  { label: "Employees", href: "/employees", icon: UserCog, section: "Finance" },
+  { label: "Employees", href: "/finance/employees", icon: UserCog, section: "Finance" },
   { label: "Fee Structure", href: "/finance/fee-structure", icon: Wallet, section: "Finance" },
   { label: "Fee Management", href: "/finance/fee-management", icon: DollarSign, section: "Finance" },
   { label: "Teacher Salary", href: "/finance/staff_payroll", icon: Banknote, section: "Finance" },
@@ -71,6 +71,7 @@ export const navigation: NavigationItem[] = [
   { label: "Payroll Report", href: "/reports/payroll", icon: BarChart3, section: "Reports" },
 
   // ── Organization ─────────────────────────
+  { label: "School Profile", href: "/organization/profile", icon: Building2, section: "Organization" },
   { label: "Organization Members", href: "/organization/team", icon: Building2, section: "Organization" },
   { label: "Invitations", href: "/organization/invitations", icon: Mail, section: "Organization" },
 ];

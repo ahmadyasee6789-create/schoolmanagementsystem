@@ -3,8 +3,6 @@
 import { usePathname } from "next/navigation";
 import SidebarHeader from "./SidebarHeader";
 import SidebarNav from "./SidebarNav";
-import SidebarFooter from "./SidebarFooter";
-
 const SIDEBAR_WIDTH = 272;
 const COLLAPSED_WIDTH = 64;
 
@@ -47,7 +45,7 @@ export default function AdminSidebar({
       >
         <SidebarHeader collapsed={collapsed} onToggle={() => setCollapsed((v) => !v)} />
         <SidebarNav pathname={pathname} collapsed={collapsed} />
-        <SidebarFooter collapsed={collapsed} onLogout={handleLogout} />
+        
       </div>
 
       <div
@@ -63,7 +61,7 @@ export default function AdminSidebar({
       >
         <SidebarHeader collapsed={false} onToggle={() => setMobileOpen?.(false)} />
         <SidebarNav pathname="" collapsed={false} />
-        <SidebarFooter collapsed={false} onLogout={handleLogout} />
+        
       </div>
     </>
   );

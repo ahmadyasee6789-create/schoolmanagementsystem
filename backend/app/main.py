@@ -1,18 +1,20 @@
 from dotenv import load_dotenv
 import os
+from contextlib import asynccontextmanager
 
 load_dotenv()
 
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
+from app.routers import fee_voucher
 from app.routers import students
 from app.routers import dashboard
 from app.routers import auth
 from app.routers import classes
 from app.routers import organizationInvite
 from app.routers import organization_team
+from app.routers import organization_profile
 from app.routers import student_fee
 from app.routers import fee_structure
 from app.routers import acadmic_session
@@ -31,7 +33,16 @@ from app.routers import reports
 from app.routers import employees
 from app.routers import superadmin
 from starlette.middleware.trustedhost import TrustedHostMiddleware
-app = FastAPI( redirect_slashes=True,)
+from app.security import validate_security_configuration
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    validate_security_configuration()
+    yield
+
+
+app = FastAPI(redirect_slashes=True, lifespan=lifespan)
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
 # ✅ Use regex to allow ALL Vercel preview deployments
 from fastapi.middleware.cors import CORSMiddleware
@@ -54,6 +65,7 @@ app.include_router(auth.router)
 app.include_router(classes.router)
 app.include_router(organizationInvite.router)
 app.include_router(organization_team.router)
+app.include_router(organization_profile.router)
 app.include_router(student_fee.router)
 app.include_router(fee_structure.router)    
 app.include_router(acadmic_session.router)
@@ -71,3 +83,4 @@ app.include_router(promotion.router)
 app.include_router(reports.router)
 app.include_router(employees.router)
 app.include_router(superadmin.router)
+app.include_router(fee_voucher.router)

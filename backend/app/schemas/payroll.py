@@ -1,20 +1,41 @@
-from pydantic import BaseModel, Field
+from decimal import Decimal
+from pydantic import BaseModel, BeforeValidator, Field, field_validator
 from datetime import date, datetime
-from typing import Optional
+from typing import Annotated, Optional
+
+
+def _reject_boolean_amount(value):
+    if isinstance(value, bool):
+        raise ValueError("A monetary amount must be a number")
+    return value
+
+
+SalaryAmount = Annotated[
+    Decimal,
+    BeforeValidator(_reject_boolean_amount),
+    Field(ge=0, le=Decimal("99999999.99"), max_digits=10, decimal_places=2, allow_inf_nan=False),
+]
 
 
 class StaffSalaryCreate(BaseModel):
     employee_id: int
-    base_salary: float
+    base_salary: SalaryAmount
     pay_frequency: str = "monthly"
     effective_from: date
     effective_to: Optional[date] = None
 
 
 class StaffSalaryUpdate(BaseModel):
-    base_salary: Optional[float] = None
+    base_salary: Optional[SalaryAmount] = None
     pay_frequency: Optional[str] = None
     effective_to: Optional[date] = None
+
+    @field_validator("base_salary")
+    @classmethod
+    def reject_explicit_null_salary(cls, value):
+        if value is None:
+            raise ValueError("Base salary cannot be null")
+        return value
 
 
 class StaffSalaryResponse(BaseModel):
@@ -40,8 +61,8 @@ class SalaryGenerate(BaseModel):
 
 class SalaryPay(BaseModel):
     payment_method: str
-    deductions: Optional[float] = 0
-    bonus: Optional[float] = 0
+    deductions: Optional[SalaryAmount] = Decimal("0")
+    bonus: Optional[SalaryAmount] = Decimal("0")
 
 
 class SalaryPaymentResponse(BaseModel):

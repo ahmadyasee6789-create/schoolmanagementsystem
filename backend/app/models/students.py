@@ -56,7 +56,7 @@ class Student(Base):
 
     last_name: Mapped[str] = mapped_column(
         String(100),
-        nullable=False,
+        nullable=True,
     )
 
     gender: Mapped[str] = mapped_column(
@@ -150,7 +150,8 @@ class Student(Base):
     fees = relationship(
         "StudentFee",
         back_populates="student",
-        cascade="all, delete",
+        # Never cascade a profile deletion into issued charges or payments.
+        passive_deletes="all",
     )
 
     attendances = relationship(

@@ -1,5 +1,5 @@
 # app/models/student_enrollment.py
-from sqlalchemy import Column, Float, Integer, ForeignKey, Date, Boolean, String, UniqueConstraint
+from sqlalchemy import Column, Numeric, Integer, ForeignKey, Date, Boolean, String, UniqueConstraint, CheckConstraint
 from sqlalchemy.orm import relationship
 from app.db.base import Base
 from datetime import date
@@ -14,7 +14,7 @@ class StudentEnrollment(Base):
 
     classroom_id = Column(Integer, ForeignKey("classrooms.id"), nullable=True)
     roll_number = Column(String(20), nullable=True)
-    discount_percent=Column(Float, default=0.0, nullable=True)
+    discount_percent=Column(Numeric(5, 2), default=0, nullable=True)
     enrollment_date = Column(Date, default=date.today, nullable=False)
     withdrawal_date = Column(Date, nullable=True)
     is_active = Column(Boolean, default=True)
@@ -26,6 +26,7 @@ class StudentEnrollment(Base):
     exam_results = relationship("ExamResult", back_populates="student_enrollment")
 
     __table_args__ = (
+        CheckConstraint("discount_percent IS NULL OR (discount_percent >= 0 AND discount_percent <= 100)", name="ck_enrollment_discount_percent"),
         UniqueConstraint(
             "student_id", 
             "session_id", 

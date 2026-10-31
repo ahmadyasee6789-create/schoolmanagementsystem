@@ -10,8 +10,14 @@ from app.models.expenses import Expense
 from app.schemas.expenses import ExpenseCategoryCreate, ExpenseCategoryOut, ExpenseCreate, ExpenseOut
 from app.models.expensecategory import ExpenseCategory
 from app.dependencies import get_active_session
+from app.financial_permissions import require_financial_permission
 
-router=APIRouter(prefix="/expenses",tags=["expenses"])
+
+def require_expense_access(current_user=Depends(get_current_user)):
+    require_financial_permission(current_user, "view_fees")
+
+
+router=APIRouter(prefix="/expenses",tags=["expenses"], dependencies=[Depends(require_expense_access)])
 @router.post("")
 def add_expenses(
         expense: ExpenseCreate,
@@ -19,6 +25,12 @@ def add_expenses(
         current_user=Depends(get_current_user),
         active_session=Depends(get_active_session)
 ):
+    category = db.query(ExpenseCategory).filter(
+        ExpenseCategory.id == expense.category_id,
+        ExpenseCategory.organization_id == current_user.org_id,
+    ).first()
+    if category is None:
+        raise HTTPException(status_code=404, detail="Expense category not found")
     new_expense=Expense(
         organization_id=current_user.org_id,
         category_id=expense.category_id,
@@ -112,6 +124,3 @@ def add_category(
     db.commit()
     db.refresh(new_category)
     return new_category
-
-    
-    
