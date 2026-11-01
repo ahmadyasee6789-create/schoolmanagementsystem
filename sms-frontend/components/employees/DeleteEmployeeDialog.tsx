@@ -1,7 +1,7 @@
 "use client";
 
 import { AlertTriangle } from "lucide-react";
-import { secondaryButtonClass } from "./types.ts";
+import { secondaryButtonClass } from "./types";
 
 export default function DeleteEmployeeDialog({
   open,
