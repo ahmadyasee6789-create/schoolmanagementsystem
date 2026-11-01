@@ -1,7 +1,7 @@
 "use client";
 
 import { X } from "lucide-react";
-import { EmployeeFormData, inputClass, secondaryButtonClass } from "./types.ts";
+import { EmployeeFormData, inputClass, secondaryButtonClass } from "./types";
 
 export default function EmployeeFormDialog({
   open,

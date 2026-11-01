@@ -1,7 +1,7 @@
 "use client";
 
 import { Plus, Search } from "lucide-react";
-import { inputClass } from "./types.ts";
+import { inputClass } from "./types";
 
 export default function EmployeeToolbar({
   count,

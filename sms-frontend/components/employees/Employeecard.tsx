@@ -1,7 +1,7 @@
 "use client";
 
 import { Pencil, Trash2 } from "lucide-react";
-import { Employee, formatDate } from "./types.ts";
+import { Employee, formatDate } from "./types";
 import { RoleBadge, SourceBadge, StatusBadge } from "./Badges";
 
 export default function EmployeeCard({
