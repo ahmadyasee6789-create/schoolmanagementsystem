@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from redis import RedisError
 from sqlalchemy.orm import Session
 from sqlalchemy import func, extract, cast, Date
 from datetime import date, datetime
@@ -63,8 +64,10 @@ def get_dashboard_stats(
 
     org_id = membership.organization_id
     cache_key = f"dashboard:stats:{org_id}:{active_session.id}:{membership.role}"
-
-    cached_data = redis_client.get(cache_key)
+    try:
+        cached_data = redis_client.get(cache_key)
+    except RedisError:
+        cached_data = None
 
     if cached_data:
         return redact_dashboard_financials(json.loads(cached_data), current_user)
