@@ -1,14 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Box, CircularProgress, Grid, Table, TableBody, TableCell, TableHead, TableRow } from '@mui/material';
-import { api } from '@/app/lib/api';
+import { useCallback, useEffect, useState } from 'react';
+import { CalendarCheck, CalendarX, Clock, TrendingUp } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { api } from '@/app/lib/api';
 import {
-  C, FONT, EASE, thSx, tdSx, GlobalStyles, MiniStatCard,
-  ReportHeader, ReportFiltersCard, ReportFilterSelect,
-  DataTable, AttBar, ClassChip, StudentCell,
-} from '@/components/ui';
+  ReportClass, ReportFilterSelect, ReportFilters, ReportPage, ReportPerson, ReportProgress, ReportTable,
+} from '@/components/reports/ReportUi';
 
 type AttendanceRow = {
   student_id: number; student_name: string; admission_no: string;
@@ -24,20 +22,21 @@ export default function AttendanceReport() {
   const [rows, setRows]               = useState<AttendanceRow[]>([]);
   const [grades, setGrades]           = useState<Grade[]>([]);
   const [classes, setClasses]         = useState<Classroom[]>([]);
-  const [loading, setLoading]         = useState(false);
+  const [loading, setLoading]         = useState(true);
   const [refreshing, setRefreshing]   = useState(false);
   const [monthFilter, setMonthFilter] = useState(MONTHS[new Date().getMonth()]);
   const [gradeFilter, setGradeFilter] = useState('all');
   const [classFilter, setClassFilter] = useState('all');
 
   useEffect(() => {
-    Promise.all([api.get('/grades'), api.get('/classes/')]).then(([g, c]) => { setGrades(g.data); setClasses(c.data); });
-    fetchData();
+    void Promise.all([api.get('/grades'), api.get('/classes/')])
+      .then(([g, c]) => { setGrades(g.data); setClasses(c.data); })
+      .catch(() => toast.error('Failed to load attendance filters'));
   }, []);
-  useEffect(() => { fetchData(); }, [monthFilter, gradeFilter, classFilter]);
 
-  const fetchData = async (isRefresh = false) => {
-    isRefresh ? setRefreshing(true) : setLoading(true);
+  const fetchData = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
     try {
       const params: Record<string, string> = {};
       if (gradeFilter !== 'all') params.grade_name  = gradeFilter;
@@ -47,7 +46,9 @@ export default function AttendanceReport() {
       setRows(Array.isArray(res.data) ? res.data : res.data?.items ?? []);
     } catch { toast.error('Failed to load attendance report'); }
     finally { setLoading(false); setRefreshing(false); }
-  };
+  }, [monthFilter, gradeFilter, classFilter]);
+
+  useEffect(() => { void fetchData(); }, [fetchData]);
 
   const filteredClasses = gradeFilter === 'all' ? classes : classes.filter(c => c.grade_name === gradeFilter);
   const avgPct      = rows.length ? Math.round(rows.reduce((s, r) => s + r.attendance_pct, 0) / rows.length) : 0;
@@ -64,53 +65,47 @@ export default function AttendanceReport() {
   };
 
   return (
-    <>
-      <GlobalStyles />
-      <Box sx={{ p: { xs: 2, sm: 3 }, backgroundColor: C.bg, minHeight: '100%' }}>
-        <ReportHeader title="Attendance Report" subtitle="Monthly attendance · presence rates · absence tracking" onRefresh={() => fetchData(true)} onExport={exportPDF} refreshing={refreshing} />
+    <ReportPage
+      title="Attendance Report"
+      subtitle="Monthly attendance · presence rates · absence tracking"
+      onRefresh={() => fetchData(true)}
+      onExport={exportPDF}
+      refreshing={refreshing}
+      stats={[
+        { title: 'Avg Attendance', value: `${avgPct}%`, icon: TrendingUp, tone: 'purple' },
+        { title: 'Good (≥80%)', value: goodCount, icon: CalendarCheck, tone: 'green' },
+        { title: 'Poor (<60%)', value: poorCount, icon: CalendarX, tone: 'red' },
+        { title: 'Total Absences', value: totalAbsent, icon: Clock, tone: 'amber' },
+      ]}
+    >
+      <ReportFilters count={rows.length}>
+        <ReportFilterSelect label="Month" value={monthFilter} onChange={setMonthFilter} options={MONTHS.map(m => ({ value: m, label: m }))} />
+        <ReportFilterSelect label="Grade" value={gradeFilter} onChange={v => { setGradeFilter(v); setClassFilter('all'); }}
+          options={[{ value: 'all', label: 'All Grades' }, ...grades.map(g => ({ value: g.name, label: g.name }))]} />
+        <ReportFilterSelect label="Class" value={classFilter} onChange={setClassFilter}
+          options={[{ value: 'all', label: 'All Classes' }, ...filteredClasses.map(c => ({ value: String(c.id), label: `${c.grade_name} – ${c.section}` }))]} />
+      </ReportFilters>
 
-        <Grid container spacing={2} sx={{ mb: 3 }}>
-          {[
-            { label: 'Avg Attendance', value: `${avgPct}%`, color: C.accent, dim: C.accentDim },
-            { label: 'Good (≥80%)',    value: goodCount,    color: C.green,  dim: C.greenDim  },
-            { label: 'Poor (<60%)',    value: poorCount,    color: C.red,    dim: C.redDim    },
-            { label: 'Total Absences', value: totalAbsent,  color: C.yellow, dim: C.yellowDim },
-          ].map(s => <Grid item xs={6} md={3} key={s.label}><MiniStatCard {...s} /></Grid>)}
-        </Grid>
-
-        <ReportFiltersCard count={rows.length}>
-          <ReportFilterSelect label="Month" value={monthFilter} onChange={setMonthFilter} options={MONTHS.map(m => ({ value: m, label: m }))} />
-          <ReportFilterSelect label="Grade" value={gradeFilter} onChange={v => { setGradeFilter(v); setClassFilter('all'); }}
-            options={[{ value: 'all', label: 'All Grades' }, ...grades.map(g => ({ value: g.name, label: g.name }))]} />
-          <ReportFilterSelect label="Class" value={classFilter} onChange={setClassFilter}
-            options={[{ value: 'all', label: 'All Classes' }, ...filteredClasses.map(c => ({ value: String(c.id), label: `${c.grade_name} – ${c.section}` }))]} />
-        </ReportFiltersCard>
-
-        <DataTable>
-          {loading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}><CircularProgress size={32} thickness={3} sx={{ color: C.accent }} /></Box>
-          ) : (
-            <Table>
-              <TableHead><TableRow>{['#','Student','Grade','Present','Absent','Leave','Total Days','Attendance'].map(h => <TableCell key={h} sx={thSx}>{h}</TableCell>)}</TableRow></TableHead>
-              <TableBody>
-                {rows.map((r, i) => (
-                  <TableRow key={r.student_id} sx={{ '&:hover': { backgroundColor: 'rgba(255,255,255,0.02)' }, transition: `background ${EASE}` }}>
-                    <TableCell sx={{ ...tdSx, color: C.textSecondary }}>{i + 1}</TableCell>
-                    <TableCell sx={tdSx}><StudentCell name={r.student_name} admissionNo={r.admission_no} /></TableCell>
-                    <TableCell sx={tdSx}><ClassChip grade={r.grade_name} section={r.section} /></TableCell>
-                    <TableCell sx={{ ...tdSx, color: C.green,  fontWeight: 600 }}>{r.present}</TableCell>
-                    <TableCell sx={{ ...tdSx, color: C.red,    fontWeight: 600 }}>{r.absent}</TableCell>
-                    <TableCell sx={{ ...tdSx, color: C.yellow, fontWeight: 600 }}>{r.leave}</TableCell>
-                    <TableCell sx={{ ...tdSx, color: C.textSecondary }}>{r.total_days}</TableCell>
-                    <TableCell sx={tdSx}><AttBar pct={r.attendance_pct} /></TableCell>
-                  </TableRow>
-                ))}
-                {rows.length === 0 && <TableRow><TableCell colSpan={8} sx={{ ...tdSx, textAlign: 'center', color: C.textSecondary, py: 6 }}>No attendance data found</TableCell></TableRow>}
-              </TableBody>
-            </Table>
-          )}
-        </DataTable>
-      </Box>
-    </>
+      <ReportTable label="Attendance results" columns={['Grade', 'Present', 'Absent', 'Leave', 'Total Days', 'Attendance']}
+        loading={loading} icon={CalendarCheck} empty="No attendance data found"
+        rows={rows.map((row) => {
+          const { attendance_pct: percent } = row;
+          const tone = percent >= 80 ? 'green' : percent >= 60 ? 'amber' : 'red';
+          const detail = tone === 'green' ? 'Good' : tone === 'amber' ? 'Average' : 'Poor';
+          return {
+            key: row.student_id,
+            person: <ReportPerson name={row.student_name} admissionNo={row.admission_no} />,
+            values: [
+              <ReportClass key="grade" grade={row.grade_name} section={row.section} />,
+              <span key="present" className="font-semibold text-emerald-600 dark:text-emerald-400">{row.present}</span>,
+              <span key="absent" className="font-semibold text-red-600 dark:text-red-400">{row.absent}</span>,
+              <span key="leave" className="font-semibold text-amber-700 dark:text-amber-400">{row.leave}</span>,
+              row.total_days,
+              <ReportProgress key="attendance" value={`${percent}%`} percent={percent} detail={detail} tone={tone} />,
+            ],
+          };
+        })}
+      />
+    </ReportPage>
   );
 }

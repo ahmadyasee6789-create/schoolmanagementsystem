@@ -1,5 +1,5 @@
 from app.db.base import Base
-from sqlalchemy import Column, Integer, String, ForeignKey, Numeric, UniqueConstraint, CheckConstraint
+from sqlalchemy import Column, Integer, String, ForeignKey, Numeric, UniqueConstraint, CheckConstraint, Date, extract
 from sqlalchemy.orm import relationship
 
 
@@ -14,6 +14,8 @@ class StudentFee(Base):
     session_id = Column(Integer, ForeignKey("academic_sessions.id"), nullable=False)
 
     month = Column(String, nullable=False)
+    # Retain the old display label; identity and ordering use this date.
+    billing_period = Column(Date, nullable=False)
 
     # Fee Breakdown
     admission_fee = Column(Numeric(14, 2), default=0, nullable=False)
@@ -31,7 +33,9 @@ class StudentFee(Base):
     status = Column(String, default="unpaid", nullable=False)  # unpaid, partial, paid
 
     __table_args__ = (
-        UniqueConstraint("organization_id", "student_id", "session_id", "month", name="uq_student_fee_period"),
+        UniqueConstraint("organization_id", "student_id", "session_id", "billing_period", name="uq_student_fee_billing_period"),
+        UniqueConstraint("id", "organization_id", "student_id", "session_id", name="uq_student_fee_allocation_owner"),
+        CheckConstraint(extract("day", billing_period) == 1, name="ck_student_fee_period_start"),
         CheckConstraint("admission_fee BETWEEN 0 AND 999999999999.99 AND monthly_fee BETWEEN 0 AND 999999999999.99 AND exam_fee BETWEEN 0 AND 999999999999.99 AND total_amount BETWEEN 0 AND 999999999999.99", name="ck_student_fee_charges"),
         CheckConstraint("discount_percent >= 0 AND discount_percent <= 100", name="ck_student_fee_discount_percent"),
         CheckConstraint("total_amount = admission_fee + monthly_fee + exam_fee", name="ck_student_fee_gross"),
@@ -47,6 +51,10 @@ class StudentFee(Base):
         back_populates="student_fee",
         cascade="save-update, merge",
         passive_deletes="all",
+        foreign_keys="FeeTransaction.student_fee_id",
     )
+    allocations = relationship("FeeAllocation", back_populates="student_fee",
+                               foreign_keys="FeeAllocation.student_fee_id",
+                               cascade="save-update, merge", passive_deletes="all")
     classroom = relationship("Classroom", back_populates="student_fees")
     session= relationship("AcademicSession")

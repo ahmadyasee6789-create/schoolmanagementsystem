@@ -1,14 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Box, Chip, CircularProgress, Grid, Table, TableBody, TableCell, TableHead, TableRow, Typography } from '@mui/material';
-import { api } from '@/app/lib/api';
+import { useCallback, useEffect, useState } from 'react';
+import { CircleCheck, CircleX, ClipboardList, Target, TrendingUp, Trophy } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { api } from '@/app/lib/api';
+import { Badge } from '@/components/finance/FinanceUi';
 import {
-  C, FONT, EASE, thSx, tdSx, GlobalStyles, MiniStatCard,
-  ReportHeader, ReportFiltersCard, ReportFilterSelect,
-  DataTable, MarkBar, GradeChip, ClassChip, StudentCell, PassRateChip,
-} from '@/components/ui';
+  ReportClass, ReportFilterSelect, ReportFilters, ReportPage, ReportPerson, ReportProgress, ReportTable,
+} from '@/components/reports/ReportUi';
 
 type ExamResultRow = {
   student_name: string; admission_no: string; grade_name: string; section: string;
@@ -23,20 +22,21 @@ export default function ExamReport() {
   const [rows, setRows]               = useState<ExamResultRow[]>([]);
   const [exams, setExams]             = useState<Exam[]>([]);
   const [grades, setGrades]           = useState<Grade[]>([]);
-  const [loading, setLoading]         = useState(false);
+  const [loading, setLoading]         = useState(true);
   const [refreshing, setRefreshing]   = useState(false);
   const [examFilter, setExamFilter]   = useState('all');
   const [gradeFilter, setGradeFilter] = useState('all');
   const [resultFilter, setResultFilter] = useState('all');
 
   useEffect(() => {
-    Promise.all([api.get('/exams/'), api.get('/grades')]).then(([e, g]) => { setExams(e.data); setGrades(g.data); });
-    fetchData();
+    void Promise.all([api.get('/exams/'), api.get('/grades')])
+      .then(([e, g]) => { setExams(e.data); setGrades(g.data); })
+      .catch(() => toast.error('Failed to load exam filters'));
   }, []);
-  useEffect(() => { fetchData(); }, [examFilter, gradeFilter, resultFilter]);
 
-  const fetchData = async (isRefresh = false) => {
-    isRefresh ? setRefreshing(true) : setLoading(true);
+  const fetchData = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
     try {
       const params: Record<string, string> = {};
       if (examFilter !== 'all')   params.exam_id    = examFilter;
@@ -46,7 +46,9 @@ export default function ExamReport() {
       setRows(Array.isArray(res.data) ? res.data : res.data?.items ?? []);
     } catch { toast.error('Failed to load exam report'); }
     finally { setLoading(false); setRefreshing(false); }
-  };
+  }, [examFilter, gradeFilter, resultFilter]);
+
+  useEffect(() => { void fetchData(); }, [fetchData]);
 
   const passCount = rows.filter(r => r.obtained_marks >= r.pass_marks).length;
   const failCount = rows.length - passCount;
@@ -62,57 +64,50 @@ export default function ExamReport() {
   };
 
   return (
-    <>
-      <GlobalStyles />
-      <Box sx={{ p: { xs: 2, sm: 3 }, backgroundColor: C.bg, minHeight: '100%' }}>
-        <ReportHeader title="Exam Report" subtitle="Results breakdown · grades · GPA analysis" onRefresh={() => fetchData(true)} onExport={exportPDF} refreshing={refreshing} />
+    <ReportPage
+      title="Exam Report"
+      subtitle="Results breakdown · grades · GPA analysis"
+      onRefresh={() => fetchData(true)}
+      onExport={exportPDF}
+      refreshing={refreshing}
+      stats={[
+        { title: 'Total Records', value: rows.length, icon: ClipboardList, tone: 'purple' },
+        { title: 'Passed', value: passCount, icon: CircleCheck, tone: 'green' },
+        { title: 'Failed', value: failCount, icon: CircleX, tone: 'red' },
+        { title: 'Average Score', value: `${avgPct}%`, icon: TrendingUp, tone: 'blue' },
+        { title: 'Top Score', value: `${topScore}%`, icon: Trophy, tone: 'purple' },
+        { title: 'Pass Rate', value: rows.length ? `${Math.round((passCount / rows.length) * 100)}%` : '0%', icon: Target, tone: 'green' },
+      ]}
+    >
+      <ReportFilters count={rows.length}>
+        <ReportFilterSelect label="Exam" value={examFilter} onChange={setExamFilter} options={[{ value: 'all', label: 'All Exams' }, ...exams.map(e => ({ value: String(e.id), label: e.name }))]} />
+        <ReportFilterSelect label="Grade" value={gradeFilter} onChange={setGradeFilter} options={[{ value: 'all', label: 'All Grades' }, ...grades.map(g => ({ value: g.name, label: g.name }))]} />
+        <ReportFilterSelect label="Result" value={resultFilter} onChange={setResultFilter} options={[{ value: 'all', label: 'All Results' }, { value: 'pass', label: 'Pass' }, { value: 'fail', label: 'Fail' }]} />
+      </ReportFilters>
 
-        <Grid container spacing={2} sx={{ mb: 3 }}>
-          {[
-            { label: 'Total Records', value: rows.length,        color: C.accent,  dim: C.accentDim  },
-            { label: 'Passed',        value: passCount,          color: C.green,   dim: C.greenDim   },
-            { label: 'Failed',        value: failCount,          color: C.red,     dim: C.redDim     },
-            { label: 'Average Score', value: `${avgPct}%`,       color: C.blue,    dim: C.blueDim    },
-            { label: 'Top Score',     value: `${topScore}%`,     color: C.purple,  dim: C.purpleDim  },
-            { label: 'Pass Rate',     value: rows.length ? `${Math.round((passCount / rows.length) * 100)}%` : '0%', color: C.green, dim: C.greenDim },
-          ].map(s => <Grid item xs={6} md={2} key={s.label}><MiniStatCard {...s} /></Grid>)}
-        </Grid>
-
-        <ReportFiltersCard count={rows.length}>
-          <ReportFilterSelect label="Exam" value={examFilter} onChange={setExamFilter} options={[{ value: 'all', label: 'All Exams' }, ...exams.map(e => ({ value: String(e.id), label: e.name }))]} />
-          <ReportFilterSelect label="Grade" value={gradeFilter} onChange={setGradeFilter} options={[{ value: 'all', label: 'All Grades' }, ...grades.map(g => ({ value: g.name, label: g.name }))]} />
-          <ReportFilterSelect label="Result" value={resultFilter} onChange={setResultFilter} options={[{ value: 'all', label: 'All Results' }, { value: 'pass', label: 'Pass' }, { value: 'fail', label: 'Fail' }]} />
-        </ReportFiltersCard>
-
-        <DataTable>
-          {loading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}><CircularProgress size={32} thickness={3} sx={{ color: C.accent }} /></Box>
-          ) : (
-            <Table>
-              <TableHead><TableRow>{['#','Student','Grade','Exam','Subject','Marks','Grade','GPA','Result'].map(h => <TableCell key={h} sx={thSx}>{h}</TableCell>)}</TableRow></TableHead>
-              <TableBody>
-                {rows.map((r, i) => {
-                  const pass = r.obtained_marks >= r.pass_marks;
-                  return (
-                    <TableRow key={i} sx={{ '&:hover': { backgroundColor: 'rgba(255,255,255,0.02)' }, transition: `background ${EASE}` }}>
-                      <TableCell sx={{ ...tdSx, color: C.textSecondary }}>{i + 1}</TableCell>
-                      <TableCell sx={tdSx}><StudentCell name={r.student_name} admissionNo={r.admission_no} /></TableCell>
-                      <TableCell sx={tdSx}><ClassChip grade={r.grade_name} section={r.section} /></TableCell>
-                      <TableCell sx={{ ...tdSx, color: C.textSecondary, fontSize: '0.8rem' }}>{r.exam_name}</TableCell>
-                      <TableCell sx={tdSx}><Chip label={r.subject_name} size="small" sx={{ backgroundColor: C.blueDim, color: C.blue, fontFamily: FONT, fontWeight: 600, fontSize: '0.7rem', height: 22 }} /></TableCell>
-                      <TableCell sx={tdSx}><MarkBar obtained={r.obtained_marks} total={r.total_marks} pass={r.pass_marks} /></TableCell>
-                      <TableCell sx={tdSx}><GradeChip grade={r.grade} /></TableCell>
-                      <TableCell sx={{ ...tdSx, color: C.blue, fontWeight: 700 }}>{r.gpa?.toFixed(2) ?? '—'}</TableCell>
-                      <TableCell sx={tdSx}><Chip label={pass ? 'Pass' : 'Fail'} size="small" sx={{ backgroundColor: pass ? C.greenDim : C.redDim, color: pass ? C.green : C.red, fontFamily: FONT, fontWeight: 700, fontSize: '0.7rem', height: 22 }} /></TableCell>
-                    </TableRow>
-                  );
-                })}
-                {rows.length === 0 && <TableRow><TableCell colSpan={9} sx={{ ...tdSx, textAlign: 'center', color: C.textSecondary, py: 6 }}>No exam results found</TableCell></TableRow>}
-              </TableBody>
-            </Table>
-          )}
-        </DataTable>
-      </Box>
-    </>
+      <ReportTable label="Exam results" columns={['Class', 'Exam', 'Subject', 'Marks', 'Grade', 'GPA', 'Result']}
+        loading={loading} icon={ClipboardList} empty="No exam results found"
+        rows={rows.map((row, index) => {
+          const pass = row.obtained_marks >= row.pass_marks;
+          const percent = row.total_marks > 0 ? Math.round((row.obtained_marks / row.total_marks) * 100) : 0;
+          const grade = row.grade?.toUpperCase();
+          const gradeTone = !grade ? 'slate' : ['A+', 'A', 'A1'].includes(grade) ? 'green'
+            : ['B+', 'B', 'B1'].includes(grade) ? 'blue' : ['C+', 'C', 'C1', 'D', 'D1'].includes(grade) ? 'purple' : 'red';
+          return {
+            key: index,
+            person: <ReportPerson name={row.student_name} admissionNo={row.admission_no} />,
+            values: [
+              <ReportClass key="class" grade={row.grade_name} section={row.section} />,
+              row.exam_name,
+              <Badge key="subject" tone="blue">{row.subject_name}</Badge>,
+              <ReportProgress key="marks" value={`${row.obtained_marks}/${row.total_marks}`} percent={percent} tone={pass ? 'green' : 'red'} />,
+              row.grade ? <Badge key="grade" tone={gradeTone}>{row.grade}</Badge> : '—',
+              row.gpa?.toFixed(2) ?? '—',
+              <Badge key="result" tone={pass ? 'green' : 'red'}>{pass ? 'Pass' : 'Fail'}</Badge>,
+            ],
+          };
+        })}
+      />
+    </ReportPage>
   );
 }

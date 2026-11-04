@@ -1,4 +1,4 @@
-"""Voucher and ledger regression tests; all records are synthetic and in memory.
+"""Voucher and ledger regression tests using only synthetic local data.
 
 Run: python -B -m unittest discover -s tests -p test_fee_voucher.py -v
 """
@@ -30,6 +30,7 @@ from app.models.student_fee import StudentFee
 from app.models.students import Student
 from app.models.users import Organization
 from app.services.fee_voucher_generator import generate_fee_voucher
+from app.services.billing_periods import resolve_legacy_month
 from app.services.school_logo import MAX_LOGO_BYTES
 
 # The application normally configures a remote database at import time.
@@ -47,8 +48,12 @@ class FeeVoucherTests(unittest.TestCase):
         return output.getvalue()
 
     def setUp(self):
-        self.engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
-        event.listen(self.engine, "connect", lambda connection, _: connection.execute("PRAGMA foreign_keys=ON"))
+        if os.environ.get("TEST_POSTGRES_URL"):
+            from test_fee_postgres import isolated_postgres_engine
+            self.engine = isolated_postgres_engine(self)
+        else:
+            self.engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+            event.listen(self.engine, "connect", lambda connection, _: connection.execute("PRAGMA foreign_keys=ON"))
         Base.metadata.create_all(self.engine)
         self.db = Session(self.engine)
         self.db.add_all([Organization(id=1, name="Example School"), Organization(id=2, name="Other School")])
@@ -92,6 +97,8 @@ class FeeVoucherTests(unittest.TestCase):
         values = dict(student_id=1, class_id=1, organization_id=1, session_id=1, month="December", monthly_fee=1000,
                       admission_fee=0, exam_fee=0, total_amount=1000, discount_amount=0, final_amount=1000, paid_amount=0)
         values.update(changes)
+        session = self.db.get(AcademicSession, values["session_id"])
+        values["billing_period"] = resolve_legacy_month(values["month"], session.start_date, session.end_date)
         fee = StudentFee(**values)
         self.db.add(fee)
         self.db.flush()
@@ -100,6 +107,8 @@ class FeeVoucherTests(unittest.TestCase):
     @contextmanager
     def legacy_invalid_amounts(self):
         """Exercise voucher defenses against pre-migration corruption only."""
+        if self.engine.dialect.name == "postgresql":
+            self.skipTest("Legacy corruption fixture uses SQLite constraint bypass")
         self.db.execute(text("PRAGMA ignore_check_constraints=ON"))
         try:
             yield

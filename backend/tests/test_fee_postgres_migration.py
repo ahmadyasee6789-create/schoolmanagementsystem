@@ -113,10 +113,10 @@ class PostgreSQLFeeMigrationTests(unittest.TestCase):
             self.assertEqual(tuple(legacy), (None, None, None))
             discount_type = next(column["type"] for column in inspect(connection).get_columns("student_enrollments") if column["name"] == "discount_percent")
             self.assertEqual(str(discount_type), "NUMERIC(5, 2)")
-        from app.services.fee_collection import collect_fee_payment
-        with Session(self.engine) as db:
-            result = collect_fee_payment(db, SimpleNamespace(id=1, org_id=1, org_role="accountant"), 1, Decimal("0.25"), "migration-payment")
-        self.assertEqual(result["paid_amount"], 250.25)
+        # Test the frozen g31 schema, not the newer allocation-aware application.
+        with self.engine.begin() as connection:
+            connection.execute(text("UPDATE student_fees SET paid_amount=paid_amount+0.25 WHERE id=1"))
+            connection.execute(text("INSERT INTO fee_transactions (student_fee_id,organization_id,amount,payment_date,receipt_no,created_by,idempotency_key,paid_amount_after,fee_status_after) VALUES (1,1,0.25,'2026-04-06','MIGRATION-CENT-TEST',1,'migration-payment',250.25,'partial')"))
         with self.engine.connect() as connection:
             self.assertEqual(connection.scalar(text("SELECT paid_amount FROM student_fees WHERE id=1")), Decimal("250.25"))
             self.assertEqual(connection.scalar(text("SELECT count(*) FROM fee_transactions")), 2)

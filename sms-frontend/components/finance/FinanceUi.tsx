@@ -34,15 +34,19 @@ export function SectionLabel({
 export function Money({
   value,
   className = "",
+  fractionDigits = 0,
 }: {
   value: number;
   className?: string;
+  fractionDigits?: number;
 }) {
   return (
     <span
       className={`font-mono text-sm font-semibold text-slate-800 dark:text-slate-100 ${className}`}
     >
-      {money(value)}
+      {fractionDigits === 0 ? money(value) : `PKR ${new Intl.NumberFormat("en-PK", {
+        minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits,
+      }).format(value ?? 0)}`}
     </span>
   );
 }
@@ -88,9 +92,14 @@ export function InitialsAvatar({ name }: { name: string }) {
   );
 }
 
-export function DataTable({ children }: { children: React.ReactNode }) {
+export function DataTable({ children, label }: { children: React.ReactNode; label?: string }) {
   return (
-    <div className={`${panelClass} hidden overflow-x-auto sm:block`}>
+    <div
+      className={`${panelClass} hidden overflow-x-auto sm:block`}
+      role={label ? "region" : undefined}
+      aria-label={label}
+      tabIndex={label ? 0 : undefined}
+    >
       <table className="w-full min-w-max border-collapse">{children}</table>
     </div>
   );

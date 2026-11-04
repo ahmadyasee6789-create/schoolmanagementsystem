@@ -5,7 +5,7 @@ from sqlalchemy import func, Integer
 from app.db.session import get_db
 from app.routers.auth import get_current_user
 from app.dependencies import get_active_session
-
+from app.services.exam_evaluation import evaluate_result
 from app.models.student_enrollment import StudentEnrollment
 from app.models.exams import Exam, ExamPaper, ExamResult
 from app.models.classroom import Classroom, Grade
@@ -20,10 +20,74 @@ router = APIRouter(
 # -----------------------------------------------------------
 
 from app.models.students import Student  # add this import
+def validate_promotion_exam(
+    db: Session,
+    exam_id: int,
+    org_id: int,
+    session_id: int,
+):
+    exam = (
+        db.query(Exam)
+        .filter(
+            Exam.id == exam_id,
+            Exam.organization_id == org_id,
+            Exam.session_id == session_id,
+        )
+        .first()
+    )
 
+    if exam is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Exam not found in the active session",
+        )
+
+    return exam
+def get_student_evaluation(
+    db: Session,
+    enrollment: StudentEnrollment,
+    exam_id: int,
+):
+    papers = (
+        db.query(ExamPaper)
+        .filter(
+            ExamPaper.exam_id == exam_id,
+            ExamPaper.classroom_id == enrollment.classroom_id,
+        )
+        .all()
+    )
+
+    if not papers:
+        return None
+
+    subjects = []
+
+    for paper in papers:
+        result = (
+            db.query(ExamResult)
+            .filter(
+                ExamResult.exam_paper_id == paper.id,
+                ExamResult.student_enrollment_id == enrollment.id,
+            )
+            .first()
+        )
+
+        # Missing marks: not eligible for promotion
+        if result is None or result.obtained_marks is None:
+            return None
+
+        subjects.append({
+            "name": str(paper.id),
+            "total": paper.total_marks,
+            "obtained": result.obtained_marks,
+            "pass": paper.pass_marks,
+        })
+
+    return evaluate_result(subjects)
 @router.get("/preview/{classroom_id}")
 def preview_promotion(
     classroom_id: int,
+    exam_id:int,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
     active_session=Depends(get_active_session)
@@ -35,6 +99,12 @@ def preview_promotion(
 
     if not classroom:
         raise HTTPException(404, "Classroom not found")
+    validate_promotion_exam(
+    db=db,
+    exam_id=exam_id,
+    org_id=current_user.org_id,
+    session_id=active_session.id,
+)
 
     enrollments = db.query(StudentEnrollment).filter(
         StudentEnrollment.classroom_id == classroom_id,
@@ -58,32 +128,26 @@ def preview_promotion(
         }
 
         # Check if any results exist at all
-        has_results = db.query(ExamResult).join(
-            ExamPaper, ExamResult.exam_paper_id == ExamPaper.id
-        ).filter(
-            ExamResult.student_enrollment_id == enrollment.id,
-            ExamPaper.classroom_id == classroom_id
-        ).first()
+       
 
-        if not has_results:
+       
+
+        evaluation = get_student_evaluation(db, enrollment, exam_id)
+
+        if  evaluation is None:
             no_result_students.append(student_info)
             continue
 
-        passed = db.query(
-            func.min(
-                (ExamResult.obtained_marks >= ExamPaper.pass_marks).cast(Integer)
-            )
-        ).join(
-            ExamPaper, ExamResult.exam_paper_id == ExamPaper.id
-        ).filter(
-            ExamResult.student_enrollment_id == enrollment.id,
-            ExamPaper.classroom_id == classroom_id
-        ).scalar()
+        student_info["percentage"] = evaluation["percentage"]
+        student_info["failed_count"] = evaluation["failed_count"]
+        student_info["result"] = evaluation["result"]
 
-        if passed:
+        if evaluation["result"] == "PASSED":
             passed_students.append(student_info)
         else:
             failed_students.append(student_info)
+            
+       
 
     return {
         "classroom_id": classroom_id,
@@ -100,6 +164,7 @@ def preview_promotion(
 @router.post("/class/{classroom_id}")
 def promote_students(
     classroom_id: int,
+    exam_id: int,
     next_session_id: int,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
@@ -114,6 +179,12 @@ def promote_students(
 
     if not classroom:
         raise HTTPException(404, "Classroom not found")
+    validate_promotion_exam(
+    db=db,
+    exam_id=exam_id,
+    org_id=current_user.org_id,
+    session_id=active_session.id,
+)
 
     # 2️⃣ Get current grade
     current_grade = db.query(Grade).filter(
@@ -171,17 +242,11 @@ def promote_students(
     for enrollment in enrollments:
 
         # 6️⃣ Check pass / fail
-        passed = db.query(
-            func.min(
-                (ExamResult.obtained_marks >= ExamPaper.pass_marks).cast(Integer)
-            )
-        ).join(
-            ExamPaper,
-            ExamResult.exam_paper_id == ExamPaper.id
-        ).filter(
-            ExamResult.student_enrollment_id == enrollment.id,
-            ExamPaper.classroom_id == classroom_id
-        ).scalar()
+        evaluation = get_student_evaluation(db, enrollment, exam_id)
+        if evaluation is None:
+            failed += 1
+            continue
+        passed = evaluation["result"] == "PASSED"
 
         if passed:
 
@@ -198,7 +263,7 @@ def promote_students(
 
             # deactivate old enrollment
             enrollment.is_active = False
-
+            next_roll += 1
             promoted += 1
 
         else:

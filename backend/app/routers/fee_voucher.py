@@ -11,13 +11,14 @@ from app.db.session import get_db
 from app.dependencies import get_active_session
 from app.financial_permissions import require_financial_permission
 from app.models.student_fee import StudentFee
+from app.models.fee_yearly_discount import FeeYearlyDiscount
 from app.models.classroom import Classroom
 from app.models.students import Student
 from app.models.student_enrollment import StudentEnrollment
 from app.routers.auth import get_current_user
 from app.services.fee_voucher_generator import generate_fee_voucher, generate_fee_vouchers
 from app.services.school_logo import organization_logo
-from app.routers.student_fee import MONTH_TO_NUMBER
+from app.services.billing_periods import MONTH_TO_NUMBER, resolve_legacy_month, validate_period
 router = APIRouter(tags=["Fee Voucher"])
 
 
@@ -31,11 +32,10 @@ def _fee_decimal(value) -> Decimal:
         raise HTTPException(status_code=409, detail="Fee amounts need correction before issuing a voucher") from exc
 
 
-def _month_order(month: str, session_start_month: int) -> int:
-    number = MONTH_TO_NUMBER.get(month)
-    if number is None:
-        raise ValueError(f"Unsupported fee month: {month!r}")
-    return (number - session_start_month) % 12
+def _checked_period(fee, session):
+    if MONTH_TO_NUMBER.get(fee.month) != getattr(fee.billing_period, "month", None):
+        raise ValueError("Fee month label does not match its billing period")
+    return validate_period(fee.billing_period, session.start_date, session.end_date)
 
 
 def _voucher_classroom(db, class_id, org_id, session_id):
@@ -63,24 +63,19 @@ def _voucher_payload(fee, classroom, active_session, org_id, due_date, previous_
     if student is None or student.organization_id != org_id:
         raise HTTPException(status_code=404, detail="Student not found")
 
-    # Within one <=12-month academic session, chronological order begins
-    # at active_session.start_date.month (e.g., April -> March).
-    start_date = getattr(active_session, "start_date", None)
-    if not start_date:
-        raise HTTPException(status_code=409, detail="Set the academic session start date before issuing a voucher")
     try:
-        target_order = _month_order(fee.month, start_date.month)
+        target_period = _checked_period(fee, active_session)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-
     arrears = Decimal("0")
-    for old_fee in previous_fees:
+    for old_fee, yearly_discount in previous_fees:
         try:
-            is_earlier = _month_order(old_fee.month, start_date.month) < target_order
+            is_earlier = _checked_period(old_fee, active_session) < target_period
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         if is_earlier:
-            outstanding = _fee_decimal(old_fee.final_amount) - _fee_decimal(old_fee.paid_amount)
+            outstanding = (_fee_decimal(old_fee.final_amount) - _fee_decimal(old_fee.paid_amount)
+                           - _fee_decimal(yearly_discount or 0))
             arrears += max(Decimal("0"), outstanding)
 
     fee_items = [
@@ -145,6 +140,10 @@ def _bulk_voucher_pdf(class_id, month, due_date, db, current_user, active_sessio
     if month not in MONTH_TO_NUMBER:
         raise HTTPException(status_code=422, detail="Select a valid fee month")
     org_id = current_user.org_id
+    try:
+        period = resolve_legacy_month(month, active_session.start_date, active_session.end_date)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
     classroom = _voucher_classroom(db, class_id, org_id, active_session.id)
     enrolled = db.query(StudentEnrollment.id).filter(
         StudentEnrollment.student_id == StudentFee.student_id,
@@ -153,9 +152,10 @@ def _bulk_voucher_pdf(class_id, month, due_date, db, current_user, active_sessio
         StudentEnrollment.is_active.is_(True),
     ).exists()
     fees = (
-        db.query(StudentFee).join(Student, StudentFee.student_id == Student.id)
+        db.query(StudentFee, FeeYearlyDiscount.id).join(Student, StudentFee.student_id == Student.id)
+        .outerjoin(FeeYearlyDiscount, FeeYearlyDiscount.student_fee_id == StudentFee.id)
         .options(joinedload(StudentFee.student).joinedload(Student.organization))
-        .filter(StudentFee.class_id == class_id, StudentFee.month == month,
+        .filter(StudentFee.class_id == class_id, StudentFee.billing_period == period,
                 StudentFee.organization_id == org_id, StudentFee.session_id == active_session.id,
                 Student.organization_id == org_id, enrolled)
         .order_by(Student.first_name, Student.last_name, Student.admission_no, StudentFee.id)
@@ -163,19 +163,21 @@ def _bulk_voucher_pdf(class_id, month, due_date, db, current_user, active_sessio
     )
     if not fees:
         raise HTTPException(status_code=404, detail="No fees found for this class and month. Generate fees first.")
-    eligible = [fee for fee in fees if _fee_decimal(fee.paid_amount) == 0]
+    eligible = [fee for fee, discount_id in fees if _fee_decimal(fee.paid_amount) == 0 and discount_id is None]
     if not eligible:
         raise HTTPException(status_code=409, detail="No vouchers to generate: all matching fees already have recorded payments.")
     logo_image = organization_logo(eligible[0].student.organization)
 
     # Load balances once for the whole batch, including earlier classroom assignments.
     history = defaultdict(list)
-    previous_fees = db.query(StudentFee).filter(
+    previous_fees = db.query(StudentFee, FeeYearlyDiscount.amount).outerjoin(
+        FeeYearlyDiscount, FeeYearlyDiscount.student_fee_id == StudentFee.id,
+    ).filter(
         StudentFee.organization_id == org_id, StudentFee.session_id == active_session.id,
         StudentFee.student_id.in_({fee.student_id for fee in eligible}),
     ).all()
-    for previous_fee in previous_fees:
-        history[previous_fee.student_id].append(previous_fee)
+    for previous_fee, yearly_discount in previous_fees:
+        history[previous_fee.student_id].append((previous_fee, yearly_discount))
     vouchers = []
     for fee in eligible:
         try:
@@ -200,14 +202,21 @@ def _bulk_voucher_pdf(class_id, month, due_date, db, current_user, active_sessio
 def _single_voucher_pdf(fee_id, due_date, db, current_user, active_session):
     """Render an A4 landscape two-copy fee voucher before payment."""
     org_id = current_user.org_id
-    fee = db.query(StudentFee).filter(
+    row = db.query(StudentFee, FeeYearlyDiscount.id).outerjoin(
+        FeeYearlyDiscount, FeeYearlyDiscount.student_fee_id == StudentFee.id,
+    ).filter(
         StudentFee.id == fee_id, StudentFee.organization_id == org_id,
         StudentFee.session_id == active_session.id,
     ).first()
-    if fee is None:
+    if row is None:
         raise HTTPException(status_code=404, detail="Fee record not found")
+    fee, discount_id = row
+    if discount_id is not None:
+        raise HTTPException(status_code=409, detail="This fee has already been settled with a yearly discount.")
     classroom = _voucher_classroom(db, fee.class_id, org_id, active_session.id)
-    previous_fees = db.query(StudentFee).filter(
+    previous_fees = db.query(StudentFee, FeeYearlyDiscount.amount).outerjoin(
+        FeeYearlyDiscount, FeeYearlyDiscount.student_fee_id == StudentFee.id,
+    ).filter(
         StudentFee.organization_id == org_id, StudentFee.student_id == fee.student_id,
         StudentFee.session_id == active_session.id, StudentFee.id != fee.id,
     ).all()

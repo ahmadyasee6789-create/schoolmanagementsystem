@@ -9,6 +9,9 @@ from app.models.attendance import Attendance
 from app.models.student_fee import StudentFee
 from app.models.fee_structure import FeeStructure
 from app.models.fee_transection import FeeTransaction
+from app.models.fee_allocation import FeeAllocation
+from app.models.fee_collection_command import FeeCollectionCommand
+from app.models.fee_yearly_discount import FeeYearlyDiscount
 from app.models.academic_session import AcademicSession
 from app.models.expenses import Expense
 from app.models.expensecategory import ExpenseCategory

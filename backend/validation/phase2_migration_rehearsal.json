@@ -1,0 +1,952 @@
+{
+  "target": "disposable loopback PostgreSQL, synthetic data only",
+  "postgres_version": "18.1",
+  "revision_before": "h42a81f3b075",
+  "revision_after": "i53b92a4c186",
+  "all_original_fields_preserved": true,
+  "totals_before": {
+    "fee_count": 6,
+    "payment_count": 7,
+    "allocation_count": 7,
+    "billed": "5541.19",
+    "paid": "3546.27",
+    "outstanding": "1994.92",
+    "cash": "4046.27",
+    "allocated": "3546.27",
+    "credit": "500.00"
+  },
+  "totals_after": {
+    "fee_count": 6,
+    "payment_count": 7,
+    "allocation_count": 7,
+    "billed": "5541.19",
+    "paid": "3546.27",
+    "outstanding": "1994.92",
+    "cash": "4046.27",
+    "allocated": "3546.27",
+    "credit": "500.00"
+  },
+  "table_fingerprints": {
+    "organizations": {
+      "rows": 2,
+      "before_sha256": "00010cf747bc9f741037fedb2c4d19bf1352647936dbdf8aeb3d5b37efefedd1",
+      "after_sha256": "00010cf747bc9f741037fedb2c4d19bf1352647936dbdf8aeb3d5b37efefedd1"
+    },
+    "users": {
+      "rows": 1,
+      "before_sha256": "af9fe76c2e86933dccd45abc3f3b7d83d2486aa9bedf0182a1755fcca6b91913",
+      "after_sha256": "af9fe76c2e86933dccd45abc3f3b7d83d2486aa9bedf0182a1755fcca6b91913"
+    },
+    "students": {
+      "rows": 2,
+      "before_sha256": "88b32fde7c4307f2c19f2f4d2f44525b84798f435830643b3de706c3a4fa4076",
+      "after_sha256": "88b32fde7c4307f2c19f2f4d2f44525b84798f435830643b3de706c3a4fa4076"
+    },
+    "academic_sessions": {
+      "rows": 2,
+      "before_sha256": "e71c09b74dbb86c72ede8d5d75d6d8a5275b432eb8a13d2f0f2739beed2f856c",
+      "after_sha256": "e71c09b74dbb86c72ede8d5d75d6d8a5275b432eb8a13d2f0f2739beed2f856c"
+    },
+    "grades": {
+      "rows": 2,
+      "before_sha256": "a61554e267d33c94bd2ea5cfaea9ba7283e7f023d290defa8c340e821deacdf9",
+      "after_sha256": "a61554e267d33c94bd2ea5cfaea9ba7283e7f023d290defa8c340e821deacdf9"
+    },
+    "classrooms": {
+      "rows": 2,
+      "before_sha256": "062c5bca337494ae621a077c47bcfdd9c1c7dfc5497fec67fe8a6fb688746198",
+      "after_sha256": "062c5bca337494ae621a077c47bcfdd9c1c7dfc5497fec67fe8a6fb688746198"
+    },
+    "student_enrollments": {
+      "rows": 2,
+      "before_sha256": "0733f85201f41adc02aa36cd56690869aae8197a391b3960acc1f30981131744",
+      "after_sha256": "0733f85201f41adc02aa36cd56690869aae8197a391b3960acc1f30981131744"
+    },
+    "fee_structures": {
+      "rows": 2,
+      "before_sha256": "0ec5c52d113b3f2fd1f82960a05a199b4ed78aeebc8b55d5088f04f6b3845636",
+      "after_sha256": "0ec5c52d113b3f2fd1f82960a05a199b4ed78aeebc8b55d5088f04f6b3845636"
+    },
+    "student_fees": {
+      "rows": 6,
+      "before_sha256": "adaf36c239519cc118a9724b922d0eff7f957508aa450f3afff774c261b74b1c",
+      "after_sha256": "adaf36c239519cc118a9724b922d0eff7f957508aa450f3afff774c261b74b1c"
+    },
+    "fee_transactions": {
+      "rows": 7,
+      "before_sha256": "f590a29e4b0b25130fcd0b46eea42f9c6f791d2eb4f295c73bc9ca788bad7057",
+      "after_sha256": "f590a29e4b0b25130fcd0b46eea42f9c6f791d2eb4f295c73bc9ca788bad7057"
+    },
+    "fee_allocations": {
+      "rows": 7,
+      "before_sha256": "f88ae27dd347dbfaf4524088d241e6863b69a2307f716f1490d440bca35f90d3",
+      "after_sha256": "f88ae27dd347dbfaf4524088d241e6863b69a2307f716f1490d440bca35f90d3"
+    }
+  },
+  "financial_rows_before": {
+    "student_fees": [
+      {
+        "id": 1,
+        "class_id": 1,
+        "student_id": 1,
+        "organization_id": 1,
+        "session_id": 1,
+        "month": "April",
+        "admission_fee": "0.00",
+        "monthly_fee": "1000.00",
+        "exam_fee": "0.00",
+        "total_amount": "1000.00",
+        "discount_percent": "12.25",
+        "discount_amount": "122.50",
+        "final_amount": "877.50",
+        "paid_amount": "350.00",
+        "status": "partial",
+        "billing_period": "2026-04-01"
+      },
+      {
+        "id": 2,
+        "class_id": 1,
+        "student_id": 1,
+        "organization_id": 1,
+        "session_id": 1,
+        "month": "May",
+        "admission_fee": "50.00",
+        "monthly_fee": "1000.04",
+        "exam_fee": "20.00",
+        "total_amount": "1070.04",
+        "discount_percent": "12.50",
+        "discount_amount": "125.01",
+        "final_amount": "945.03",
+        "paid_amount": "945.03",
+        "status": "paid",
+        "billing_period": "2026-05-01"
+      },
+      {
+        "id": 3,
+        "class_id": 1,
+        "student_id": 1,
+        "organization_id": 1,
+        "session_id": 1,
+        "month": "January",
+        "admission_fee": "0.00",
+        "monthly_fee": "1001.00",
+        "exam_fee": "0.00",
+        "total_amount": "1001.00",
+        "discount_percent": "3.33",
+        "discount_amount": "33.33",
+        "final_amount": "967.67",
+        "paid_amount": "50.25",
+        "status": "partial",
+        "billing_period": "2027-01-01"
+      },
+      {
+        "id": 4,
+        "class_id": 1,
+        "student_id": 1,
+        "organization_id": 1,
+        "session_id": 1,
+        "month": "June",
+        "admission_fee": "0.00",
+        "monthly_fee": "750.00",
+        "exam_fee": "0.00",
+        "total_amount": "750.00",
+        "discount_percent": "0.00",
+        "discount_amount": "0.00",
+        "final_amount": "750.00",
+        "paid_amount": "200.00",
+        "status": "partial",
+        "billing_period": "2026-06-01"
+      },
+      {
+        "id": 5,
+        "class_id": 1,
+        "student_id": 1,
+        "organization_id": 1,
+        "session_id": 1,
+        "month": "July",
+        "admission_fee": "0.00",
+        "monthly_fee": "100.00",
+        "exam_fee": "0.00",
+        "total_amount": "100.00",
+        "discount_percent": "100.00",
+        "discount_amount": "100.00",
+        "final_amount": "0.00",
+        "paid_amount": "0.00",
+        "status": "paid",
+        "billing_period": "2026-07-01"
+      },
+      {
+        "id": 6,
+        "class_id": 2,
+        "student_id": 2,
+        "organization_id": 2,
+        "session_id": 2,
+        "month": "April",
+        "admission_fee": "0.00",
+        "monthly_fee": "2000.99",
+        "exam_fee": "0.00",
+        "total_amount": "2000.99",
+        "discount_percent": "0.00",
+        "discount_amount": "0.00",
+        "final_amount": "2000.99",
+        "paid_amount": "2000.99",
+        "status": "paid",
+        "billing_period": "2026-04-01"
+      }
+    ],
+    "fee_transactions": [
+      {
+        "id": 1,
+        "student_fee_id": 1,
+        "organization_id": 1,
+        "amount": "250.00",
+        "payment_date": "2026-04-05",
+        "receipt_no": "LEGACY-RECEIPT-001",
+        "created_by": 1,
+        "idempotency_key": null,
+        "paid_amount_after": null,
+        "fee_status_after": null,
+        "student_id": 1,
+        "session_id": 1,
+        "request_fingerprint": null,
+        "response_snapshot": null
+      },
+      {
+        "id": 2,
+        "student_fee_id": 2,
+        "organization_id": 1,
+        "amount": "500.01",
+        "payment_date": "2026-05-02",
+        "receipt_no": "MIGRATION-002",
+        "created_by": 1,
+        "idempotency_key": "MIGRATION-PAY-2",
+        "paid_amount_after": "500.01",
+        "fee_status_after": "partial",
+        "student_id": 1,
+        "session_id": 1,
+        "request_fingerprint": null,
+        "response_snapshot": null
+      },
+      {
+        "id": 3,
+        "student_fee_id": 2,
+        "organization_id": 1,
+        "amount": "445.02",
+        "payment_date": "2026-05-03",
+        "receipt_no": "MIGRATION-003",
+        "created_by": 1,
+        "idempotency_key": "MIGRATION-PAY-3",
+        "paid_amount_after": "945.03",
+        "fee_status_after": "paid",
+        "student_id": 1,
+        "session_id": 1,
+        "request_fingerprint": null,
+        "response_snapshot": null
+      },
+      {
+        "id": 4,
+        "student_fee_id": 3,
+        "organization_id": 1,
+        "amount": "50.25",
+        "payment_date": "2026-12-15",
+        "receipt_no": "MIGRATION-004",
+        "created_by": 1,
+        "idempotency_key": "MIGRATION-PAY-4",
+        "paid_amount_after": "50.25",
+        "fee_status_after": "partial",
+        "student_id": 1,
+        "session_id": 1,
+        "request_fingerprint": null,
+        "response_snapshot": null
+      },
+      {
+        "id": 5,
+        "student_fee_id": 6,
+        "organization_id": 2,
+        "amount": "2000.99",
+        "payment_date": "2026-04-10",
+        "receipt_no": "LEGACY-RECEIPT-001",
+        "created_by": 1,
+        "idempotency_key": "MIGRATION-PAY-2",
+        "paid_amount_after": "2000.99",
+        "fee_status_after": "paid",
+        "student_id": 2,
+        "session_id": 2,
+        "request_fingerprint": null,
+        "response_snapshot": null
+      },
+      {
+        "id": 6,
+        "student_fee_id": null,
+        "organization_id": 1,
+        "amount": "500.00",
+        "payment_date": "2026-06-01",
+        "receipt_no": "H42-SPLIT-CREDIT",
+        "created_by": 1,
+        "idempotency_key": null,
+        "paid_amount_after": null,
+        "fee_status_after": null,
+        "student_id": 1,
+        "session_id": 1,
+        "request_fingerprint": null,
+        "response_snapshot": null
+      },
+      {
+        "id": 7,
+        "student_fee_id": null,
+        "organization_id": 1,
+        "amount": "300.00",
+        "payment_date": "2026-06-02",
+        "receipt_no": "H42-UNALLOCATED-CREDIT",
+        "created_by": 1,
+        "idempotency_key": null,
+        "paid_amount_after": null,
+        "fee_status_after": null,
+        "student_id": 1,
+        "session_id": 1,
+        "request_fingerprint": null,
+        "response_snapshot": null
+      }
+    ],
+    "fee_allocations": [
+      {
+        "id": 1,
+        "organization_id": 1,
+        "student_id": 1,
+        "session_id": 1,
+        "transaction_id": 1,
+        "student_fee_id": 1,
+        "amount": "250.00",
+        "created_at": "2026-11-03 22:45:17.036484+05:00"
+      },
+      {
+        "id": 2,
+        "organization_id": 1,
+        "student_id": 1,
+        "session_id": 1,
+        "transaction_id": 2,
+        "student_fee_id": 2,
+        "amount": "500.01",
+        "created_at": "2026-11-03 22:45:17.036484+05:00"
+      },
+      {
+        "id": 3,
+        "organization_id": 1,
+        "student_id": 1,
+        "session_id": 1,
+        "transaction_id": 3,
+        "student_fee_id": 2,
+        "amount": "445.02",
+        "created_at": "2026-11-03 22:45:17.036484+05:00"
+      },
+      {
+        "id": 4,
+        "organization_id": 1,
+        "student_id": 1,
+        "session_id": 1,
+        "transaction_id": 4,
+        "student_fee_id": 3,
+        "amount": "50.25",
+        "created_at": "2026-11-03 22:45:17.036484+05:00"
+      },
+      {
+        "id": 5,
+        "organization_id": 2,
+        "student_id": 2,
+        "session_id": 2,
+        "transaction_id": 5,
+        "student_fee_id": 6,
+        "amount": "2000.99",
+        "created_at": "2026-11-03 22:45:17.036484+05:00"
+      },
+      {
+        "id": 6,
+        "organization_id": 1,
+        "student_id": 1,
+        "session_id": 1,
+        "transaction_id": 6,
+        "student_fee_id": 1,
+        "amount": "100.00",
+        "created_at": "2026-11-03 22:45:17.203128+05:00"
+      },
+      {
+        "id": 7,
+        "organization_id": 1,
+        "student_id": 1,
+        "session_id": 1,
+        "transaction_id": 6,
+        "student_fee_id": 4,
+        "amount": "200.00",
+        "created_at": "2026-11-03 22:45:17.203128+05:00"
+      }
+    ],
+    "fee_structures": [
+      {
+        "id": 1,
+        "class_id": 1,
+        "session_id": 1,
+        "organization_id": 1,
+        "admission_fee": "0.50",
+        "monthly_fee": "1000.25",
+        "exam_fee": "0.75"
+      },
+      {
+        "id": 2,
+        "class_id": 2,
+        "session_id": 2,
+        "organization_id": 2,
+        "admission_fee": "0.00",
+        "monthly_fee": "2000.99",
+        "exam_fee": "0.00"
+      }
+    ]
+  },
+  "financial_rows_after": {
+    "student_fees": [
+      {
+        "id": 1,
+        "class_id": 1,
+        "student_id": 1,
+        "organization_id": 1,
+        "session_id": 1,
+        "month": "April",
+        "admission_fee": "0.00",
+        "monthly_fee": "1000.00",
+        "exam_fee": "0.00",
+        "total_amount": "1000.00",
+        "discount_percent": "12.25",
+        "discount_amount": "122.50",
+        "final_amount": "877.50",
+        "paid_amount": "350.00",
+        "status": "partial",
+        "billing_period": "2026-04-01"
+      },
+      {
+        "id": 2,
+        "class_id": 1,
+        "student_id": 1,
+        "organization_id": 1,
+        "session_id": 1,
+        "month": "May",
+        "admission_fee": "50.00",
+        "monthly_fee": "1000.04",
+        "exam_fee": "20.00",
+        "total_amount": "1070.04",
+        "discount_percent": "12.50",
+        "discount_amount": "125.01",
+        "final_amount": "945.03",
+        "paid_amount": "945.03",
+        "status": "paid",
+        "billing_period": "2026-05-01"
+      },
+      {
+        "id": 3,
+        "class_id": 1,
+        "student_id": 1,
+        "organization_id": 1,
+        "session_id": 1,
+        "month": "January",
+        "admission_fee": "0.00",
+        "monthly_fee": "1001.00",
+        "exam_fee": "0.00",
+        "total_amount": "1001.00",
+        "discount_percent": "3.33",
+        "discount_amount": "33.33",
+        "final_amount": "967.67",
+        "paid_amount": "50.25",
+        "status": "partial",
+        "billing_period": "2027-01-01"
+      },
+      {
+        "id": 4,
+        "class_id": 1,
+        "student_id": 1,
+        "organization_id": 1,
+        "session_id": 1,
+        "month": "June",
+        "admission_fee": "0.00",
+        "monthly_fee": "750.00",
+        "exam_fee": "0.00",
+        "total_amount": "750.00",
+        "discount_percent": "0.00",
+        "discount_amount": "0.00",
+        "final_amount": "750.00",
+        "paid_amount": "200.00",
+        "status": "partial",
+        "billing_period": "2026-06-01"
+      },
+      {
+        "id": 5,
+        "class_id": 1,
+        "student_id": 1,
+        "organization_id": 1,
+        "session_id": 1,
+        "month": "July",
+        "admission_fee": "0.00",
+        "monthly_fee": "100.00",
+        "exam_fee": "0.00",
+        "total_amount": "100.00",
+        "discount_percent": "100.00",
+        "discount_amount": "100.00",
+        "final_amount": "0.00",
+        "paid_amount": "0.00",
+        "status": "paid",
+        "billing_period": "2026-07-01"
+      },
+      {
+        "id": 6,
+        "class_id": 2,
+        "student_id": 2,
+        "organization_id": 2,
+        "session_id": 2,
+        "month": "April",
+        "admission_fee": "0.00",
+        "monthly_fee": "2000.99",
+        "exam_fee": "0.00",
+        "total_amount": "2000.99",
+        "discount_percent": "0.00",
+        "discount_amount": "0.00",
+        "final_amount": "2000.99",
+        "paid_amount": "2000.99",
+        "status": "paid",
+        "billing_period": "2026-04-01"
+      }
+    ],
+    "fee_transactions": [
+      {
+        "id": 1,
+        "student_fee_id": 1,
+        "organization_id": 1,
+        "amount": "250.00",
+        "payment_date": "2026-04-05",
+        "receipt_no": "LEGACY-RECEIPT-001",
+        "created_by": 1,
+        "idempotency_key": null,
+        "paid_amount_after": null,
+        "fee_status_after": null,
+        "student_id": 1,
+        "session_id": 1,
+        "request_fingerprint": null,
+        "response_snapshot": null
+      },
+      {
+        "id": 2,
+        "student_fee_id": 2,
+        "organization_id": 1,
+        "amount": "500.01",
+        "payment_date": "2026-05-02",
+        "receipt_no": "MIGRATION-002",
+        "created_by": 1,
+        "idempotency_key": "MIGRATION-PAY-2",
+        "paid_amount_after": "500.01",
+        "fee_status_after": "partial",
+        "student_id": 1,
+        "session_id": 1,
+        "request_fingerprint": null,
+        "response_snapshot": null
+      },
+      {
+        "id": 3,
+        "student_fee_id": 2,
+        "organization_id": 1,
+        "amount": "445.02",
+        "payment_date": "2026-05-03",
+        "receipt_no": "MIGRATION-003",
+        "created_by": 1,
+        "idempotency_key": "MIGRATION-PAY-3",
+        "paid_amount_after": "945.03",
+        "fee_status_after": "paid",
+        "student_id": 1,
+        "session_id": 1,
+        "request_fingerprint": null,
+        "response_snapshot": null
+      },
+      {
+        "id": 4,
+        "student_fee_id": 3,
+        "organization_id": 1,
+        "amount": "50.25",
+        "payment_date": "2026-12-15",
+        "receipt_no": "MIGRATION-004",
+        "created_by": 1,
+        "idempotency_key": "MIGRATION-PAY-4",
+        "paid_amount_after": "50.25",
+        "fee_status_after": "partial",
+        "student_id": 1,
+        "session_id": 1,
+        "request_fingerprint": null,
+        "response_snapshot": null
+      },
+      {
+        "id": 5,
+        "student_fee_id": 6,
+        "organization_id": 2,
+        "amount": "2000.99",
+        "payment_date": "2026-04-10",
+        "receipt_no": "LEGACY-RECEIPT-001",
+        "created_by": 1,
+        "idempotency_key": "MIGRATION-PAY-2",
+        "paid_amount_after": "2000.99",
+        "fee_status_after": "paid",
+        "student_id": 2,
+        "session_id": 2,
+        "request_fingerprint": null,
+        "response_snapshot": null
+      },
+      {
+        "id": 6,
+        "student_fee_id": null,
+        "organization_id": 1,
+        "amount": "500.00",
+        "payment_date": "2026-06-01",
+        "receipt_no": "H42-SPLIT-CREDIT",
+        "created_by": 1,
+        "idempotency_key": null,
+        "paid_amount_after": null,
+        "fee_status_after": null,
+        "student_id": 1,
+        "session_id": 1,
+        "request_fingerprint": null,
+        "response_snapshot": null
+      },
+      {
+        "id": 7,
+        "student_fee_id": null,
+        "organization_id": 1,
+        "amount": "300.00",
+        "payment_date": "2026-06-02",
+        "receipt_no": "H42-UNALLOCATED-CREDIT",
+        "created_by": 1,
+        "idempotency_key": null,
+        "paid_amount_after": null,
+        "fee_status_after": null,
+        "student_id": 1,
+        "session_id": 1,
+        "request_fingerprint": null,
+        "response_snapshot": null
+      }
+    ],
+    "fee_allocations": [
+      {
+        "id": 1,
+        "organization_id": 1,
+        "student_id": 1,
+        "session_id": 1,
+        "transaction_id": 1,
+        "student_fee_id": 1,
+        "amount": "250.00",
+        "created_at": "2026-11-03 22:45:17.036484+05:00"
+      },
+      {
+        "id": 2,
+        "organization_id": 1,
+        "student_id": 1,
+        "session_id": 1,
+        "transaction_id": 2,
+        "student_fee_id": 2,
+        "amount": "500.01",
+        "created_at": "2026-11-03 22:45:17.036484+05:00"
+      },
+      {
+        "id": 3,
+        "organization_id": 1,
+        "student_id": 1,
+        "session_id": 1,
+        "transaction_id": 3,
+        "student_fee_id": 2,
+        "amount": "445.02",
+        "created_at": "2026-11-03 22:45:17.036484+05:00"
+      },
+      {
+        "id": 4,
+        "organization_id": 1,
+        "student_id": 1,
+        "session_id": 1,
+        "transaction_id": 4,
+        "student_fee_id": 3,
+        "amount": "50.25",
+        "created_at": "2026-11-03 22:45:17.036484+05:00"
+      },
+      {
+        "id": 5,
+        "organization_id": 2,
+        "student_id": 2,
+        "session_id": 2,
+        "transaction_id": 5,
+        "student_fee_id": 6,
+        "amount": "2000.99",
+        "created_at": "2026-11-03 22:45:17.036484+05:00"
+      },
+      {
+        "id": 6,
+        "organization_id": 1,
+        "student_id": 1,
+        "session_id": 1,
+        "transaction_id": 6,
+        "student_fee_id": 1,
+        "amount": "100.00",
+        "created_at": "2026-11-03 22:45:17.203128+05:00"
+      },
+      {
+        "id": 7,
+        "organization_id": 1,
+        "student_id": 1,
+        "session_id": 1,
+        "transaction_id": 6,
+        "student_fee_id": 4,
+        "amount": "200.00",
+        "created_at": "2026-11-03 22:45:17.203128+05:00"
+      }
+    ],
+    "fee_structures": [
+      {
+        "id": 1,
+        "class_id": 1,
+        "session_id": 1,
+        "organization_id": 1,
+        "admission_fee": "0.50",
+        "monthly_fee": "1000.25",
+        "exam_fee": "0.75"
+      },
+      {
+        "id": 2,
+        "class_id": 2,
+        "session_id": 2,
+        "organization_id": 2,
+        "admission_fee": "0.00",
+        "monthly_fee": "2000.99",
+        "exam_fee": "0.00"
+      }
+    ]
+  },
+  "rates_finalized": [
+    {
+      "id": 1,
+      "rates_finalized": false
+    },
+    {
+      "id": 2,
+      "rates_finalized": false
+    }
+  ],
+  "schema": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "nullable": false,
+        "default": "nextval('fee_collection_commands_id_seq'::regclass)",
+        "autoincrement": true,
+        "comment": null
+      },
+      {
+        "name": "organization_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "default": null,
+        "autoincrement": false,
+        "comment": null
+      },
+      {
+        "name": "student_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "default": null,
+        "autoincrement": false,
+        "comment": null
+      },
+      {
+        "name": "session_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "default": null,
+        "autoincrement": false,
+        "comment": null
+      },
+      {
+        "name": "transaction_id",
+        "type": "INTEGER",
+        "nullable": true,
+        "default": null,
+        "autoincrement": false,
+        "comment": null
+      },
+      {
+        "name": "created_by",
+        "type": "INTEGER",
+        "nullable": false,
+        "default": null,
+        "autoincrement": false,
+        "comment": null
+      },
+      {
+        "name": "idempotency_key",
+        "type": "VARCHAR(128)",
+        "nullable": false,
+        "default": null,
+        "autoincrement": false,
+        "comment": null
+      },
+      {
+        "name": "request_fingerprint",
+        "type": "VARCHAR(64)",
+        "nullable": false,
+        "default": null,
+        "autoincrement": false,
+        "comment": null
+      },
+      {
+        "name": "response_snapshot",
+        "type": "JSON",
+        "nullable": false,
+        "default": null,
+        "autoincrement": false,
+        "comment": null
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMP",
+        "nullable": false,
+        "default": "now()",
+        "autoincrement": false,
+        "comment": null
+      }
+    ],
+    "primary_key": {
+      "constrained_columns": [
+        "id"
+      ],
+      "name": "fee_collection_commands_pkey",
+      "comment": null,
+      "dialect_options": {
+        "postgresql_include": []
+      }
+    },
+    "unique_constraints": [
+      {
+        "column_names": [
+          "organization_id",
+          "idempotency_key"
+        ],
+        "name": "uq_fee_command_key",
+        "comment": null,
+        "dialect_options": {
+          "postgresql_include": [],
+          "postgresql_nulls_not_distinct": false
+        }
+      }
+    ],
+    "foreign_keys": [
+      {
+        "name": "fee_collection_commands_created_by_fkey",
+        "constrained_columns": [
+          "created_by"
+        ],
+        "referred_schema": null,
+        "referred_table": "users",
+        "referred_columns": [
+          "id"
+        ],
+        "options": {
+          "ondelete": "RESTRICT"
+        },
+        "comment": null
+      },
+      {
+        "name": "fk_fee_command_payment",
+        "constrained_columns": [
+          "transaction_id",
+          "organization_id",
+          "student_id",
+          "session_id"
+        ],
+        "referred_schema": null,
+        "referred_table": "fee_transactions",
+        "referred_columns": [
+          "id",
+          "organization_id",
+          "student_id",
+          "session_id"
+        ],
+        "options": {
+          "ondelete": "RESTRICT"
+        },
+        "comment": null
+      },
+      {
+        "name": "fk_fee_command_session",
+        "constrained_columns": [
+          "session_id",
+          "organization_id"
+        ],
+        "referred_schema": null,
+        "referred_table": "academic_sessions",
+        "referred_columns": [
+          "id",
+          "organization_id"
+        ],
+        "options": {
+          "ondelete": "RESTRICT"
+        },
+        "comment": null
+      },
+      {
+        "name": "fk_fee_command_student",
+        "constrained_columns": [
+          "student_id",
+          "organization_id"
+        ],
+        "referred_schema": null,
+        "referred_table": "students",
+        "referred_columns": [
+          "id",
+          "organization_id"
+        ],
+        "options": {
+          "ondelete": "RESTRICT"
+        },
+        "comment": null
+      }
+    ],
+    "check_constraints": [
+      {
+        "name": "ck_fee_command_fingerprint",
+        "sqltext": "length(request_fingerprint::text) = 64",
+        "comment": null
+      }
+    ],
+    "indexes": [
+      {
+        "name": "ix_fee_command_owner",
+        "unique": false,
+        "column_names": [
+          "organization_id",
+          "student_id",
+          "session_id"
+        ],
+        "include_columns": [],
+        "dialect_options": {
+          "postgresql_include": []
+        }
+      },
+      {
+        "name": "uq_fee_command_key",
+        "unique": true,
+        "column_names": [
+          "organization_id",
+          "idempotency_key"
+        ],
+        "duplicates_constraint": "uq_fee_command_key",
+        "include_columns": [],
+        "dialect_options": {
+          "postgresql_include": []
+        }
+      }
+    ],
+    "rls": {
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    "policies": []
+  }
+}

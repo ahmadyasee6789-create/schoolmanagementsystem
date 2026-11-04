@@ -9,6 +9,7 @@ from app.models import (
     Exam, ExamPaper, ExamResult, StudentEnrollment,
     Student, Classroom, OrganizationMember
 )
+from app.services.exam_evaluation import evaluate_result
 from app.models.exams import GradeScale
 from app.services.dmc_generator import generate_bulk_dmc  
 from app.dependencies import get_active_session 
@@ -117,9 +118,11 @@ def bulk_dmc(
                 grade = gs.grade
                 break
 
-        passed = all(
-            s["obtained"] >= s["pass"] for s in subjects if s["total"] > 0
-        )
+        evaluation = evaluate_result(subjects)
+
+        passed = evaluation["result"] == "PASSED"
+        percentage = evaluation["percentage"]
+        failed_count = evaluation["failed_count"]
 
         students_data.append({
             "roll_no":      str(enrollment.roll_number or "—"),
@@ -131,6 +134,7 @@ def bulk_dmc(
             "percentage":   f"{percentage:.2f}%",
             "grade":        grade,
             "result":       "PASSED" if passed else "FAILED",
+            "failed_count": evaluation["failed_count"],
         })
 
     if not students_data:

@@ -1,0 +1,58 @@
+{
+  "target": "disposable loopback PostgreSQL",
+  "revision_before": "g31f70e2a964",
+  "revision_after": "h42a81f3b075",
+  "fee_count": 6,
+  "payment_count": 5,
+  "allocation_count": 5,
+  "all_original_fields_preserved": true,
+  "totals": {
+    "billed": "5541.19",
+    "paid": "3246.27",
+    "cash": "3246.27",
+    "allocated": "3246.27"
+  },
+  "outstanding": "2294.92",
+  "payment_to_allocation_rows": [
+    {
+      "transaction_id": 1,
+      "student_fee_id": 1,
+      "organization_id": 1,
+      "student_id": 1,
+      "session_id": 1,
+      "amount": "250.00"
+    },
+    {
+      "transaction_id": 2,
+      "student_fee_id": 2,
+      "organization_id": 1,
+      "student_id": 1,
+      "session_id": 1,
+      "amount": "500.01"
+    },
+    {
+      "transaction_id": 3,
+      "student_fee_id": 2,
+      "organization_id": 1,
+      "student_id": 1,
+      "session_id": 1,
+      "amount": "445.02"
+    },
+    {
+      "transaction_id": 4,
+      "student_fee_id": 3,
+      "organization_id": 1,
+      "student_id": 1,
+      "session_id": 1,
+      "amount": "50.25"
+    },
+    {
+      "transaction_id": 5,
+      "student_fee_id": 6,
+      "organization_id": 2,
+      "student_id": 2,
+      "session_id": 2,
+      "amount": "2000.99"
+    }
+  ]
+}

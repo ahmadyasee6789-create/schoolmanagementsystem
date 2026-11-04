@@ -31,6 +31,7 @@ from app.models.expensecategory import ExpenseCategory
 from app.models.expenses import Expense
 from app.models.fee_structure import FeeStructure
 from app.models.fee_transection import FeeTransaction
+from app.models.fee_allocation import FeeAllocation
 from app.models.student_enrollment import StudentEnrollment
 from app.models.student_fee import StudentFee
 from app.models.students import Student
@@ -201,12 +202,15 @@ class FinancialRelationshipTests(unittest.TestCase):
                                                   db=self.db, current_user=actor())
 
     def add_fee_history(self):
-        fee = StudentFee(student_id=1, organization_id=1, class_id=1, session_id=1, month="January",
+        fee = StudentFee(student_id=1, organization_id=1, class_id=1, session_id=1, month="January", billing_period=date(2026, 1, 1),
                          monthly_fee=100, admission_fee=0, exam_fee=0, total_amount=100,
                          discount_percent=0, discount_amount=0, final_amount=100, paid_amount=10, status="partial")
         self.db.add(fee)
         self.db.flush()
-        self.db.add(FeeTransaction(student_fee_id=fee.id, organization_id=1, amount=10, receipt_no="REC-TEST", created_by=1))
+        payment = FeeTransaction(student_fee_id=fee.id, organization_id=1, student_id=1, session_id=1, amount=10, receipt_no="REC-TEST", created_by=1)
+        self.db.add(payment)
+        self.db.flush()
+        self.db.add(FeeAllocation(transaction_id=payment.id, student_fee_id=fee.id, organization_id=1, student_id=1, session_id=1, amount=10))
         self.db.commit()
         return fee
 

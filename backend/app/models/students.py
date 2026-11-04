@@ -16,6 +16,7 @@ class Student(Base):
     __tablename__ = "students"
 
     __table_args__ = (
+        UniqueConstraint("id", "organization_id", name="uq_student_financial_owner"),
         UniqueConstraint(
             "organization_id",
             "admission_no",

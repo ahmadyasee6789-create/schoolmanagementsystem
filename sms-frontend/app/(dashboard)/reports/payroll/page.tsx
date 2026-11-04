@@ -1,15 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Box, CircularProgress, Grid, Table, TableBody, TableCell, TableHead, TableRow } from '@mui/material';
-import { api } from '@/app/lib/api';
+import { useCallback, useEffect, useState } from 'react';
+import { Banknote, Clock, TrendingUp, Wallet } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { api } from '@/app/lib/api';
+import { Badge } from '@/components/finance/FinanceUi';
 import {
-  C, FONT, EASE, thSx, tdSx, GlobalStyles, MiniStatCard,
-  ReportHeader, ReportFiltersCard, ReportFilterSelect,
-  DataTable, PayBar, PayrollStatusChip, InitialsAvatar,
-} from '@/components/ui';
-import { Chip, Typography } from '@mui/material';
+  ReportFilterSelect, ReportFilters, ReportPage, ReportPayment, ReportPaymentStatus, ReportPerson, ReportTable,
+} from '@/components/reports/ReportUi';
 
 type PayrollRow = {
   id: number; member_name: string; role: string;
@@ -21,17 +19,17 @@ const MONTHS = ['January','February','March','April','May','June','July','August
 
 export default function PayrollReport() {
   const [rows, setRows]               = useState<PayrollRow[]>([]);
-  const [loading, setLoading]         = useState(false);
+  const [loading, setLoading]         = useState(true);
   const [refreshing, setRefreshing]   = useState(false);
   const [monthFilter, setMonthFilter]   = useState(MONTHS[new Date().getMonth()]);
   const [statusFilter, setStatusFilter] = useState('all');
   const [roleFilter, setRoleFilter]     = useState('all');
 
-  useEffect(() => { fetchData(); }, []);
-  useEffect(() => { fetchData(); }, [monthFilter, statusFilter, roleFilter]);
 
-  const fetchData = async (isRefresh = false) => {
-    isRefresh ? setRefreshing(true) : setLoading(true);
+
+  const fetchData = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
     try {
       const params: Record<string, string> = {};
       if (monthFilter)            params.month  = monthFilter;
@@ -41,7 +39,9 @@ export default function PayrollReport() {
       setRows(Array.isArray(res.data) ? res.data : res.data?.items ?? []);
     } catch { toast.error('Failed to load payroll report'); }
     finally { setLoading(false); setRefreshing(false); }
-  };
+  }, [monthFilter, statusFilter, roleFilter]);
+
+  useEffect(() => { void fetchData(); }, [fetchData]);
 
   const totalPayable = rows.reduce((s, r) => s + r.net_salary,   0);
   const totalPaid    = rows.reduce((s, r) => s + r.paid_amount,  0);
@@ -59,61 +59,44 @@ export default function PayrollReport() {
   };
 
   return (
-    <>
-      <GlobalStyles />
-      <Box sx={{ p: { xs: 2, sm: 3 }, backgroundColor: C.bg, minHeight: '100%' }}>
-        <ReportHeader title="Payroll Report" subtitle="Staff salary breakdown · payment status · monthly disbursement" onRefresh={() => fetchData(true)} onExport={exportPDF} refreshing={refreshing} />
+    <ReportPage
+      title="Payroll Report"
+      subtitle="Staff salary breakdown · payment status · monthly disbursement"
+      onRefresh={() => fetchData(true)}
+      onExport={exportPDF}
+      refreshing={refreshing}
+      stats={[
+        { title: 'Total Payable', value: `₨${totalPayable.toLocaleString()}`, icon: Wallet, tone: 'purple', sub: `${rows.length} staff` },
+        { title: 'Disbursed', value: `₨${totalPaid.toLocaleString()}`, icon: Banknote, tone: 'green', sub: `${paidCount} paid` },
+        { title: 'Outstanding', value: `₨${totalPending.toLocaleString()}`, icon: Clock, tone: 'red', sub: `${rows.length - paidCount} unpaid` },
+        { title: 'Disbursement %', value: `${disbursement}%`, icon: TrendingUp, tone: 'blue' },
+      ]}
+    >
+      <ReportFilters count={rows.length}>
+        <ReportFilterSelect label="Month" value={monthFilter} onChange={setMonthFilter} options={MONTHS.map(m => ({ value: m, label: m }))} />
+        <ReportFilterSelect label="Role" value={roleFilter} onChange={setRoleFilter}
+          options={[{ value: 'all', label: 'All Roles' }, ...roles.map(r => ({ value: r, label: r }))]} />
+        <ReportFilterSelect label="Status" value={statusFilter} onChange={setStatusFilter}
+          options={[{ value: 'all', label: 'All Statuses' }, { value: 'paid', label: 'Paid' }, { value: 'unpaid', label: 'Unpaid' }, { value: 'partial', label: 'Partial' }]} />
+      </ReportFilters>
 
-        <Grid container spacing={2} sx={{ mb: 3 }}>
-          {[
-            { label: 'Total Payable',  value: `₨${totalPayable.toLocaleString()}`, color: C.accent, dim: C.accentDim, sub: `${rows.length} staff` },
-            { label: 'Disbursed',      value: `₨${totalPaid.toLocaleString()}`,    color: C.green,  dim: C.greenDim,  sub: `${paidCount} paid` },
-            { label: 'Outstanding',    value: `₨${totalPending.toLocaleString()}`, color: C.red,    dim: C.redDim,    sub: `${rows.length - paidCount} unpaid` },
-            { label: 'Disbursement %', value: `${disbursement}%`,                  color: C.blue,   dim: C.blueDim   },
-          ].map(s => <Grid item xs={6} md={3} key={s.label}><MiniStatCard {...s} /></Grid>)}
-        </Grid>
-
-        <ReportFiltersCard count={rows.length}>
-          <ReportFilterSelect label="Month" value={monthFilter} onChange={setMonthFilter} options={MONTHS.map(m => ({ value: m, label: m }))} />
-          <ReportFilterSelect label="Role" value={roleFilter} onChange={setRoleFilter}
-            options={[{ value: 'all', label: 'All Roles' }, ...roles.map(r => ({ value: r, label: r }))]} />
-          <ReportFilterSelect label="Status" value={statusFilter} onChange={setStatusFilter}
-            options={[{ value: 'all', label: 'All Statuses' }, { value: 'paid', label: 'Paid' }, { value: 'unpaid', label: 'Unpaid' }, { value: 'partial', label: 'Partial' }]} />
-        </ReportFiltersCard>
-
-        <DataTable>
-          {loading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}><CircularProgress size={32} thickness={3} sx={{ color: C.accent }} /></Box>
-          ) : (
-            <Table>
-              <TableHead><TableRow>{['#','Staff Member','Role','Basic','Allowances','Deductions','Net Salary','Payment','Status'].map(h => <TableCell key={h} sx={thSx}>{h}</TableCell>)}</TableRow></TableHead>
-              <TableBody>
-                {rows.map((r, i) => (
-                  <TableRow key={r.id} sx={{ '&:hover': { backgroundColor: 'rgba(255,255,255,0.02)' }, transition: `background ${EASE}` }}>
-                    <TableCell sx={{ ...tdSx, color: C.textSecondary }}>{i + 1}</TableCell>
-                    <TableCell sx={tdSx}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                        <InitialsAvatar name={r.member_name} color={C.purple} dim={C.purpleDim} />
-                        <Typography sx={{ fontFamily: FONT, fontWeight: 600, fontSize: '0.855rem', color: C.textPrimary }}>{r.member_name}</Typography>
-                      </Box>
-                    </TableCell>
-                    <TableCell sx={tdSx}>
-                      <Chip label={r.role} size="small" sx={{ backgroundColor: C.purpleDim, color: C.purple, fontFamily: FONT, fontWeight: 600, fontSize: '0.7rem', height: 22 }} />
-                    </TableCell>
-                    <TableCell sx={{ ...tdSx, color: C.textSecondary }}>₨{r.basic_salary.toLocaleString()}</TableCell>
-                    <TableCell sx={{ ...tdSx, color: C.green }}>+₨{r.allowances.toLocaleString()}</TableCell>
-                    <TableCell sx={{ ...tdSx, color: C.red }}>−₨{r.deductions.toLocaleString()}</TableCell>
-                    <TableCell sx={{ ...tdSx, fontWeight: 700 }}>₨{r.net_salary.toLocaleString()}</TableCell>
-                    <TableCell sx={tdSx}><PayBar paid={r.paid_amount} total={r.net_salary} /></TableCell>
-                    <TableCell sx={tdSx}><PayrollStatusChip status={r.status} /></TableCell>
-                  </TableRow>
-                ))}
-                {rows.length === 0 && <TableRow><TableCell colSpan={9} sx={{ ...tdSx, textAlign: 'center', color: C.textSecondary, py: 6 }}>No payroll records found</TableCell></TableRow>}
-              </TableBody>
-            </Table>
-          )}
-        </DataTable>
-      </Box>
-    </>
+      <ReportTable label="Payroll records" personColumn="Staff Member"
+        columns={['Role', 'Basic', 'Allowances', 'Deductions', 'Net Salary', 'Payment', 'Status']}
+        loading={loading} icon={Wallet} empty="No payroll records found"
+        rows={rows.map((row) => ({
+          key: row.id,
+          person: <ReportPerson name={row.member_name} />,
+          values: [
+            <Badge key="role">{row.role}</Badge>,
+            `₨${row.basic_salary.toLocaleString()}`,
+            <span key="allowances" className="text-emerald-600 dark:text-emerald-400">+₨{row.allowances.toLocaleString()}</span>,
+            <span key="deductions" className="text-red-600 dark:text-red-400">−₨{row.deductions.toLocaleString()}</span>,
+            <strong key="net" className="font-semibold text-slate-900 dark:text-slate-100">₨{row.net_salary.toLocaleString()}</strong>,
+            <ReportPayment key="payment" paid={row.paid_amount} total={row.net_salary} />,
+            <ReportPaymentStatus key="status" status={row.status} />,
+          ],
+        }))}
+      />
+    </ReportPage>
   );
 }

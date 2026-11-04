@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, ForeignKey, Numeric, String, UniqueConstraint, CheckConstraint
+from sqlalchemy import Column, Integer, ForeignKey, Numeric, String, UniqueConstraint, CheckConstraint, Boolean, false
 from sqlalchemy.orm import relationship
 
 from app.db.base import Base
@@ -17,6 +17,9 @@ class FeeStructure(Base):
     admission_fee = Column(Numeric(10, 2), nullable=False)
     monthly_fee = Column(Numeric(10, 2), nullable=False)
     exam_fee = Column(Numeric(10, 2), nullable=False)
+    # Explicit admin confirmation of this session's future rates. Issued fees
+    # remain immutable snapshots even when this flag or the rates later change.
+    rates_finalized = Column(Boolean, nullable=False, default=False, server_default=false())
 
     # One fee structure per class per organization
     __table_args__ = (

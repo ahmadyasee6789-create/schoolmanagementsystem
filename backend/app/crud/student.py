@@ -11,6 +11,7 @@ from app.models.students import Student
 from app.models.student_enrollment import StudentEnrollment
 from app.models.classroom import Classroom, Grade
 from app.models.student_fee import StudentFee
+from app.models.fee_transection import FeeTransaction
 from app.schemas.student import DiscountPercent, StudentCreate, StudentUpdate
 from pydantic import TypeAdapter, ValidationError
 
@@ -323,7 +324,8 @@ def delete_student(db: Session, student_id: int, org_id: int) -> bool:
         return False
 
     try:
-        if db.query(StudentFee.id).filter(StudentFee.student_id == student_id).first() is not None:
+        if (db.query(StudentFee.id).filter(StudentFee.student_id == student_id).first() is not None
+                or db.query(FeeTransaction.id).filter(FeeTransaction.student_id == student_id).first() is not None):
             raise HTTPException(status_code=409, detail="Students with fee history cannot be deleted. Mark the student inactive instead.")
         db.query(StudentEnrollment).filter(
             StudentEnrollment.student_id == student_id

@@ -1,4 +1,4 @@
-"""Phase 1 application regression tests using only synthetic local data."""
+"""Phase 1 application regressions using only synthetic SQLite or loopback PostgreSQL data."""
 import os
 import unittest
 from datetime import date
@@ -51,8 +51,12 @@ class PaymentValidationTests(unittest.TestCase):
 
 class FeeIntegrityTests(unittest.TestCase):
     def setUp(self):
-        self.engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
-        event.listen(self.engine, "connect", lambda connection, _: connection.execute("PRAGMA foreign_keys=ON"))
+        if os.environ.get("TEST_POSTGRES_URL"):
+            from test_fee_postgres import isolated_postgres_engine
+            self.engine = isolated_postgres_engine(self)
+        else:
+            self.engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+            event.listen(self.engine, "connect", lambda connection, _: connection.execute("PRAGMA foreign_keys=ON"))
         Base.metadata.create_all(self.engine)
         self.db = Session(self.engine)
         self.addCleanup(self.engine.dispose)
@@ -71,12 +75,15 @@ class FeeIntegrityTests(unittest.TestCase):
         self.db.add(Classroom(id=1, organization_id=1, grade_id=1, section="A", academic_year_id=1))
         self.db.flush()
         self.db.add_all([
-            StudentEnrollment(student_id=1, classroom_id=1, session_id=1, is_active=True, discount_percent=Decimal("12.50")),
-            FeeStructure(organization_id=1, class_id=1, session_id=1, admission_fee=Decimal("0.00"), monthly_fee=Decimal("1000.04"), exam_fee=Decimal("0.00")),
-            StudentFee(id=1, organization_id=1, student_id=1, class_id=1, session_id=1, month="April",
+            StudentEnrollment(student_id=1, classroom_id=1, session_id=1, is_active=True, enrollment_date=date(2026, 4, 1), discount_percent=Decimal("12.50")),
+            FeeStructure(organization_id=1, class_id=1, session_id=1, admission_fee=Decimal("0.00"), monthly_fee=Decimal("1000.04"), exam_fee=Decimal("0.00"), rates_finalized=True),
+            StudentFee(id=1, organization_id=1, student_id=1, class_id=1, session_id=1, month="April", billing_period=date(2026, 4, 1),
                        monthly_fee=Decimal("1000.00"), total_amount=Decimal("1000.00"), final_amount=Decimal("1000.00")),
         ])
         self.db.commit()
+        if self.engine.dialect.name == "postgresql":
+            self.db.execute(text("SELECT setval(pg_get_serial_sequence('student_fees', 'id'), (SELECT max(id) FROM student_fees))"))
+            self.db.commit()
         self.session = self.db.get(AcademicSession, 1)
 
     def pay(self, amount="250.25", key="test-payment-key", fee_id=1):
@@ -140,6 +147,8 @@ class FeeIntegrityTests(unittest.TestCase):
         self.assertEqual(self.db.query(FeeTransaction).count(), 0)
 
     def test_legacy_bad_breakdown_rejected_even_before_database_migration(self):
+        if self.engine.dialect.name == "postgresql":
+            self.skipTest("Legacy corruption fixture uses SQLite constraint bypass")
         self.db.execute(text("PRAGMA ignore_check_constraints=ON"))
         self.db.get(StudentFee, 1).final_amount = Decimal("999.00")
         self.db.commit()
@@ -207,6 +216,8 @@ class FeeIntegrityTests(unittest.TestCase):
         self.assertEqual(ledger.exception.status_code, 403)
 
     def test_generation_rejects_legacy_invalid_discount_atomically(self):
+        if self.engine.dialect.name == "postgresql":
+            self.skipTest("Legacy corruption fixture uses SQLite constraint bypass")
         self.db.execute(text("PRAGMA ignore_check_constraints=ON"))
         self.db.query(StudentEnrollment).one().discount_percent = Decimal("101.00")
         self.db.commit()

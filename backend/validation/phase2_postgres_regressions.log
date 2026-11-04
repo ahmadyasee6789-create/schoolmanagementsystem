@@ -1,0 +1,24 @@
+test_allocation_foreign_keys_block_tenant_mismatch_and_history_deletion (test_fee_postgres.PostgreSQLFeeAllocationTests.test_allocation_foreign_keys_block_tenant_mismatch_and_history_deletion) ... D:\Projects\School Managment System\backend\venv\Lib\site-packages\sqlalchemy\sql\schema.py:3624: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  return util.wrap_callable(lambda ctx: fn(), fn)  # type: ignore
+ok
+test_competing_allocations_cannot_spend_the_same_credit_twice (test_fee_postgres.PostgreSQLFeeAllocationTests.test_competing_allocations_cannot_spend_the_same_credit_twice) ... ok
+test_concurrent_generation_reuses_one_obligation_and_one_admission_charge (test_fee_postgres.PostgreSQLFeeAllocationTests.test_concurrent_generation_reuses_one_obligation_and_one_admission_charge) ... ok
+test_postgres_amount_constraints_and_fractional_input_guard (test_fee_postgres.PostgreSQLFeeAllocationTests.test_postgres_amount_constraints_and_fractional_input_guard) ... ok
+test_rls_hides_allocations_and_rejects_public_role_writes_despite_table_grants (test_fee_postgres.PostgreSQLFeeAllocationTests.test_rls_hides_allocations_and_rejects_public_role_writes_despite_table_grants) ... ok
+test_concurrent_different_fees_get_unique_receipts (test_fee_postgres.PostgreSQLFeeCollectionTests.test_concurrent_different_fees_get_unique_receipts) ... ok
+test_concurrent_duplicate_period_inserts_only_one_charge (test_fee_postgres.PostgreSQLFeeCollectionTests.test_concurrent_duplicate_period_inserts_only_one_charge) ... ok
+test_database_insert_failure_rolls_back_balance_and_transaction (test_fee_postgres.PostgreSQLFeeCollectionTests.test_database_insert_failure_rolls_back_balance_and_transaction) ... ok
+test_database_unique_constraint_rejects_duplicate_period (test_fee_postgres.PostgreSQLFeeCollectionTests.test_database_unique_constraint_rejects_duplicate_period) ... ok
+test_distinct_concurrent_partial_payments_refresh_cached_balance (test_fee_postgres.PostgreSQLFeeCollectionTests.test_distinct_concurrent_partial_payments_refresh_cached_balance) ... ok
+test_overpayment_race_only_one_collection_commits (test_fee_postgres.PostgreSQLFeeCollectionTests.test_overpayment_race_only_one_collection_commits) ... ok
+test_replay_returns_original_balance_snapshot_after_later_payment (test_fee_postgres.PostgreSQLFeeCollectionTests.test_replay_returns_original_balance_snapshot_after_later_payment) ... ok
+test_same_key_cannot_move_to_a_different_fee (test_fee_postgres.PostgreSQLFeeCollectionTests.test_same_key_cannot_move_to_a_different_fee) ... ok
+test_simultaneous_same_key_different_amount_conflicts (test_fee_postgres.PostgreSQLFeeCollectionTests.test_simultaneous_same_key_different_amount_conflicts) ... ok
+test_simultaneous_same_key_records_one_collection (test_fee_postgres.PostgreSQLFeeCollectionTests.test_simultaneous_same_key_records_one_collection) ... ok
+test_accepts_explicit_disposable_loopback_database (test_fee_postgres.PostgreSQLTargetSafetyTests.test_accepts_explicit_disposable_loopback_database) ... ok
+test_refuses_remote_or_ambiguous_targets (test_fee_postgres.PostgreSQLTargetSafetyTests.test_refuses_remote_or_ambiguous_targets) ... ok
+
+----------------------------------------------------------------------
+Ran 17 tests in 9.410s
+
+OK

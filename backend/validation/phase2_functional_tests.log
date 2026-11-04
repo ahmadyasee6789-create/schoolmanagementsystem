@@ -1,0 +1,45 @@
+test_advance_credit_creation_and_credit_only_consumption (test_fee_multi.MultiFeeTests.test_advance_credit_creation_and_credit_only_consumption) ... D:\Projects\School Managment System\backend\venv\Lib\site-packages\sqlalchemy\sql\schema.py:3624: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  return util.wrap_callable(lambda ctx: fn(), fn)  # type: ignore
+ok
+test_advance_only_works_without_structure_and_creates_no_fees (test_fee_multi.MultiFeeTests.test_advance_only_works_without_structure_and_creates_no_fees) ... ok
+test_api_contract_and_pdf_paths (test_fee_multi.MultiFeeTests.test_api_contract_and_pdf_paths) ... ok
+test_cash_replay_and_conflict (test_fee_multi.MultiFeeTests.test_cash_replay_and_conflict) ... D:\Projects\School Managment System\backend\venv\Lib\site-packages\sqlalchemy\sql\schema.py:3624: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  return util.wrap_callable(lambda ctx: fn(), fn)  # type: ignore
+ok
+test_credit_is_used_oldest_first_and_cash_only_for_remaining (test_fee_multi.MultiFeeTests.test_credit_is_used_oldest_first_and_cash_only_for_remaining) ... ok
+test_cross_session_credit_is_never_consumed_and_previous_history_remains_available (test_fee_multi.MultiFeeTests.test_cross_session_credit_is_never_consumed_and_previous_history_remains_available) ... ok
+test_custom_nonconsecutive_does_not_generate_gaps (test_fee_multi.MultiFeeTests.test_custom_nonconsecutive_does_not_generate_gaps) ... ok
+test_dashboard_counts_new_cash_once_after_existing_credit_application (test_fee_multi.MultiFeeTests.test_dashboard_counts_new_cash_once_after_existing_credit_application) ... D:\Projects\School Managment System\backend\app\routers\dashboard.py:74: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  current_year = datetime.utcnow().year
+ok
+test_discount_rounding_and_optional_heads (test_fee_multi.MultiFeeTests.test_discount_rounding_and_optional_heads) ... D:\Projects\School Managment System\backend\venv\Lib\site-packages\sqlalchemy\sql\schema.py:3624: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  return util.wrap_callable(lambda ctx: fn(), fn)  # type: ignore
+ok
+test_excess_cash_credit_overuse_and_zero_collection_rejected (test_fee_multi.MultiFeeTests.test_excess_cash_credit_overuse_and_zero_collection_rejected) ... ok
+test_existing_partial_and_paid_fees_are_not_repriced_or_overpaid (test_fee_multi.MultiFeeTests.test_existing_partial_and_paid_fees_are_not_repriced_or_overpaid) ... ok
+test_future_provisional_rates_reject_generation_allow_advance (test_fee_multi.MultiFeeTests.test_future_provisional_rates_reject_generation_allow_advance) ... ok
+test_half_year_partial_spanning_december_january (test_fee_multi.MultiFeeTests.test_half_year_partial_spanning_december_january) ... ok
+test_history_future_prepaid_not_overdue_and_credit_not_revenue (test_fee_multi.MultiFeeTests.test_history_future_prepaid_not_overdue_and_credit_not_revenue) ... ok
+test_issued_fee_heads_cannot_be_silently_added (test_fee_multi.MultiFeeTests.test_issued_fee_heads_cannot_be_silently_added) ... ok
+test_keys_cannot_be_reused_across_single_multi_or_credit_commands (test_fee_multi.MultiFeeTests.test_keys_cannot_be_reused_across_single_multi_or_credit_commands) ... ok
+test_organization_and_role_isolation_on_preview_collection_and_reads (test_fee_multi.MultiFeeTests.test_organization_and_role_isolation_on_preview_collection_and_reads) ... ok
+test_preview_is_read_only_even_with_autoflush_enabled (test_fee_multi.MultiFeeTests.test_preview_is_read_only_even_with_autoflush_enabled) ... ok
+test_quarterly_creates_three_fees_one_payment (test_fee_multi.MultiFeeTests.test_quarterly_creates_three_fees_one_payment) ... ok
+test_receipt_is_frozen_after_later_credit_consumption (test_fee_multi.MultiFeeTests.test_receipt_is_frozen_after_later_credit_consumption) ... ok
+test_report_retains_withdrawn_students_and_marks_future_balances (test_fee_multi.MultiFeeTests.test_report_retains_withdrawn_students_and_marks_future_balances) ... D:\Projects\School Managment System\backend\app\schemas\reports.py:5: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+  class FeeReportItem(BaseModel):
+ok
+test_rollback_after_second_allocation_failure (test_fee_multi.MultiFeeTests.test_rollback_after_second_allocation_failure) ... D:\Projects\School Managment System\backend\venv\Lib\site-packages\sqlalchemy\sql\schema.py:3624: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  return util.wrap_callable(lambda ctx: fn(), fn)  # type: ignore
+ok
+test_session_and_enrollment_boundaries_are_not_truncated (test_fee_multi.MultiFeeTests.test_session_and_enrollment_boundaries_are_not_truncated) ... ok
+test_stale_balance_requires_fresh_preview_without_creating_fees (test_fee_multi.MultiFeeTests.test_stale_balance_requires_fresh_preview_without_creating_fees) ... ok
+test_stale_price_discount_or_enrollment_requires_fresh_preview (test_fee_multi.MultiFeeTests.test_stale_price_discount_or_enrollment_requires_fresh_preview) ... ok
+test_yearly_uses_existing_snapshot_and_only_missing_months (test_fee_multi.MultiFeeTests.test_yearly_uses_existing_snapshot_and_only_missing_months) ... ok
+test_zero_discount_free_month_and_paid_month_need_no_allocation (test_fee_multi.MultiFeeTests.test_zero_discount_free_month_and_paid_month_need_no_allocation) ... ok
+test_bad_selections_and_money_fail_before_any_database_access (test_fee_multi.SelectionValidationTests.test_bad_selections_and_money_fail_before_any_database_access) ... ok
+
+----------------------------------------------------------------------
+Ran 28 tests in 1.971s
+
+OK

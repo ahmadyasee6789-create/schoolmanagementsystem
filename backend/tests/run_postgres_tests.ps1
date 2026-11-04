@@ -1,7 +1,8 @@
 param(
     [string]$PostgresBin = 'C:\Program Files\PostgreSQL\18\bin',
     [int]$Port = 55439,
-    [string]$TestPattern = 'test_fee_postgres*.py'
+    [string]$TestPattern = 'test_fee_postgres*.py',
+    [string[]]$TestName = @()
 )
 
 # This helper deliberately creates its own cluster. It never reads the app .env
@@ -55,7 +56,9 @@ try {
     $env:TEST_POSTGRES_URL = 'postgresql+psycopg2://sms_fee_test@127.0.0.1:' + $Port + '/' + $databaseName
     Push-Location -LiteralPath $backendPath
     try {
-        & $pythonPath -B -m unittest discover -s tests -p $TestPattern -v
+        $nameArgs = @()
+        foreach ($name in $TestName) { $nameArgs += @('-k', $name) }
+        & $pythonPath -B -m unittest discover -s tests -p $TestPattern -v @nameArgs
         $testExitCode = $LASTEXITCODE
     }
     finally { Pop-Location }

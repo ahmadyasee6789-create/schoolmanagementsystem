@@ -158,10 +158,9 @@ def get_dashboard_stats(
         extract("month", FeeTransaction.payment_date).label("month"),
         func.coalesce(func.sum(FeeTransaction.amount), 0).label("revenue")
     )
-    .join(StudentFee, FeeTransaction.student_fee_id == StudentFee.id)
     .filter(
         FeeTransaction.organization_id == org_id,
-        StudentFee.session_id == active_session.id,
+        FeeTransaction.session_id == active_session.id,
         extract("year", FeeTransaction.payment_date) == current_year
     )
     .group_by(extract("month", FeeTransaction.payment_date))

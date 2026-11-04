@@ -1,0 +1,301 @@
+{
+  "transaction_read_only": "on",
+  "revisions": [
+    {
+      "version_num": "g31f70e2a964"
+    }
+  ],
+  "fees": [
+    {
+      "id": 1,
+      "class_id": 1,
+      "student_id": 1,
+      "organization_id": 1,
+      "session_id": 1,
+      "month": "April",
+      "admission_fee": "0.00",
+      "monthly_fee": "600.00",
+      "exam_fee": "0.00",
+      "total_amount": "600.00",
+      "discount_percent": "0.00",
+      "discount_amount": "0.00",
+      "final_amount": "600.00",
+      "paid_amount": "600.00",
+      "status": "paid"
+    },
+    {
+      "id": 2,
+      "class_id": 3,
+      "student_id": 2,
+      "organization_id": 3,
+      "session_id": 4,
+      "month": "April",
+      "admission_fee": "0.00",
+      "monthly_fee": "700.00",
+      "exam_fee": "0.00",
+      "total_amount": "700.00",
+      "discount_percent": "0.00",
+      "discount_amount": "0.00",
+      "final_amount": "700.00",
+      "paid_amount": "0.01",
+      "status": "partial"
+    }
+  ],
+  "related_fees": [
+    {
+      "id": 1,
+      "class_id": 1,
+      "student_id": 1,
+      "organization_id": 1,
+      "session_id": 1,
+      "month": "April",
+      "admission_fee": "0.00",
+      "monthly_fee": "600.00",
+      "exam_fee": "0.00",
+      "total_amount": "600.00",
+      "discount_percent": "0.00",
+      "discount_amount": "0.00",
+      "final_amount": "600.00",
+      "paid_amount": "600.00",
+      "status": "paid"
+    },
+    {
+      "id": 2,
+      "class_id": 3,
+      "student_id": 2,
+      "organization_id": 3,
+      "session_id": 4,
+      "month": "April",
+      "admission_fee": "0.00",
+      "monthly_fee": "700.00",
+      "exam_fee": "0.00",
+      "total_amount": "700.00",
+      "discount_percent": "0.00",
+      "discount_amount": "0.00",
+      "final_amount": "700.00",
+      "paid_amount": "0.01",
+      "status": "partial"
+    }
+  ],
+  "payments": [
+    {
+      "id": 1,
+      "student_fee_id": 1,
+      "organization_id": 1,
+      "amount": "600.00",
+      "payment_date": "2026-04-14",
+      "receipt_no": "REC-2026-0001",
+      "created_by": 1,
+      "idempotency_key": null,
+      "paid_amount_after": null,
+      "fee_status_after": null
+    },
+    {
+      "id": 42,
+      "student_fee_id": 2,
+      "organization_id": 3,
+      "amount": "0.01",
+      "payment_date": "2026-10-30",
+      "receipt_no": "REC-2026-0001",
+      "created_by": 5,
+      "idempotency_key": "migration-g31f70e2a964-20261030-test-01",
+      "paid_amount_after": "0.01",
+      "fee_status_after": "partial"
+    }
+  ],
+  "enrollments": [
+    {
+      "id": 1,
+      "student_id": 1,
+      "session_id": 1,
+      "classroom_id": 1,
+      "discount_percent": "0.00",
+      "enrollment_date": "2026-04-14",
+      "withdrawal_date": null,
+      "is_active": true
+    },
+    {
+      "id": 2,
+      "student_id": 2,
+      "session_id": 4,
+      "classroom_id": 3,
+      "discount_percent": "0.00",
+      "enrollment_date": "2026-05-19",
+      "withdrawal_date": null,
+      "is_active": true
+    }
+  ],
+  "sessions": [
+    {
+      "id": 1,
+      "organization_id": 1,
+      "name": "2026-2027",
+      "start_date": "2026-04-14",
+      "end_date": "2027-04-14",
+      "is_active": true
+    },
+    {
+      "id": 4,
+      "organization_id": 3,
+      "name": "2026-2027",
+      "start_date": "2026-04-19",
+      "end_date": "2027-04-19",
+      "is_active": true
+    }
+  ],
+  "session_usage": [
+    {
+      "session_id": 1,
+      "enrollments": 1,
+      "fees": 1,
+      "classrooms": 1
+    },
+    {
+      "session_id": 4,
+      "enrollments": 1,
+      "fees": 1,
+      "classrooms": 4
+    }
+  ],
+  "has_allocation_table": false,
+  "allocations": [],
+  "source_fingerprints": {
+    "student_fees": {
+      "rows": 56,
+      "sha256": "413c9c00f7bf8f106a520719dad8af7307c3d4a5ae645a356a3699bb56055778"
+    },
+    "fee_transactions": {
+      "rows": 4,
+      "sha256": "53fa72e26ab96245585a3d6e2b2a706e34c5a76394feece20f34b7c819677b69"
+    },
+    "student_enrollments": {
+      "rows": 392,
+      "sha256": "c22dff020892985826dceda34ac9c368a679c489b01bb12df76e42e0151a860c"
+    },
+    "academic_sessions": {
+      "rows": 6,
+      "sha256": "561fee7970ed0c5f7c8707bf443b94e411b5ee6261c0afa8f060784df66942a8"
+    }
+  },
+  "shared_session_reference_counts": [
+    {
+      "table": "classrooms",
+      "column": "academic_year_id",
+      "counts": [
+        {
+          "session_id": 1,
+          "rows": 1
+        },
+        {
+          "session_id": 4,
+          "rows": 4
+        }
+      ]
+    },
+    {
+      "table": "expenses",
+      "column": "academic_year_id",
+      "counts": [
+        {
+          "session_id": 1,
+          "rows": 1
+        }
+      ]
+    },
+    {
+      "table": "subjects",
+      "column": "session_id",
+      "counts": [
+        {
+          "session_id": 1,
+          "rows": 2
+        },
+        {
+          "session_id": 4,
+          "rows": 8
+        }
+      ]
+    },
+    {
+      "table": "terms",
+      "column": "academic_year_id",
+      "counts": [
+        {
+          "session_id": 1,
+          "rows": 1
+        },
+        {
+          "session_id": 4,
+          "rows": 1
+        }
+      ]
+    },
+    {
+      "table": "attendances",
+      "column": "session_id",
+      "counts": [
+        {
+          "session_id": 1,
+          "rows": 2
+        }
+      ]
+    },
+    {
+      "table": "fee_structures",
+      "column": "session_id",
+      "counts": [
+        {
+          "session_id": 1,
+          "rows": 1
+        },
+        {
+          "session_id": 4,
+          "rows": 1
+        }
+      ]
+    },
+    {
+      "table": "salary_payments",
+      "column": "session_id",
+      "counts": [
+        {
+          "session_id": 1,
+          "rows": 2
+        }
+      ]
+    },
+    {
+      "table": "student_enrollments",
+      "column": "session_id",
+      "counts": [
+        {
+          "session_id": 1,
+          "rows": 1
+        },
+        {
+          "session_id": 4,
+          "rows": 1
+        }
+      ]
+    },
+    {
+      "table": "student_fees",
+      "column": "session_id",
+      "counts": [
+        {
+          "session_id": 1,
+          "rows": 1
+        },
+        {
+          "session_id": 4,
+          "rows": 1
+        }
+      ]
+    },
+    {
+      "table": "student_import_batches",
+      "column": "session_id",
+      "counts": []
+    }
+  ]
+}

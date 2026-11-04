@@ -5,6 +5,7 @@ from typing import Optional
 class FeeStructureBase(BaseModel):
     class_id: int = Field(gt=0)
     session_id: int = Field(gt=0)
+    rates_finalized: bool = False
     monthly_fee: Decimal = Field(ge=0, max_digits=10, decimal_places=2, allow_inf_nan=False)
     admission_fee: Decimal = Field(default=Decimal("0"), ge=0, max_digits=10, decimal_places=2, allow_inf_nan=False)
     exam_fee: Decimal = Field(default=Decimal("0"), ge=0, max_digits=10, decimal_places=2, allow_inf_nan=False)

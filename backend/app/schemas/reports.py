@@ -9,6 +9,9 @@ class FeeReportItem(BaseModel):
     grade_name: str
     section: str
     month: str
+    billing_period: Optional[str] = None
+    future: bool = False
+    overdue: bool = False
     admission_fee: float
     monthly_fee: float
     exam_fee: float
@@ -30,6 +33,7 @@ class FeeReportResponse(BaseModel):
     total_billed: float
     total_paid: float
     total_pending: float
+    total_overdue: float = 0
 
   #for exam_reports
 class ExamReport(BaseModel):

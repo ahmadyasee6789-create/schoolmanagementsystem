@@ -15,6 +15,7 @@ import toast from "react-hot-toast";
 import { api } from "@/app/lib/api";
 import { useAuthStore } from "@/app/store/authStore";
 import FeeVoucherDialog from "@/components/finance/FeeVoucherDialog";
+import MultiFeeCollectionDialog from "@/components/finance/MultiFeeCollectionDialog";
 import {
   EmptyState,
   LoadingState,
@@ -38,6 +39,11 @@ import {
 
 type Fee = {
   id: number;
+  // Phase 2 collection needs tenant-scoped student/session identity. Older ledger
+  // responses do not yet expose these fields, so their established collection
+  // flow remains available until the API adds them.
+  student_id?: number;
+  session_id?: number;
   student_name: string;
   month: string;
   admission_fee: number;
@@ -46,6 +52,7 @@ type Fee = {
   total_amount: number;
   discount_percent: number;
   discount_amount: number;
+  yearly_discount_amount?: number;
   final_amount: number;
   paid_amount: number;
   due_amount: number;
@@ -90,6 +97,7 @@ const months = [
   "December",
 ];
 const limit = 10;
+const feeAmountFormat = new Intl.NumberFormat("en-PK", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const classLabel = (classroom: Classroom) => {
   const grade = classroom.grade?.name ?? classroom.grade_name ?? "";
   return grade ? `${grade} – ${classroom.section}` : classroom.section;
@@ -106,12 +114,12 @@ function FeeStatus({ status }: { status: Fee["status"] }) {
 }
 
 function PaymentProgress({ paid, total }: { paid: number; total: number }) {
-  const percentage = total ? Math.min((paid / total) * 100, 100) : 0;
+  const percentage = total > 0 ? Math.min((paid / total) * 100, 100) : 100;
   return (
     <div className="min-w-28">
       <div className="flex justify-between gap-2 text-[11px] text-slate-500 dark:text-slate-400">
         <span>{Math.round(percentage)}%</span>
-        <span>{new Intl.NumberFormat("en-PK").format(paid)} paid</span>
+        <span>{feeAmountFormat.format(paid)} paid</span>
       </div>
       <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-white/10">
         <div
@@ -123,11 +131,25 @@ function PaymentProgress({ paid, total }: { paid: number; total: number }) {
   );
 }
 
+function FeeDiscounts({ fee }: { fee: Fee }) {
+  const yearly = fee.yearly_discount_amount ?? 0;
+  if (fee.discount_amount <= 0 && yearly <= 0) return <>—</>;
+
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {fee.discount_amount > 0 && (
+        <Badge tone="purple">Enrollment {fee.discount_percent}% · PKR {feeAmountFormat.format(fee.discount_amount)}</Badge>
+      )}
+      {yearly > 0 && <Badge tone="purple">Yearly · PKR {feeAmountFormat.format(yearly)}</Badge>}
+    </div>
+  );
+}
+
 function VoucherButton({ fee, onClick }: { fee: Fee; onClick: () => void }) {
-  const unavailable = fee.paid_amount > 0;
+  const unavailable = fee.paid_amount > 0 || (fee.yearly_discount_amount ?? 0) > 0;
   return (
     <button type="button" onClick={onClick} disabled={unavailable}
-      title={unavailable ? "Vouchers can only be issued before payment" : "Preview and print fee voucher"}
+      title={unavailable ? "Vouchers can only be issued before payment or yearly settlement" : "Preview and print fee voucher"}
       aria-label={`Voucher for ${fee.student_name}`}
       className={`${secondaryButtonClass} inline-flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-40`}>
       <FileText size={14} />Voucher
@@ -155,16 +177,20 @@ function FeeCard({ fee, onCollect, onVoucher }: { fee: Fee; onCollect: () => voi
       <div className="mt-4 grid grid-cols-2 gap-3 border-t border-slate-100 pt-3 text-xs dark:border-white/5">
         <div>
           <p className="text-slate-400 dark:text-slate-500">Final amount</p>
-          <Money value={fee.final_amount} className="mt-1 block" />
+          <Money value={fee.final_amount} fractionDigits={2} className="mt-1 block" />
         </div>
         <div>
           <p className="text-slate-400 dark:text-slate-500">Due</p>
           <Money
             value={fee.due_amount}
+            fractionDigits={2}
             className="mt-1 block text-red-600 dark:text-red-400"
           />
         </div>
       </div>
+      {(fee.discount_amount > 0 || (fee.yearly_discount_amount ?? 0) > 0) && (
+        <div className="mt-3"><FeeDiscounts fee={fee} /></div>
+      )}
       <div className="mt-3">
         <PaymentProgress paid={fee.paid_amount} total={fee.final_amount} />
       </div>
@@ -198,6 +224,7 @@ export default function FeeManagementPage() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [selectedFee, setSelectedFee] = useState<Fee | null>(null);
+  const [multiFee, setMultiFee] = useState<Fee | null>(null);
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paying, setPaying] = useState(false);
   const [voucherFee, setVoucherFee] = useState<Fee | null>(null);
@@ -267,6 +294,10 @@ export default function FeeManagementPage() {
   };
 
   const openPayment = (fee: Fee) => {
+    if (fee.student_id && fee.session_id) {
+      setMultiFee(fee);
+      return;
+    }
     if (pendingPayment && pendingPayment.feeId !== fee.id) {
       toast.error("Retry the pending payment before starting another payment in this tab.");
       return;
@@ -298,7 +329,7 @@ export default function FeeManagementPage() {
           return;
         }
         if (amount > selectedFee.due_amount) {
-          toast.error(`Amount exceeds due of PKR ${new Intl.NumberFormat("en-PK").format(selectedFee.due_amount)}`);
+          toast.error(`Amount exceeds due of PKR ${feeAmountFormat.format(selectedFee.due_amount)}`);
           return;
         }
         attempt = { key: crypto.randomUUID(), feeId: selectedFee.id, amount: amount.toFixed(2) };
@@ -420,13 +451,13 @@ export default function FeeManagementPage() {
           stats={[
             {
               label: "Collected",
-              value: `PKR ${new Intl.NumberFormat("en-PK").format(totalCollected)}`,
+              value: `PKR ${feeAmountFormat.format(totalCollected)}`,
               Icon: CheckCircle2,
               tone: "border-emerald-400/20 bg-emerald-50 text-emerald-600 dark:border-emerald-400/20 dark:bg-emerald-500/10 dark:text-emerald-400",
             },
             {
               label: "Due",
-              value: `PKR ${new Intl.NumberFormat("en-PK").format(totalDue)}`,
+              value: `PKR ${feeAmountFormat.format(totalDue)}`,
               Icon: XCircle,
               tone: "border-red-400/20 bg-red-50 text-red-600 dark:border-red-400/20 dark:bg-red-500/10 dark:text-red-400",
             },
@@ -481,6 +512,7 @@ export default function FeeManagementPage() {
                   "Discount",
                   "Final",
                   "Payment",
+                  "Due",
                   "Status",
                   "",
                 ].map((heading) => (
@@ -505,37 +537,31 @@ export default function FeeManagementPage() {
                     </span>
                   </td>
                   <td className={tableCellClass}>
-                    <Money value={fee.admission_fee} />
+                    <Money value={fee.admission_fee} fractionDigits={2} />
                   </td>
                   <td className={tableCellClass}>
-                    <Money value={fee.monthly_fee} />
+                    <Money value={fee.monthly_fee} fractionDigits={2} />
                   </td>
                   <td className={tableCellClass}>
-                    <Money value={fee.exam_fee} />
+                    <Money value={fee.exam_fee} fractionDigits={2} />
                   </td>
                   <td className={tableCellClass}>
-                    <Money value={fee.total_amount} />
+                    <Money value={fee.total_amount} fractionDigits={2} />
                   </td>
                   <td className={tableCellClass}>
-                    {fee.discount_percent > 0 ? (
-                      <Badge tone="purple">
-                        {fee.discount_percent}% · PKR{" "}
-                        {new Intl.NumberFormat("en-PK").format(
-                          fee.discount_amount,
-                        )}
-                      </Badge>
-                    ) : (
-                      "—"
-                    )}
+                    <FeeDiscounts fee={fee} />
                   </td>
                   <td className={tableCellClass}>
-                    <Money value={fee.final_amount} />
+                    <Money value={fee.final_amount} fractionDigits={2} />
                   </td>
                   <td className={tableCellClass}>
                     <PaymentProgress
                       paid={fee.paid_amount}
                       total={fee.final_amount}
                     />
+                  </td>
+                  <td className={tableCellClass}>
+                    <Money value={fee.due_amount} fractionDigits={2} />
                   </td>
                   <td className={tableCellClass}>
                     <FeeStatus status={fee.status} />
@@ -604,6 +630,7 @@ export default function FeeManagementPage() {
               </span>
               <Money
                 value={selectedFee.due_amount}
+                fractionDigits={2}
                 className="text-red-600 dark:text-red-400"
               />
             </div>
@@ -643,6 +670,15 @@ export default function FeeManagementPage() {
             </div>
           </div>
         </Modal> 
+      )}
+      {multiFee?.student_id && (
+        <MultiFeeCollectionDialog
+          studentId={multiFee.student_id}
+          studentName={multiFee.student_name}
+          className={selectedClassroom ? classLabel(selectedClassroom) : undefined}
+          onClose={() => setMultiFee(null)}
+          onSuccess={async () => { await fetchLedger(page); }}
+        />
       )}
     </div>
   );

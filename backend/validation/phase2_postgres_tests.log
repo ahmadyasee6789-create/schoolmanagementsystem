@@ -1,0 +1,16 @@
+test_command_rls_blocks_untrusted_reads_and_writes (test_fee_postgres_phase2.PostgreSQLMultiFeeTests.test_command_rls_blocks_untrusted_reads_and_writes) ... D:\Projects\School Managment System\backend\venv\Lib\site-packages\sqlalchemy\sql\schema.py:3624: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  return util.wrap_callable(lambda ctx: fn(), fn)  # type: ignore
+ok
+test_command_uniqueness_and_restrictive_foreign_keys (test_fee_postgres_phase2.PostgreSQLMultiFeeTests.test_command_uniqueness_and_restrictive_foreign_keys) ... ok
+test_concurrent_credit_consumption_cannot_spend_same_credit_twice (test_fee_postgres_phase2.PostgreSQLMultiFeeTests.test_concurrent_credit_consumption_cannot_spend_same_credit_twice) ... ok
+test_concurrent_generate_and_collect_preserve_one_month_and_admission (test_fee_postgres_phase2.PostgreSQLMultiFeeTests.test_concurrent_generate_and_collect_preserve_one_month_and_admission) ... ok
+test_credit_only_concurrent_replay_does_not_issue_a_second_receipt (test_fee_postgres_phase2.PostgreSQLMultiFeeTests.test_credit_only_concurrent_replay_does_not_issue_a_second_receipt) ... ok
+test_distinct_key_competing_collections_reject_stale_confirmation (test_fee_postgres_phase2.PostgreSQLMultiFeeTests.test_distinct_key_competing_collections_reject_stale_confirmation) ... ok
+test_real_database_rollback_removes_payment_fees_and_allocations (test_fee_postgres_phase2.PostgreSQLMultiFeeTests.test_real_database_rollback_removes_payment_fees_and_allocations) ... ok
+test_same_key_concurrent_retries_return_exact_snapshot (test_fee_postgres_phase2.PostgreSQLMultiFeeTests.test_same_key_concurrent_retries_return_exact_snapshot) ... ok
+test_same_key_different_requests_cannot_both_succeed (test_fee_postgres_phase2.PostgreSQLMultiFeeTests.test_same_key_different_requests_cannot_both_succeed) ... ok
+
+----------------------------------------------------------------------
+Ran 9 tests in 6.041s
+
+OK
