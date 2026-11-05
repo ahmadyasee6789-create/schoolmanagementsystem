@@ -1,11 +1,13 @@
 """Class-wide marks entry against synthetic fixtures and the existing API services."""
 from datetime import date
+from types import SimpleNamespace
 import unittest
 
 from fastapi import HTTPException
+from sqlalchemy import event
 
 import test_fee_integrity as fixture
-from app.models.exams import Exam, ExamPaper, ExamResult, Subject, Term
+from app.models.exams import Exam, ExamPaper, ExamResult, GradeScale, Subject, Term
 from app.models.student_enrollment import StudentEnrollment
 from app.models.students import Student
 from app.routers.exams_results import create_exam_result, create_exam_results_bulk, get_exam_results
@@ -61,6 +63,29 @@ class ExamResultEntryTests(unittest.TestCase):
             create_exam_result(self.mark(2, 1, 48), self.db, self.actor, self.session)
         self.assertEqual(raised.exception.status_code, 409)
         self.assertEqual(self.db.query(ExamResult).one().obtained_marks, 35)
+
+    def test_exam_results_loads_papers_and_tenant_grades_in_two_queries(self):
+        self.db.add_all([
+            GradeScale(organization_id=1, min_percentage=40, max_percentage=80, grade="B", gpa=3),
+            GradeScale(organization_id=1, min_percentage=80, max_percentage=100, grade="A", gpa=4),
+            GradeScale(organization_id=2, min_percentage=0, max_percentage=100, grade="Other"),
+        ])
+        self.db.commit()
+        self.bulk(*(self.mark(paper, 1, value) for paper, value in enumerate((39, 40, 80, 100), 1)))
+        self.db.expunge_all()
+        statements = []
+
+        def record(_conn, _cursor, statement, _parameters, _context, _many):
+            statements.append(statement)
+
+        event.listen(self.engine, "before_cursor_execute", record)
+        try:
+            results = get_exam_results(1, self.db, self.actor, SimpleNamespace(id=1))
+        finally:
+            event.remove(self.engine, "before_cursor_execute", record)
+        self.assertEqual(len(statements), 2)
+        self.assertEqual({r.obtained_marks: (r.grade, r.gpa) for r in results},
+                         {39: (None, None), 40: ("B", 3), 80: ("A", 4), 100: ("A", 4)})
 
     def test_existing_promotion_preview_returns_shared_overall_evaluation(self):
         rows = [(40, 40, 40, 40), (39, 39, 40, 41), (39, 39, 39, 90), (90,)]

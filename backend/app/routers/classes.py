@@ -10,6 +10,7 @@ from app.models.users import User,OrganizationMember
 from app.models.classroom import Classroom, Grade
 from app.models.attendance import Attendance
 from app.schemas.attendence import AttendanceCreate
+from app.schemas.auth import CurrentUser
 from app.schemas.classroom import AssignTeacherRequest, ClassroomCreate
 
 
@@ -19,15 +20,10 @@ router=APIRouter(prefix="/classes", tags=["Classes"])
 @router.get("")
 def get_classes(
     db: Session = Depends(get_db),
-    current_user:User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ):
-    # Get user's organization
-    membership = (
-        db.query(OrganizationMember)
-        .filter(OrganizationMember.user_id == current_user.id)
-        .first()
-    )
-    if not membership:
+    # Authentication already loaded this user's organization membership.
+    if current_user.org_id is None:
         raise HTTPException(status_code=403, detail="User not part of any organization")
 
     # Query classrooms with teacher info
@@ -35,7 +31,7 @@ def get_classes(
         db.query(Classroom)
         .options(
             joinedload(Classroom.grade),
-            joinedload(Classroom.class_teacher)
+            joinedload(Classroom.class_teacher).joinedload(OrganizationMember.user),
         ).filter(Classroom.organization_id==current_user.org_id)
         .all()
     )
@@ -43,14 +39,15 @@ def get_classes(
 
     result = []
     for c in classes:
+        teacher = c.class_teacher.user if c.class_teacher else None
         result.append({
             "id": c.id,
             "grade_id": c.grade_id,
             "grade_name": c.grade.name if c.grade else None,          # from grade relationship
             "section": c.section,
             "class_name": f"{c.grade.name} " if c.grade else c.section,
-            "teacher_id": c.class_teacher_member_id if c.class_teacher and c.class_teacher.user else None,    # from user relationship
-            "teacher_name": c.class_teacher.user.full_name if c.class_teacher else None,  # from user relationship
+            "teacher_id": c.class_teacher_member_id if teacher else None,
+            "teacher_name": teacher.full_name if teacher else None,
         })
     return result
 

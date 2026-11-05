@@ -1,0 +1,81 @@
+"""Synthetic DMC download regressions for the query budget and both layouts."""
+from io import BytesIO
+import re
+from types import SimpleNamespace
+import unittest
+from unittest.mock import patch
+
+from fastapi import HTTPException
+from PIL import Image
+from sqlalchemy import event
+
+import test_exam_result_entry as fixture
+from app.models.exams import ExamResult, GradeScale
+from app.models.student_enrollment import StudentEnrollment
+from app.models.users import Organization
+from app.routers import dmc
+
+
+class DmcDownloadTests(unittest.TestCase):
+    def setUp(self):
+        fixture.ExamResultEntryTests.setUp(self)
+
+    def seed_complete_class(self):
+        for enrollment in self.db.query(StudentEnrollment):
+            enrollment.roll_number = str(enrollment.student_id)
+            if enrollment.student_id == 4:
+                enrollment.is_active = False
+        self.db.add_all([
+            GradeScale(organization_id=1, min_percentage=40, max_percentage=79.99, grade="B", gpa=3),
+            GradeScale(organization_id=1, min_percentage=80, max_percentage=100, grade="A", gpa=4),
+        ])
+        for student, marks in enumerate(((85, 85, 85, 85), (85, 85, 85, 85), (0, 40, 40, 80)), 1):
+            self.db.add_all(ExamResult(exam_paper_id=paper, student_enrollment_id=self.enrollments[student], obtained_marks=mark)
+                            for paper, mark in enumerate(marks, 1))
+        logo = BytesIO()
+        Image.new("RGB", (120, 80), "#204b75").save(logo, format="PNG")
+        self.db.get(Organization, 1).logo = logo.getvalue()
+        self.db.commit()
+        self.db.expunge_all()
+
+    def download(self, layout, session=1):
+        return dmc.bulk_dmc(1, 1, layout, self.db, self.actor, SimpleNamespace(id=session))
+
+    def test_both_layouts_use_six_queries_and_preserve_marks_grades_and_ranks(self):
+        self.seed_complete_class()
+        queries = []
+
+        def record(_conn, _cursor, statement, _params, _context, _many):
+            queries.append(statement)
+
+        event.listen(self.engine, "before_cursor_execute", record)
+        try:
+            for layout, method, pages in ((2, "generate_bulk_dmc", 2), (3, "generate_bulk_dmc_three", 1)):
+                with self.subTest(layout=layout):
+                    queries.clear()
+                    with patch.object(dmc, method, wraps=getattr(dmc, method)) as render:
+                        response = self.download(layout)
+                    self.assertEqual(len(queries), 6)
+                    self.assertEqual(response.media_type, "application/pdf")
+                    self.assertTrue(response.body.startswith(b"%PDF-"))
+                    self.assertEqual(len(re.findall(rb"/Type\s*/Page\b", response.body)), pages)
+                    self.assertIn(b"/Subtype /Image", response.body)
+                    _, meta, students = render.call_args.args
+                    self.assertIsNotNone(meta["logo_image"])
+                    self.assertEqual([(s["grade"], s["position"], s["result"]) for s in students],
+                                     [("A", 1, "PASSED"), ("A", 1, "PASSED"), ("B", 3, "PASSED")])
+                    self.assertEqual(students[2]["subjects"][0]["obtained"], 0)
+        finally:
+            event.remove(self.engine, "before_cursor_execute", record)
+
+    def test_missing_marks_report_the_subject_before_rendering(self):
+        with patch.object(dmc, "generate_bulk_dmc") as render, self.assertRaises(HTTPException) as raised:
+            self.download(2)
+        self.assertEqual(raised.exception.status_code, 409)
+        self.assertIn("Subject 1", raised.exception.detail)
+        render.assert_not_called()
+
+    def test_other_session_is_rejected(self):
+        with self.assertRaises(HTTPException) as raised:
+            self.download(2, session=2)
+        self.assertEqual(raised.exception.status_code, 404)

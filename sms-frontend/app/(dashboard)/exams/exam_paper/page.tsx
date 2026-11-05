@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   BookOpen,
   FileText,
@@ -32,14 +33,39 @@ import type {
 } from "@/components/exams/types";
 import { emptyPaperForm } from "@/components/exams/types";
 
+type ExamPapersData = {
+  papers: ExamPaper[];
+  exams: Exam[];
+  classrooms: Classroom[];
+  subjects: Subject[];
+};
+
 export default function ExamPapersPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { user, loading: authLoading } = useAuthStore();
-  const [papers, setPapers] = useState<ExamPaper[]>([]);
-  const [exams, setExams] = useState<Exam[]>([]);
-  const [classrooms, setClassrooms] = useState<Classroom[]>([]);
-  const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryKey = ["exam-papers-page", user?.org_id, user?.id] as const;
+  const { data, isPending: loading, isError } = useQuery<ExamPapersData>({
+    queryKey,
+    enabled: !authLoading && Boolean(user),
+    refetchOnWindowFocus: false,
+    retry: false,
+    queryFn: async ({ signal }) => {
+      const [papers, exams, classrooms, subjects] = await Promise.all([
+        api.get<ExamPaper[]>("/exam-papers", { signal }),
+        api.get<Exam[]>("/exams", { signal }),
+        api.get<Classroom[]>("/classes", { signal }),
+        api.get<Subject[]>("/subjects", { signal }),
+      ]);
+      return {
+        papers: Array.isArray(papers.data) ? papers.data : [],
+        exams: Array.isArray(exams.data) ? exams.data : [],
+        classrooms: Array.isArray(classrooms.data) ? classrooms.data : [],
+        subjects: Array.isArray(subjects.data) ? subjects.data : [],
+      };
+    },
+  });
+  const { papers = [], exams = [], classrooms = [], subjects = [] } = data ?? {};
   const [search, setSearch] = useState("");
   const [examFilter, setExamFilter] = useState<number | "all">("all");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -51,50 +77,21 @@ export default function ExamPapersPage() {
 
   const reloadPapers = async () => {
     try {
-      const response = await api.get("/exam-papers");
-      setPapers(Array.isArray(response.data) ? response.data : []);
+      const { data } = await api.get<ExamPaper[]>("/exam-papers");
+      queryClient.setQueryData<ExamPapersData>(queryKey, (current) =>
+        current && { ...current, papers: Array.isArray(data) ? data : [] });
     } catch {
       toast.error("Failed to load exam papers");
     }
   };
 
   useEffect(() => {
-    if (authLoading) return;
-    if (!user) {
-      router.replace("/signin");
-      return;
-    }
-    const loadPage = async () => {
-      try {
-        const [
-          papersResponse,
-          examsResponse,
-          classroomsResponse,
-          subjectsResponse,
-        ] = await Promise.all([
-          api.get("/exam-papers"),
-          api.get("/exams"),
-          api.get("/classes"),
-          api.get("/subjects"),
-        ]);
-        setPapers(
-          Array.isArray(papersResponse.data) ? papersResponse.data : [],
-        );
-        setExams(Array.isArray(examsResponse.data) ? examsResponse.data : []);
-        setClassrooms(
-          Array.isArray(classroomsResponse.data) ? classroomsResponse.data : [],
-        );
-        setSubjects(
-          Array.isArray(subjectsResponse.data) ? subjectsResponse.data : [],
-        );
-      } catch {
-        toast.error("Failed to load exam paper data");
-      } finally {
-        setLoading(false);
-      }
-    };
-    void loadPage();
+    if (!authLoading && !user) router.replace("/signin");
   }, [authLoading, router, user]);
+
+  useEffect(() => {
+    if (isError) toast.error("Failed to load exam paper data");
+  }, [isError]);
 
   const filteredPapers = papers.filter(
     (paper) =>

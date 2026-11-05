@@ -243,7 +243,7 @@ def _draw_card(c: canvas.Canvas, meta: dict, student: dict, base: float,
     if not pct.endswith('%'):
         pct += '%'
     for x, text in [(.16, f'Percentage: {pct}'),
-                    f'Grade: {student["grade"]}',
+                    (.50, f'Grade: {student["grade"]}'),
                     (.82, f'Result: {student["result"]}')]:
         c.drawCentredString(LEFT+INNER_W*x, yy(summary_y+1*mm),
                             _fit(text, 'Helvetica-Bold', 8, INNER_W*.28))

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   BookOpen,
   Download,
@@ -32,70 +33,45 @@ import { classroomLabel } from "@/components/exams/types";
 export default function DmcPage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuthStore();
-  const [exams, setExams] = useState<Exam[]>([]);
-  const [papers, setPapers] = useState<ExamPaper[]>([]);
-  const [classrooms, setClassrooms] = useState<Classroom[]>([]);
-  const [students, setStudents] = useState<DmcStudent[]>([]);
-  const [results, setResults] = useState<ExamResult[]>([]);
   const [selectedExam, setSelectedExam] = useState(0);
   const [selectedClassroom, setSelectedClassroom] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [studentsLoading, setStudentsLoading] = useState(false);
   const [generating, setGenerating] = useState<2 | 3 | null>(null);
 
   useEffect(() => {
-    if (authLoading) return;
-    if (!user) {
-      router.replace("/signin");
-      return;
-    }
-    const loadPage = async () => {
-      try {
-        const [examsResponse, papersResponse, classesResponse] =
-          await Promise.all([
-            api.get("/exams"),
-            api.get("/exam-papers"),
-            api.get("/classes"),
-          ]);
-        setExams(Array.isArray(examsResponse.data) ? examsResponse.data : []);
-        setPapers(
-          Array.isArray(papersResponse.data) ? papersResponse.data : [],
-        );
-        setClassrooms(
-          Array.isArray(classesResponse.data) ? classesResponse.data : [],
-        );
-      } catch {
-        toast.error("Failed to load DMC data");
-      } finally {
-        setLoading(false);
-      }
-    };
-    void loadPage();
+    if (!authLoading && !user) router.replace("/signin");
   }, [authLoading, router, user]);
 
-  useEffect(() => {
-    if (!selectedExam || !selectedClassroom) return;
-    const loadClassData = async () => {
-      setStudentsLoading(true);
-      try {
-        const [studentsResponse, resultsResponse] = await Promise.all([
-          api.get(`/students/by-class/${selectedClassroom}`),
-          api.get(`/exam-results/exam/${selectedExam}`),
-        ]);
-        setStudents(
-          Array.isArray(studentsResponse.data) ? studentsResponse.data : [],
-        );
-        setResults(
-          Array.isArray(resultsResponse.data) ? resultsResponse.data : [],
-        );
-      } catch {
-        toast.error("Failed to load class data");
-      } finally {
-        setStudentsLoading(false);
-      }
-    };
-    void loadClassData();
-  }, [selectedClassroom, selectedExam]);
+  const setup = useQuery({
+    queryKey: ["dmc", "setup"],
+    enabled: !authLoading && Boolean(user),
+    refetchOnWindowFocus: false,
+    queryFn: async ({ signal }) => {
+      const [exams, papers, classrooms] = await Promise.all([
+        api.get<Exam[]>("/exams", { signal }),
+        api.get<ExamPaper[]>("/exam-papers", { signal }),
+        api.get<Classroom[]>("/classes", { signal }),
+      ]);
+      return { exams: exams.data, papers: papers.data, classrooms: classrooms.data };
+    },
+  });
+  const previewEnabled = setup.isSuccess && selectedExam > 0 && selectedClassroom > 0;
+  const studentQuery = useQuery({
+    queryKey: ["dmc", "students", selectedClassroom],
+    enabled: previewEnabled,
+    refetchOnWindowFocus: false,
+    queryFn: async ({ signal }) => (await api.get<DmcStudent[]>(`/students/by-class/${selectedClassroom}`, { signal })).data,
+  });
+  const resultQuery = useQuery({
+    queryKey: ["dmc", "results", selectedExam],
+    enabled: previewEnabled,
+    refetchOnWindowFocus: false,
+    queryFn: async ({ signal }) => (await api.get<ExamResult[]>(`/exam-results/exam/${selectedExam}`, { signal })).data,
+  });
+  const { exams = [], papers = [], classrooms = [] } = setup.data ?? {};
+  const students = studentQuery.data ?? [];
+  const results = resultQuery.data ?? [];
+  const studentsLoading = previewEnabled && (studentQuery.isPending || resultQuery.isPending);
+  const previewError = studentQuery.isError || resultQuery.isError;
 
   const classroomsForExam = selectedExam
     ? classrooms.filter((classroom) =>
@@ -124,18 +100,11 @@ export default function DmcPage() {
       .map((result) => result.student_enrollment_id),
   ).size;
   const readyToGenerate =
-    selectedExam > 0 && selectedClassroom > 0 && enteredCount > 0;
+    previewEnabled && !previewError && enteredCount > 0;
 
   const changeExam = (examId: number) => {
     setSelectedExam(examId);
     setSelectedClassroom(0);
-    setStudents([]);
-    setResults([]);
-  };
-  const changeClassroom = (classroomId: number) => {
-    setSelectedClassroom(classroomId);
-    setStudents([]);
-    setResults([]);
   };
   const downloadDmc = async (layout: 2 | 3) => {
     if (!readyToGenerate || studentsLoading || generating !== null) {
@@ -203,23 +172,17 @@ export default function DmcPage() {
     }
   };
 
-  const downloadLabel = generating
-    ? "Generating PDF…"
-    : !selectedExam
-      ? "Select an exam first"
-      : !selectedClassroom
-        ? "Select a class"
-        : enteredCount === 0
-          ? "No results entered yet"
-          : `Download DMC — ${enteredCount} Student${enteredCount === 1 ? "" : "s"}`;
   return (
     <div className="min-h-full bg-white p-4 dark:bg-[#0D1117] sm:p-6 md:p-8">
       <PageHeader
         title="Generate DMC"
         subtitle="Select an exam and class, then download Detailed Marks Certificates"
       />
-      {loading || authLoading ? (
+      {setup.isPending || authLoading ? (
         <LoadingState />
+      ) : setup.isError ? (
+        <EmptyState icon={GraduationCap} message="Could not load DMC options"
+          actionLabel="Retry" onAction={() => void setup.refetch()} />
       ) : (
         <>
           <section className="mb-6 rounded-xl border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-white/[0.03] sm:p-5">
@@ -251,7 +214,7 @@ export default function DmcPage() {
                   value={selectedClassroom}
                   disabled={!selectedExam || classroomsForExam.length === 0}
                   onChange={(event) =>
-                    changeClassroom(Number(event.target.value))
+                    setSelectedClassroom(Number(event.target.value))
                   }
                   className={`${inputClass} mt-1.5`}
                 >
@@ -354,6 +317,11 @@ export default function DmcPage() {
               icon={GraduationCap}
               message="Select an exam and class to preview results and generate DMCs"
             />
+          ) : previewError ? (
+            <EmptyState icon={FileText} message="Could not load the class preview" actionLabel="Retry" onAction={() => {
+              if (studentQuery.isError) void studentQuery.refetch();
+              if (resultQuery.isError) void resultQuery.refetch();
+            }} />
           ) : studentsLoading ? (
             <LoadingState />
           ) : students.length === 0 ? (

@@ -1,6 +1,6 @@
 # app/routers/exam_results.py
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, contains_eager
 from typing import List
 from pydantic import BaseModel
 
@@ -27,8 +27,12 @@ class BulkExamResultOut(BaseModel):
 # ─────────────────────────────────────────────
 # Helper
 # ─────────────────────────────────────────────
+def mark_percentage(marks: int, total_marks: int):
+    return (marks / total_marks) * 100 if total_marks > 0 else 0
+
+
 def calculate_grade_gpa(marks: int, total_marks: int, db: Session, org_id: int):
-    percentage = (marks / total_marks) * 100 if total_marks > 0 else 0
+    percentage = mark_percentage(marks, total_marks)
     grade_scale = (
         db.query(GradeScale)
         .filter(
@@ -46,6 +50,10 @@ def calculate_grade_gpa(marks: int, total_marks: int, db: Session, org_id: int):
 
 def build_result_out(result: ExamResult, exam_paper: ExamPaper, db: Session, org_id: int) -> ExamResultOut:
     grade, gpa = calculate_grade_gpa(result.obtained_marks, exam_paper.total_marks, db, org_id)
+    return result_out(result, grade, gpa)
+
+
+def result_out(result: ExamResult, grade: str | None, gpa: float | None) -> ExamResultOut:
     return ExamResultOut(
         id=result.id,
         exam_paper_id=result.exam_paper_id,
@@ -246,6 +254,7 @@ def get_exam_results(
     results = (
         db.query(ExamResult)
         .join(ExamPaper, ExamResult.exam_paper_id == ExamPaper.id)
+        .options(contains_eager(ExamResult.exam_paper))
         .join(Exam, ExamPaper.exam_id == Exam.id)
         .join(Term, Exam.term_id == Term.id)
         .filter(
@@ -257,10 +266,20 @@ def get_exam_results(
         .all()
     )
 
-    return [
-        build_result_out(r, r.exam_paper, db, current_user.org_id)
-        for r in results
-    ]
+    if not results:
+        return []
+    scales = (
+        db.query(GradeScale)
+        .filter(GradeScale.organization_id == current_user.org_id)
+        .order_by(GradeScale.min_percentage.desc())
+        .all()
+    )
+    response = []
+    for result in results:
+        percentage = mark_percentage(result.obtained_marks, result.exam_paper.total_marks)
+        scale = next((item for item in scales if item.min_percentage <= percentage <= item.max_percentage), None)
+        response.append(result_out(result, scale.grade if scale else None, scale.gpa if scale else None))
+    return response
 
 
 # ─────────────────────────────────────────────

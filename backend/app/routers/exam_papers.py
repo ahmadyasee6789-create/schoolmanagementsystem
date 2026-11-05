@@ -1,6 +1,6 @@
 # app/routers/exam_papers.py
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, contains_eager
 from typing import List
 
 from app.db.session import get_db
@@ -29,6 +29,11 @@ def get_exam_papers(
         .join(Classroom)
         .join(Subject)
         .join(Term)
+        .options(
+            contains_eager(ExamPaper.exam),
+            contains_eager(ExamPaper.classroom).joinedload(Classroom.grade),
+            contains_eager(ExamPaper.subject),
+        )
         .filter(Exam.organization_id == current_user.org_id,
                 Term.academic_year_id==active_session.id)
         .all()
