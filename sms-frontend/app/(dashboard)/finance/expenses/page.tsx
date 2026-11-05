@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { DollarSign, ReceiptText, Search, Tags, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
 import { usePaginatedQuery } from "@/app/hooks/usePaginatedQuery";
@@ -19,7 +20,12 @@ function ExpenseCard({ expense }: { expense: Expense }) {
 }
 
 export default function ExpensesPage() {
-  const [categories, setCategories] = useState<ExpenseCategory[]>([]);
+  const categoryQuery = useQuery({
+    queryKey: ["expense-categories"],
+    refetchOnWindowFocus: false,
+    queryFn: async ({ signal }) => (await api.get<ExpenseCategory[]>("/expenses/categories", { signal })).data,
+  });
+  const categories = categoryQuery.data ?? [];
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [expenseOpen, setExpenseOpen] = useState(false);
@@ -32,8 +38,9 @@ export default function ExpensesPage() {
   const [deletingCategory, setDeletingCategory] = useState(false);
 
   const { data: expenses, loading, page, totalPages, setPage, refetch } = usePaginatedQuery({
-    fetcher: async ({ page: currentPage, limit, search: query, category }) => {
-      const response = await api.get("/expenses", { params: { page: currentPage, limit, search: query, category } });
+    queryKey: ["expenses"],
+    fetcher: async ({ page: currentPage, limit, search: query, category }, signal) => {
+      const response = await api.get("/expenses", { params: { page: currentPage, limit, search: query, category }, signal });
       return { data: response.data.data, totalPages: response.data.totalPages };
     },
     filters: { search, category: categoryFilter ? Number(categoryFilter) : undefined },
@@ -42,12 +49,11 @@ export default function ExpensesPage() {
   const expenseItems = expenses as Expense[];
 
   const fetchCategories = async () => {
-    try {
-      const response = await api.get("/expenses/categories");
-      setCategories(response.data ?? []);
-    } catch { toast.error("Failed to load expense categories"); }
+    await categoryQuery.refetch();
   };
-  useEffect(() => { void fetchCategories(); }, []);
+  useEffect(() => {
+    if (categoryQuery.isError) toast.error("Failed to load expense categories");
+  }, [categoryQuery.isError]);
 
   const addExpense = async () => {
     if (!form.category_id || !form.amount) return toast.error("Category and amount are required");

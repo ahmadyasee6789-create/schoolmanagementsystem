@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ClipboardList, FileClock, Lock, Search, Send } from "lucide-react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
@@ -14,14 +15,30 @@ import type { AcademicSession, ApiError, Exam, ExamForm, Term } from "@/componen
 import { emptyExamForm } from "@/components/exams/types";
 
 type StatusFilter = "all" | "draft" | "published" | "locked";
+type ExamSetup = { exams: Exam[]; terms: Term[]; activeSession: AcademicSession | null };
 
 export default function ExamsPage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuthStore();
-  const [exams, setExams] = useState<Exam[]>([]);
-  const [terms, setTerms] = useState<Term[]>([]);
-  const [activeSession, setActiveSession] = useState<AcademicSession | null>(null);
-  const [loading, setLoading] = useState(true);
+  const client = useQueryClient();
+  const queryKey = ["examinations", "setup"];
+  const setup = useQuery<ExamSetup>({
+    queryKey,
+    enabled: !authLoading && Boolean(user),
+    refetchOnWindowFocus: false,
+    queryFn: async ({ signal }) => {
+      const [sessionResponse, termsResponse, examsResponse] = await Promise.all([
+        api.get<AcademicSession>("/sessions/active", { signal }).catch(() => ({ data: null })),
+        api.get<Term[]>("/terms", { signal }),
+        api.get<Exam[]>("/exams", { signal }),
+      ]);
+      return { activeSession: sessionResponse.data,
+        terms: Array.isArray(termsResponse.data) ? termsResponse.data : [],
+        exams: Array.isArray(examsResponse.data) ? examsResponse.data : [] };
+    },
+  });
+  const { exams = [], terms = [], activeSession = null } = setup.data ?? {};
+  const loading = setup.isPending;
   const [search, setSearch] = useState("");
   const [termFilter, setTermFilter] = useState<number | "all">("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -35,7 +52,8 @@ export default function ExamsPage() {
   const reloadExams = async () => {
     try {
       const response = await api.get("/exams");
-      setExams(Array.isArray(response.data) ? response.data : []);
+      client.setQueryData<ExamSetup>(queryKey, (previous) => previous
+        ? { ...previous, exams: Array.isArray(response.data) ? response.data : [] } : previous);
     } catch {
       toast.error("Failed to load exams");
     }
@@ -44,24 +62,10 @@ export default function ExamsPage() {
   useEffect(() => {
     if (authLoading) return;
     if (!user) { router.replace("/signin"); return; }
-    const loadPage = async () => {
-      try {
-        const [sessionResponse, termsResponse, examsResponse] = await Promise.all([
-          api.get("/sessions/active").catch(() => ({ data: null })),
-          api.get("/terms"),
-          api.get("/exams"),
-        ]);
-        setActiveSession(sessionResponse.data);
-        setTerms(Array.isArray(termsResponse.data) ? termsResponse.data : []);
-        setExams(Array.isArray(examsResponse.data) ? examsResponse.data : []);
-      } catch {
-        toast.error("Failed to load exam data");
-      } finally {
-        setLoading(false);
-      }
-    };
-    void loadPage();
   }, [authLoading, router, user]);
+  useEffect(() => {
+    if (setup.isError) toast.error("Failed to load exam data");
+  }, [setup.isError]);
 
   const filteredExams = exams.filter((exam) => {
     const matchesSearch = exam.name.toLowerCase().includes(search.toLowerCase());

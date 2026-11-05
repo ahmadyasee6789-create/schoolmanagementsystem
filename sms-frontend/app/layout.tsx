@@ -3,7 +3,6 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "react-hot-toast";
 import AuthHydration from "./providers/AuthHydration";
-import AuthProvider from "./providers/AuthProvider";
 import { ThemeProvider } from "./context/ThemeContext";
 import QueryProvider from "./providers/QueryProvider";
 
@@ -31,12 +30,10 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <AuthHydration>
-          <AuthProvider>
             <ThemeProvider>
               <Toaster />
               <QueryProvider>{children}</QueryProvider>
             </ThemeProvider>
-          </AuthProvider>
         </AuthHydration>
       </body>
     </html>

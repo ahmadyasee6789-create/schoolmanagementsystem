@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, Integer
 
 from app.db.session import get_db
@@ -107,7 +107,7 @@ def preview_promotion(
     session_id=active_session.id,
 )
 
-    enrollments = db.query(StudentEnrollment).filter(
+    enrollments = db.query(StudentEnrollment).options(joinedload(StudentEnrollment.student)).filter(
         StudentEnrollment.classroom_id == classroom_id,
         StudentEnrollment.session_id == active_session.id,
         StudentEnrollment.is_active == True
@@ -120,8 +120,22 @@ def preview_promotion(
     failed_students = []
     no_result_students = []
 
+    papers = db.query(ExamPaper).filter(
+        ExamPaper.exam_id == exam_id,
+        ExamPaper.classroom_id == classroom_id,
+    ).all()
+    marks = {
+        (enrollment_id, paper_id): obtained
+        for enrollment_id, paper_id, obtained in db.query(
+            ExamResult.student_enrollment_id, ExamResult.exam_paper_id, ExamResult.obtained_marks,
+        ).filter(
+            ExamResult.student_enrollment_id.in_([enrollment.id for enrollment in enrollments]),
+            ExamResult.exam_paper_id.in_([paper.id for paper in papers]),
+        )
+    }
+
     for enrollment in enrollments:
-        student = db.query(Student).filter(Student.id == enrollment.student_id).first()
+        student = enrollment.student
         student_info = {
             "student_id": enrollment.student_id,
             "name": f"{student.first_name} {student.last_name}" if student else "Unknown",
@@ -133,7 +147,11 @@ def preview_promotion(
 
        
 
-        evaluation = get_student_evaluation(db, enrollment, exam_id)
+        subjects = [{"name": str(paper.id), "total": paper.total_marks,
+                     "obtained": marks.get((enrollment.id, paper.id)), "pass": paper.pass_marks}
+                    for paper in papers]
+        evaluation = (evaluate_result(subjects) if subjects and
+                      all(subject["obtained"] is not None for subject in subjects) else None)
 
         if  evaluation is None:
             no_result_students.append(student_info)

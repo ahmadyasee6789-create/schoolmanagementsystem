@@ -15,39 +15,42 @@ from app.services.fee_amounts import money
 from app.services.fee_locks import lock_financial_organization
 
 
-def _allocated(db, column, record_id, owner):
-    rows = db.query(FeeAllocation).filter(column == record_id).all()
+def _allocated(db, column, record_id, owner, rows=None):
+    if rows is None:
+        rows = db.query(FeeAllocation).filter(column == record_id).all()
     if any((row.organization_id, row.student_id, row.session_id) != owner for row in rows):
         raise HTTPException(409, "Allocation ownership needs reconciliation")
     return sum((money(row.amount, positive=True) for row in rows), Decimal("0.00"))
 
 
-def remaining_credit(db, payment):
+def remaining_credit(db, payment, *, allocations=None):
     """Derived from this receipt only; no second stored credit balance."""
     allocated = _allocated(db, FeeAllocation.transaction_id, payment.id,
-                           (payment.organization_id, payment.student_id, payment.session_id))
+                           (payment.organization_id, payment.student_id, payment.session_id), allocations)
     credit = money(payment.amount, positive=True) - allocated
     if credit < 0:
         raise HTTPException(409, "Payment allocations exceed the recorded payment")
     return credit
 
 
-def yearly_discount_total(db, fee):
-    return sum((money(row.amount, positive=True) for row in db.query(FeeYearlyDiscount).filter_by(student_fee_id=fee.id).all()), Decimal("0.00"))
+def yearly_discount_total(db, fee, *, adjustments=None):
+    if adjustments is None:
+        adjustments = db.query(FeeYearlyDiscount).filter_by(student_fee_id=fee.id).all()
+    return sum((money(row.amount, positive=True) for row in adjustments), Decimal("0.00"))
 
 
-def reconciled_fee_balance(db, fee):
+def reconciled_fee_balance(db, fee, *, allocations=None, yearly_discounts=None):
     paid, final = money(fee.paid_amount), money(fee.final_amount)
     gross = sum((money(fee.admission_fee), money(fee.monthly_fee), money(fee.exam_fee)), Decimal(0))
     discount = money(fee.discount_amount)
-    annual_discount = yearly_discount_total(db, fee)
+    annual_discount = yearly_discount_total(db, fee, adjustments=yearly_discounts)
     if (money(fee.discount_percent) > 100 or gross != money(fee.total_amount)
             or discount > gross or gross - discount != final or paid > final):
         raise HTTPException(409, "Fee breakdown needs reconciliation before collection")
     if annual_discount > min(final - paid, max(Decimal("0.00"), money(fee.monthly_fee) - discount)):
         raise HTTPException(409, "Yearly discount exceeds the remaining tuition balance")
     owner = (fee.organization_id, fee.student_id, fee.session_id)
-    recorded = _allocated(db, FeeAllocation.student_fee_id, fee.id, owner)
+    recorded = _allocated(db, FeeAllocation.student_fee_id, fee.id, owner, allocations)
     if recorded != paid:
         raise HTTPException(409, "Paid amount does not match allocation history; reconcile before collection")
     return final - paid - annual_discount

@@ -1,113 +1,61 @@
-import { useEffect, useRef, useState } from "react";
-import { debounce } from "../lib/debounce";
+"use client";
 
-interface Options<TFilters> {
-  fetcher: (params: TFilters & { page: number; limit: number }) => Promise<{
-    data: any[];
+import { useEffect, useState, type SetStateAction } from "react";
+import { useQuery } from "@tanstack/react-query";
+
+interface Options<TFilters, TItem> {
+  queryKey: readonly unknown[];
+  fetcher: (params: TFilters & { page: number; limit: number }, signal: AbortSignal) => Promise<{
+    data: TItem[];
     totalPages: number;
   }>;
-  filters?: TFilters;
+  filters: TFilters;
   debounceKeys?: (keyof TFilters)[];
   initialPage?: number;
   initialLimit?: number;
   debounceMs?: number;
 }
 
-export function usePaginatedQuery<TFilters extends Record<string, any>>({
+export function usePaginatedQuery<TFilters extends Record<string, unknown>, TItem = unknown>({
+  queryKey,
   fetcher,
-  filters = {} as TFilters,
+  filters,
   debounceKeys = [],
   initialPage = 1,
   initialLimit = 10,
   debounceMs = 500,
-}: Options<TFilters>) {
-  const [data, setData] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [page, setPage] = useState(initialPage);
+}: Options<TFilters, TItem>) {
+  const nextDebounced = JSON.stringify(Object.fromEntries(debounceKeys.map((key) => [key, filters[key]])));
+  const [debounced, setDebounced] = useState(nextDebounced);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(nextDebounced), debounceMs);
+    return () => clearTimeout(timer);
+  }, [nextDebounced, debounceMs]);
+
+  const appliedFilters = { ...filters, ...JSON.parse(debounced) } as TFilters;
+  const filterKey = JSON.stringify(appliedFilters);
+  const [pagination, setPagination] = useState({ filterKey, page: initialPage });
   const [limit, setLimit] = useState(initialLimit);
-  const [totalPages, setTotalPages] = useState(1);
-
-  // ── Refs always hold the latest values — no stale closures ──────
-  const pageRef    = useRef(page);
-  const limitRef   = useRef(limit);
-  const filtersRef = useRef(filters);
-  const fetcherRef = useRef(fetcher);
-
-  pageRef.current    = page;
-  limitRef.current   = limit;
-  filtersRef.current = filters;
-  fetcherRef.current = fetcher;
-
-  // ── Stable debounced runner (created once) ───────────────────────
-  const debouncedFetch = useRef(
-    debounce(async (params: any) => {
-      setLoading(true);
-      try {
-        const res = await fetcherRef.current(params);
-        setData(res.data);
-        setTotalPages(res.totalPages);
-      } finally {
-        setLoading(false);
-      }
-    }, debounceMs)
-  );
-
-  // ── Core fetch — always reads from refs, never stale ────────────
-  const triggerFetch = useRef((useDebounce = false) => {
-    const params = {
-      ...filtersRef.current,
-      page:  pageRef.current,
-      limit: limitRef.current,
-    };
-
-    if (useDebounce) {
-      debouncedFetch.current(params);
-    } else {
-      debouncedFetch.current.cancel?.();
-      setLoading(true);
-      fetcherRef.current(params)
-        .then((res) => {
-          setData(res.data);
-          setTotalPages(res.totalPages);
-        })
-        .finally(() => setLoading(false));
-    }
+  // New filters start on page one without requesting the obsolete page first.
+  const page = pagination.filterKey === filterKey ? pagination.page : 1;
+  const params = { ...appliedFilters, page, limit };
+  const query = useQuery({
+    queryKey: [...queryKey, params],
+    queryFn: ({ signal }) => fetcher(params, signal),
+    refetchOnWindowFocus: false,
+    retry: false,
   });
 
-  // ── Debounced filter keys (e.g. search) ─────────────────────────
-  useEffect(() => {
-    if (!debounceKeys.length) return;
-    setPage(1);
-    // page ref won't be 1 yet — pass override directly
-    const params = {
-      ...filtersRef.current,
-      page: 1,
-      limit: limitRef.current,
-    };
-    debouncedFetch.current(params);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, debounceKeys.map((k) => filters[k]));
-
-  // ── Page / limit / non-debounced filter changes ─────────────────
-  useEffect(() => {
-    triggerFetch.current(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    page,
-    limit,
-    ...Object.keys(filters)
-      .filter((k) => !debounceKeys.includes(k as keyof TFilters))
-      .map((k) => filters[k]),
-  ]);
-
   return {
-    data,
-    loading,
+    data: query.data?.data ?? [],
+    loading: query.isPending || query.isFetching,
     page,
     limit,
-    totalPages,
-    setPage,
+    totalPages: query.data?.totalPages ?? 1,
+    setPage: (value: SetStateAction<number>) => setPagination({
+      filterKey, page: typeof value === "function" ? value(page) : value,
+    }),
     setLimit,
-    refetch: () => triggerFetch.current(false),
+    refetch: () => { void query.refetch(); },
   };
 }

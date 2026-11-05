@@ -4,7 +4,7 @@ import math
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 from sqlalchemy import and_
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, contains_eager
 
 from app.db.session import get_db
 from app.models.academic_session import AcademicSession
@@ -222,7 +222,7 @@ def get_fee_ledger(
 
     total = query.count()
     fees = (
-        query.add_columns(FeeYearlyDiscount.amount)
+        query.options(contains_eager(StudentFee.student)).add_columns(FeeYearlyDiscount.amount)
         .outerjoin(FeeYearlyDiscount, and_(
             FeeYearlyDiscount.student_fee_id == StudentFee.id,
             FeeYearlyDiscount.organization_id == StudentFee.organization_id,

@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, contains_eager, joinedload
 from sqlalchemy import and_
 from typing import List
 
@@ -69,6 +69,11 @@ def get_all_assignments(
         db.query(ClassSubject)
         .join(Classroom)
         .join(Subject)
+        .options(
+            contains_eager(ClassSubject.classroom).joinedload(Classroom.grade),
+            contains_eager(ClassSubject.subject),
+            joinedload(ClassSubject.teacher).joinedload(OrganizationMember.user),
+        )
         .filter(Classroom.organization_id == membership.organization_id,
                 Subject.session_id==active_session.id)
         .all()

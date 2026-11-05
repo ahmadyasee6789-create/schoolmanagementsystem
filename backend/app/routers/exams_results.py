@@ -64,6 +64,20 @@ def result_out(result: ExamResult, grade: str | None, gpa: float | None) -> Exam
     )
 
 
+def results_with_grades(results, db: Session, org_id: int):
+    if not results:
+        return []
+    scales = db.query(GradeScale).filter(
+        GradeScale.organization_id == org_id,
+    ).order_by(GradeScale.min_percentage.desc()).all()
+    response = []
+    for result in results:
+        percentage = mark_percentage(result.obtained_marks, result.exam_paper.total_marks)
+        scale = next((item for item in scales if item.min_percentage <= percentage <= item.max_percentage), None)
+        response.append(result_out(result, scale.grade if scale else None, scale.gpa if scale else None))
+    return response
+
+
 def editable_exam_paper(db: Session, paper_id: int, org_id: int, session_id: int) -> ExamPaper:
     # Serialize with the exam lock action so a save cannot cross a committed lock.
     row = (
@@ -266,20 +280,7 @@ def get_exam_results(
         .all()
     )
 
-    if not results:
-        return []
-    scales = (
-        db.query(GradeScale)
-        .filter(GradeScale.organization_id == current_user.org_id)
-        .order_by(GradeScale.min_percentage.desc())
-        .all()
-    )
-    response = []
-    for result in results:
-        percentage = mark_percentage(result.obtained_marks, result.exam_paper.total_marks)
-        scale = next((item for item in scales if item.min_percentage <= percentage <= item.max_percentage), None)
-        response.append(result_out(result, scale.grade if scale else None, scale.gpa if scale else None))
-    return response
+    return results_with_grades(results, db, current_user.org_id)
 
 
 # ─────────────────────────────────────────────
@@ -312,6 +313,7 @@ def get_student_results(
     results = (
         db.query(ExamResult)
         .join(ExamPaper)
+        .options(contains_eager(ExamResult.exam_paper))
         .join(Exam)
         .join(Term)
         .filter(
@@ -322,10 +324,7 @@ def get_student_results(
         .all()
     )
 
-    return [
-        build_result_out(r, r.exam_paper, db, current_user.org_id)
-        for r in results
-    ]
+    return results_with_grades(results, db, current_user.org_id)
 
 
 # ─────────────────────────────────────────────

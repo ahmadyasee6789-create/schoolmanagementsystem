@@ -1,10 +1,13 @@
 """Organization-scoped read models. Receipts never collect or allocate money."""
+from collections import defaultdict
 from decimal import Decimal
 from fastapi import HTTPException
+from sqlalchemy import or_
 from app.financial_permissions import require_financial_permission
 from app.models.academic_session import AcademicSession
 from app.models.fee_allocation import FeeAllocation
 from app.models.fee_transection import FeeTransaction
+from app.models.fee_yearly_discount import FeeYearlyDiscount
 from app.models.student_fee import StudentFee
 from app.models.students import Student
 from app.schemas.fee_collection import ReceiptInfo
@@ -54,10 +57,28 @@ def student_fee_history(db, user, student_id, session_id=None, page=1, limit=100
     if session_id is not None:
         fees, payments = fees.filter_by(session_id=session_id), payments.filter_by(session_id=session_id)
     all_fees = fees.order_by(StudentFee.billing_period, StudentFee.id).all()
+    all_payments = payments.all()
+    fee_ids = [fee.id for fee in all_fees]
+    payment_ids = [payment.id for payment in all_payments]
+    by_fee, by_payment, discounts = defaultdict(list), defaultdict(list), defaultdict(list)
+    if fee_ids or payment_ids:
+        # Load every related allocation, including any ownership mismatch, so
+        # the existing reconciliation guards continue to fail closed.
+        allocations = db.query(FeeAllocation).filter(or_(
+            FeeAllocation.student_fee_id.in_(fee_ids),
+            FeeAllocation.transaction_id.in_(payment_ids),
+        )).all()
+        for allocation in allocations:
+            by_fee[allocation.student_fee_id].append(allocation)
+            by_payment[allocation.transaction_id].append(allocation)
+    if fee_ids:
+        for adjustment in db.query(FeeYearlyDiscount).filter(FeeYearlyDiscount.student_fee_id.in_(fee_ids)):
+            discounts[adjustment.student_fee_id].append(adjustment)
+    annual_discounts = {fee.id: yearly_discount_total(db, fee, adjustments=discounts[fee.id]) for fee in all_fees}
     sessions = {}
     for fee in all_fees:
-        balance = reconciled_fee_balance(db, fee)
-        annual_discount = yearly_discount_total(db, fee)
+        balance = reconciled_fee_balance(db, fee, allocations=by_fee[fee.id], yearly_discounts=discounts[fee.id])
+        annual_discount = annual_discounts[fee.id]
         sessions.setdefault(fee.session_id, {"billed": Decimal(0), "paid": Decimal(0), "outstanding": Decimal(0),
                                             "overdue": Decimal(0), "available_credit": Decimal(0), "cash_received": Decimal(0)})
         totals = sessions[fee.session_id]
@@ -68,15 +89,15 @@ def student_fee_history(db, user, student_id, session_id=None, page=1, limit=100
         totals["yearly_discount"] += annual_discount
         if fee_line(fee, yearly_discount_amount=annual_discount)["overdue"]:
             totals["overdue"] += balance
-    for payment in payments.all():
+    for payment in all_payments:
         totals = sessions.setdefault(payment.session_id, {"billed": Decimal(0), "paid": Decimal(0), "outstanding": Decimal(0),
                                                          "overdue": Decimal(0), "available_credit": Decimal(0), "cash_received": Decimal(0), "yearly_discount": Decimal(0)})
-        totals["available_credit"] += remaining_credit(db, payment)
+        totals["available_credit"] += remaining_credit(db, payment, allocations=by_payment[payment.id])
         totals["cash_received"] += payment.amount
     session_rows = db.query(AcademicSession).filter(AcademicSession.id.in_(sessions), AcademicSession.organization_id == user.org_id).all()
     names = {s.id: s.name for s in session_rows}
     return dict(student_id=student_id, total=len(all_fees), page=page, limit=limit,
-                items=[fee_line(f, yearly_discount_amount=yearly_discount_total(db, f)) for f in all_fees[(page-1)*limit:page*limit]],
+                items=[fee_line(f, yearly_discount_amount=annual_discounts[f.id]) for f in all_fees[(page-1)*limit:page*limit]],
                 sessions=[dict(session_id=sid, session_name=names[sid],
                                **{key: format(value, ".2f") for key, value in totals.items()},
                                credit_status="advance_credit" if totals["available_credit"] else None)

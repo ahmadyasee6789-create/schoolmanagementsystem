@@ -1,6 +1,8 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { isAxiosError } from "axios";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "../store/authStore";
 import { api } from "../lib/api";
@@ -16,13 +18,38 @@ import MonthlyFinancialChart from "@/components/dashboard/MonthlyFinancialChart"
 import YearSummaryCard from "@/components/dashboard/YearSummaryCard";
 import { fmt } from "@/components/dashboard/CustomTooltip";
 
+type DashboardStats = {
+  overview: { students: { total: number; active: number; inactive: number }; faculty: number;
+    classes: number; studentsPerClass: { class: string; students: number }[] };
+  attendance: { marked: boolean; present: number; absent: number; percentage: number };
+  financials: { year: number; revenue: { yearTotal: number };
+    expenses: { yearTotal: number; salaryYearTotal: number; pendingSalaryTotal: number; combinedYearTotal: number };
+    net: { yearTotal: number };
+    monthlyComparison: { month: number; revenue: number; salary: number; expense: number; net: number }[] };
+};
+
 export default function HomePage() {
   const { user, loading: authLoading } = useAuthStore();
   const role = user?.org_role;
   const router = useRouter();
-  const [stats, setStats] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const query = useQuery({
+    queryKey: ["dashboard", "stats"],
+    enabled: !authLoading && Boolean(user),
+    refetchOnWindowFocus: false,
+    queryFn: async ({ signal }) => (await api.get<DashboardStats>("/dashboard/stats", { signal })).data,
+  });
+  const stats = query.data;
+  const loading = query.isPending;
+  let error: string | null = null;
+  if (query.isError) {
+    const cause = query.error;
+    const detail = isAxiosError(cause) ? cause.response?.data?.detail : undefined;
+    error = detail === "No active academic session found"
+      ? role === "admin"
+        ? "No active academic session found. Please go to Settings → Academic Sessions and activate or create a session for the current term."
+        : "No active academic session found. Please contact your school administrator to activate the current academic session."
+      : typeof detail === "string" ? detail : "Unable to load dashboard data. Please try again later.";
+  }
 
   const can = {
     viewStudents: role === "admin",
@@ -34,42 +61,8 @@ export default function HomePage() {
 
   useEffect(() => {
     if (authLoading) return;
-    if (!user) { router.replace("/signin"); return; }
-
-    (async () => {
-      try {
-        const cached = localStorage.getItem("dashboard_stats");
-        if (cached) { setStats(JSON.parse(cached)); setLoading(false); }
-        const res = await api.get("/dashboard/stats");
-        const fresh = res.data;
-        if (JSON.stringify(fresh) !== cached) {
-          localStorage.setItem("dashboard_stats", JSON.stringify(fresh));
-          setStats(fresh);
-        }
-        setError(null);
-      } catch (err: any) {
-        console.error("Dashboard error:", err);
-        if (err.response?.status === 400) {
-          const detail = err.response?.data?.detail;
-          if (detail === "No active academic session found") {
-            setError(
-              role === "admin"
-                ? "No active academic session found. Please go to Settings → Academic Sessions and activate or create a session for the current term."
-                : "No active academic session found. Please contact your school administrator to activate the current academic session."
-            );
-          } else {
-            setError(detail || "Unable to load dashboard data. Please try again later.");
-          }
-        } else if (err.response?.status === 401) {
-          router.replace("/signin");
-        } else {
-          setError("An unexpected error occurred. Please refresh the page or contact support.");
-        }
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [user, router, authLoading, role]);
+    if (!user || (isAxiosError(query.error) && query.error.response?.status === 401)) router.replace("/signin");
+  }, [user, router, authLoading, query.error]);
 
   if (loading && !stats) return <DashboardLoading />;
 
@@ -87,10 +80,10 @@ export default function HomePage() {
   if (!stats) return null;
 
   const fin = stats.financials;
-  const classData = stats.overview.studentsPerClass.map((item: any) => ({
+  const classData = stats.overview.studentsPerClass.map((item) => ({
     class: item.class, students: item.students,
   }));
-  const financialData = fin.monthlyComparison.map((item: any) => ({
+  const financialData = fin.monthlyComparison.map((item) => ({
     month: item.month,
     Revenue: item.revenue,
     Salary: item.salary ?? 0,

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from redis import RedisError
 from sqlalchemy.orm import Session
-from sqlalchemy import func, extract, cast, Date
+from sqlalchemy import func, extract, cast, Date, case
 from datetime import date, datetime
 
 from app.db.session import get_db
@@ -91,43 +91,28 @@ def get_dashboard_stats(
             Classroom.organization_id==org_id
         ).all()
         class_ids=[c[0] for c in class_ids]
-    active_students = db.query(StudentEnrollment).join(Student).filter(
-    Student.organization_id == org_id,
-    StudentEnrollment.session_id == active_session.id,
-    StudentEnrollment.classroom_id.in_(class_ids),
-    Student.is_active.is_(True)
-).count()
-    total_students=db.query(StudentEnrollment).join(Student).filter(
+    total_students, active_students = db.query(
+        func.count(StudentEnrollment.id),
+        func.coalesce(func.sum(case((Student.is_active.is_(True), 1), else_=0)), 0),
+    ).join(Student).filter(
         StudentEnrollment.classroom_id.in_(class_ids),
          StudentEnrollment.session_id == active_session.id,
     Student.organization_id == org_id,
-    ).count()
+    ).one()
     today=date.today()
-    attendance=db.query(Attendance).filter(
+    attendance_exists, present_count, absent_count = db.query(
+        func.count(Attendance.id),
+        func.coalesce(func.sum(case((Attendance.status == "present", 1), else_=0)), 0),
+        func.coalesce(func.sum(case((Attendance.status == "absent", 1), else_=0)), 0),
+    ).filter(
         Attendance.class_id.in_(class_ids),
         Attendance.session_id==active_session.id,
         Attendance.date==today
-    )
-    attendance_exists=attendance.first()
-    present_count=attendance.filter(
-        Attendance.status=="present"
-    ).count()
-    absent_count=attendance.filter(
-        Attendance.status=="absent"
-    ).count()
+    ).one()
     percentage = 0
     if total_students > 0:
         percentage = round((present_count / total_students) * 100, 2)
-  # For teacher
-    if membership.role == "teacher":
-        total_classes = db.query(Classroom).filter(
-           Classroom.organization_id == org_id,
-           Classroom.class_teacher_member_id == membership.id
-    ).count()
-    else:
-      total_classes = db.query(Classroom).filter(
-        Classroom.organization_id == org_id
-    ).count()
+    total_classes = len(class_ids)
 
     spc_query = (
     db.query(
@@ -289,5 +274,8 @@ for row in students_per_class
         },
     }
     response = redact_dashboard_financials(response, current_user)
-    redis_client.set(cache_key,json.dumps(response),ex=30)
+    try:
+        redis_client.set(cache_key,json.dumps(response),ex=30)
+    except RedisError:
+        pass
     return response
