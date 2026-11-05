@@ -1,5 +1,5 @@
 import io
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException,Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from app.models import Organization
@@ -12,6 +12,7 @@ from app.models import (
 from app.services.exam_evaluation import evaluate_result
 from app.models.exams import GradeScale
 from app.services.dmc_generator import generate_bulk_dmc  
+from app.services.dmc_generator_three import  generate_bulk_dmc_three
 from app.dependencies import get_active_session 
 from app.services.school_logo import organization_logo  
 router = APIRouter(prefix="/dmc", tags=["DMC"])
@@ -21,6 +22,7 @@ router = APIRouter(prefix="/dmc", tags=["DMC"])
 def bulk_dmc(
     exam_id: int,
     classroom_id: int,
+    layout: int = Query(2, ge=2, le=3),
     db: Session = Depends(get_db),
     current_user: OrganizationMember = Depends(get_current_user),
     active_session=Depends(get_active_session)
@@ -113,17 +115,15 @@ def bulk_dmc(
         # Calculate grade
         percentage = (obtained_total / grand_total * 100) if grand_total else 0
         grade = "—"
-        for gs in grade_scales:
-            if gs.min_percentage <= percentage <= gs.max_percentage:
-                grade = gs.grade
-                break
-
+        
         evaluation = evaluate_result(subjects)
-
         passed = evaluation["result"] == "PASSED"
         percentage = evaluation["percentage"]
         failed_count = evaluation["failed_count"]
-
+        for gs in grade_scales:
+                    if gs.min_percentage <= percentage <= g+s.max_percentage:
+                        grade = gs.grade
+                        break
         students_data.append({
             "roll_no":      str(enrollment.roll_number or "—"),
             "student_name": f"{student.first_name} {student.last_name}".strip(),
@@ -182,11 +182,17 @@ def bulk_dmc(
 
     # ── 10. Generate PDF ──────────────────────────────────
     buf = io.BytesIO()
-
-    generate_bulk_dmc(
-        buf,
-        meta,
-        students_data
+    if layout == 3:
+        generate_bulk_dmc_three(
+          buf,
+          meta,
+          students_data
+    )
+    else:
+        generate_bulk_dmc(
+          buf,
+          meta,
+          students_data
     )
 
     buf.seek(0)

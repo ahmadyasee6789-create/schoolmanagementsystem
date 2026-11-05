@@ -7,7 +7,7 @@ from app.routers.auth import get_current_user
 from app.dependencies import get_active_session
 from app.services.exam_evaluation import evaluate_result
 from app.models.student_enrollment import StudentEnrollment
-from app.models.exams import Exam, ExamPaper, ExamResult
+from app.models.exams import Exam, ExamPaper, ExamResult, Term
 from app.models.classroom import Classroom, Grade
 
 router = APIRouter(
@@ -28,10 +28,11 @@ def validate_promotion_exam(
 ):
     exam = (
         db.query(Exam)
+        .join(Term, Exam.term_id == Term.id)
         .filter(
             Exam.id == exam_id,
             Exam.organization_id == org_id,
-            Exam.session_id == session_id,
+            Term.academic_year_id == session_id,
         )
         .first()
     )

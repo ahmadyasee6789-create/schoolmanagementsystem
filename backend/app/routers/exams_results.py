@@ -56,6 +56,28 @@ def build_result_out(result: ExamResult, exam_paper: ExamPaper, db: Session, org
     )
 
 
+def editable_exam_paper(db: Session, paper_id: int, org_id: int, session_id: int) -> ExamPaper:
+    # Serialize with the exam lock action so a save cannot cross a committed lock.
+    row = (
+        db.query(ExamPaper, Exam.is_locked)
+        .join(Exam)
+        .join(Term)
+        .filter(
+            ExamPaper.id == paper_id,
+            Exam.organization_id == org_id,
+            Term.academic_year_id == session_id,
+        )
+        .with_for_update(of=Exam)
+        .first()
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail="Exam paper not found")
+    paper, locked = row
+    if locked:
+        raise HTTPException(status_code=409, detail="Exam is locked")
+    return paper
+
+
 # ─────────────────────────────────────────────
 # POST /  — single upsert
 # ─────────────────────────────────────────────
@@ -66,19 +88,7 @@ def create_exam_result(
     current_user: OrganizationMember = Depends(get_current_user),
     active_session=Depends(get_active_session),
 ):
-    exam_paper = (
-        db.query(ExamPaper)
-        .join(Exam)
-        .join(Term)
-        .filter(
-            ExamPaper.id == result_in.exam_paper_id,
-            Exam.organization_id == current_user.org_id,
-            Term.academic_year_id == active_session.id,
-        )
-        .first()
-    )
-    if not exam_paper:
-        raise HTTPException(status_code=404, detail="Exam paper not found")
+    exam_paper = editable_exam_paper(db, result_in.exam_paper_id, current_user.org_id, active_session.id)
 
     enrollment = (
         db.query(StudentEnrollment)
@@ -138,32 +148,22 @@ def create_exam_results_bulk(
     if not results_in:
         raise HTTPException(status_code=400, detail="No results provided")
 
-    # Cache exam papers — avoids N DB hits when all rows share the same paper
-    exam_paper_cache: dict[int, ExamPaper] = {}
-
-    def get_exam_paper(exam_paper_id: int) -> ExamPaper | None:
-        if exam_paper_id not in exam_paper_cache:
-            exam_paper_cache[exam_paper_id] = (
-                db.query(ExamPaper)
-                .join(Exam)
-                .join(Term)
-                .filter(
-                    ExamPaper.id == exam_paper_id,
-                    Exam.organization_id == current_user.org_id,
-                    Term.academic_year_id == active_session.id,
-                )
-                .first()
-            )
-        return exam_paper_cache[exam_paper_id]
+    exam_paper_cache: dict[int, ExamPaper | HTTPException] = {}
 
     succeeded_objects: list[tuple[ExamResult, ExamPaper]] = []
     failed: list[dict] = []
 
     for i, result_in in enumerate(results_in):
         try:
-            exam_paper = get_exam_paper(result_in.exam_paper_id)
-            if not exam_paper:
-                raise HTTPException(status_code=404, detail="Exam paper not found")
+            paper_id = result_in.exam_paper_id
+            if paper_id not in exam_paper_cache:
+                try:
+                    exam_paper_cache[paper_id] = editable_exam_paper(db, paper_id, current_user.org_id, active_session.id)
+                except HTTPException as exc:
+                    exam_paper_cache[paper_id] = exc
+            exam_paper = exam_paper_cache[paper_id]
+            if isinstance(exam_paper, HTTPException):
+                raise exam_paper
 
             enrollment = (
                 db.query(StudentEnrollment)
@@ -252,6 +252,7 @@ def get_exam_results(
             ExamPaper.exam_id == exam_id,
             Exam.organization_id == current_user.org_id,
             Term.academic_year_id == active_session.id,
+            ExamResult.obtained_marks.is_not(None),
         )
         .all()
     )
