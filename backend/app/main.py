@@ -24,6 +24,7 @@ from app.routers import grades
 from app.routers import subjects
 from app.routers import terms
 from app.routers import exams
+from app.routers import grade_scales
 from app.routers import exam_papers
 from app.routers import exams_results
 from app.routers import dmc
@@ -75,6 +76,7 @@ app.include_router(grades.router)
 app.include_router(subjects.router)
 app.include_router(terms.router)
 app.include_router(exams.router)    
+app.include_router(grade_scales.router)
 app.include_router(exam_papers.router)
 app.include_router(exams_results.router)
 app.include_router(dmc.router)

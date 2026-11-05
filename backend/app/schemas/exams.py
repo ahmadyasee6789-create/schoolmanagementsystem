@@ -15,13 +15,14 @@ class ExamCreate(ExamBase):
     pass
 
 class ExamUpdate(BaseModel):
-    name: Optional[str]
-    start_date: Optional[date]
-    end_date: Optional[date]
-    weightage: Optional[float]
-    is_published: Optional[bool]
-    is_locked: Optional[bool]
-    term_id: Optional[int]
+    name: Optional[str] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    weightage: Optional[float] = None
+    # Accepted for older clients; only dedicated lifecycle endpoints change status.
+    is_published: Optional[bool] = None
+    is_locked: Optional[bool] = None
+    term_id: Optional[int] = None
 
 class ExamOut(ExamBase):
     id: int

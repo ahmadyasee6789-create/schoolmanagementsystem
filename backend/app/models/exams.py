@@ -15,6 +15,7 @@ class Term(Base):
 )
 class Exam(Base):
     __tablename__ = "exams"
+    __table_args__ = (UniqueConstraint("id", "organization_id", name="uq_exam_snapshot_owner"),)
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)

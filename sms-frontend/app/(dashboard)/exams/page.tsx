@@ -10,6 +10,7 @@ import { useAuthStore } from "@/app/store/authStore";
 import DeleteModal from "@/components/exams/DeleteModal";
 import ExamFormModal from "@/components/exams/ExamFormModal";
 import ExamsList from "@/components/exams/ExamsList";
+import ReopenExamDialog from "@/components/exams/ReopenExamDialog";
 import { EmptyState, LoadingState, PageHeader, StatGrid, inputClass } from "@/components/exams/ExamUi";
 import type { AcademicSession, ApiError, Exam, ExamForm, Term } from "@/components/exams/types";
 import { emptyExamForm } from "@/components/exams/types";
@@ -48,6 +49,27 @@ export default function ExamsPage() {
   const [saving, setSaving] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [reopenTarget, setReopenTarget] = useState<Exam | null>(null);
+  const [reopening, setReopening] = useState(false);
+  const [reopenError, setReopenError] = useState("");
+  const isAdmin = user?.org_role === "admin";
+  const reopenExam = async (reason: string) => {
+    if (!isAdmin || !reopenTarget || reopening) return;
+    setReopening(true); setReopenError("");
+    try {
+      const { data } = await api.post<{ exam: Exam; snapshot_id: number }>(`/exams/${reopenTarget.id}/reopen`, { reason });
+      client.setQueryData<ExamSetup>(queryKey, (previous) => previous ? { ...previous, exams: previous.exams.map((exam) => exam.id === data.exam.id ? data.exam : exam) } : previous);
+      setReopenTarget(null);
+      toast.success(`Exam reopened. Original snapshot #${data.snapshot_id} preserved.`);
+      await Promise.all([
+        client.invalidateQueries({ queryKey: ["exam-entry"] }),
+        client.invalidateQueries({ queryKey: ["dmc"] }),
+        client.invalidateQueries({ queryKey: ["grade-scales"] }),
+      ]);
+    } catch (error) {
+      setReopenError((error as ApiError).response?.data?.detail ?? "Could not reopen the exam. No status change was confirmed.");
+    } finally { setReopening(false); }
+  };
 
   const reloadExams = async () => {
     try {
@@ -95,11 +117,12 @@ export default function ExamsPage() {
   const confirmDelete = async () => { if (!deleteId) return; setDeleting(true); try { await api.delete(`/exams/${deleteId}`); toast.success("Exam deleted"); setDeleteId(null); await reloadExams(); } catch (error: unknown) { toast.error((error as ApiError).response?.data?.detail ?? "Cannot delete exam"); } finally { setDeleting(false); } };
 
   return <div className="min-h-full bg-white p-4 dark:bg-[#0D1117] sm:p-6 md:p-8">
-    <PageHeader title="Examinations" subtitle="Schedule and manage exams · publish to make visible · lock after results entry" badge={activeSession?.name} actionLabel="Schedule Exam" onAction={openAdd} disabled={noTerms} />
+    <PageHeader title="Examinations" subtitle="Enter marks in draft · lock and publish after review · reopen for corrections" badge={activeSession?.name} actionLabel="Schedule Exam" onAction={openAdd} disabled={noTerms} />
     {!loading && noTerms && <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300/40 bg-amber-50 px-4 py-3 dark:border-amber-500/20 dark:bg-amber-500/10"><div><p className="text-sm font-semibold text-amber-700 dark:text-amber-400">No terms available</p><p className="text-xs text-amber-700/80 dark:text-amber-400/70">Exams must belong to a term. Create at least one term first.</p></div><button type="button" onClick={() => router.push("/academics/terms")} className="rounded-lg border border-amber-400/40 px-3 py-1.5 text-xs font-semibold text-amber-700 transition-colors hover:bg-amber-100 dark:text-amber-400 dark:hover:bg-amber-500/10">Go to Terms</button></div>}
     <StatGrid stats={[{ label: "Total Exams", value: stats.total, Icon: ClipboardList, tone: "border-[#8B6DF2]/20 bg-[#8B6DF2]/10 text-[#8B6DF2]" }, { label: "Draft", value: stats.draft, Icon: FileClock, tone: "border-blue-400/20 bg-blue-50 text-blue-600 dark:border-blue-400/20 dark:bg-blue-500/10 dark:text-blue-400" }, { label: "Published", value: stats.published, Icon: Send, tone: "border-emerald-400/20 bg-emerald-50 text-emerald-600 dark:border-emerald-400/20 dark:bg-emerald-500/10 dark:text-emerald-400" }, { label: "Locked", value: stats.locked, Icon: Lock, tone: "border-red-400/20 bg-red-50 text-red-500 dark:border-red-400/20 dark:bg-red-500/10" }]} />
     <div className="mb-6 grid gap-3 lg:grid-cols-12"><div className="relative lg:col-span-6"><Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search exams…" className={`${inputClass} pl-9`} /></div><select value={termFilter} onChange={(event) => setTermFilter(event.target.value === "all" ? "all" : Number(event.target.value))} className={`${inputClass} lg:col-span-3`}><option value="all">All Terms</option>{terms.map((term) => <option key={term.id} value={term.id}>{term.name}</option>)}</select><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)} className={`${inputClass} lg:col-span-3`}><option value="all">All Status</option><option value="draft">Draft</option><option value="published">Published</option><option value="locked">Locked</option></select></div>
-    {loading || authLoading ? <LoadingState /> : filteredExams.length === 0 ? <EmptyState icon={ClipboardList} message={search ? "No exams match your search" : "No exams yet — schedule your first exam"} actionLabel={noTerms ? undefined : "Schedule Exam"} onAction={openAdd} /> : <ExamsList exams={filteredExams} onEdit={openEdit} onPublish={publishExam} onLock={lockExam} onDelete={(exam) => setDeleteId(exam.id)} />}
+    {loading || authLoading ? <LoadingState /> : filteredExams.length === 0 ? <EmptyState icon={ClipboardList} message={search ? "No exams match your search" : "No exams yet — schedule your first exam"} actionLabel={noTerms ? undefined : "Schedule Exam"} onAction={openAdd} /> : <ExamsList exams={filteredExams} onEdit={openEdit} onPublish={publishExam} onLock={lockExam} onDelete={(exam) => setDeleteId(exam.id)} canManageLifecycle={isAdmin} onReopen={(exam) => { setReopenError(""); setReopenTarget(exam); }} />}
+    {reopenTarget && <ReopenExamDialog exam={reopenTarget} busy={reopening} error={reopenError} onClose={() => { if (!reopening) setReopenTarget(null); }} onConfirm={reopenExam} />}
     {dialogOpen && <ExamFormModal form={form} terms={terms} editing={Boolean(editingId)} saving={saving} onChange={setForm} onClose={() => setDialogOpen(false)} onSave={saveExam} />}
     {deleteId !== null && <DeleteModal title="Delete Exam?" description={`Only draft exams can be deleted.${selectedExam?.name ? ` “${selectedExam.name}” will be removed.` : ""}`} loading={deleting} onClose={() => setDeleteId(null)} onConfirm={confirmDelete} />}
   </div>;

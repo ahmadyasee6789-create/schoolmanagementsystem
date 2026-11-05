@@ -59,7 +59,11 @@ def _draw_dmc(c: canvas.Canvas, meta: dict, student: dict, base_y: float, logo) 
     c.setFont('Helvetica-Bold', 8)
     c.drawCentredString(cx, y(86), 'DETAILED MARKS CERTIFICATE (DMC)')
     c.setFont('Helvetica', 7.5)
-    c.drawCentredString(cx, y(82), _fit(meta['exam_name'], 'Helvetica', 7.5, max_title))
+    exam_session = (
+    f"{meta['exam_name']}  |  "
+    f"Session: {meta.get('session_name', '—')}"
+)
+    c.drawCentredString(cx, y(82), _fit(exam_session, 'Helvetica', 7.5, max_title))
     c.setStrokeColor(LINE)
     c.line(LEFT, y(77.5), RIGHT, y(77.5))
 

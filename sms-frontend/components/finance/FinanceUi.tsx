@@ -92,10 +92,10 @@ export function InitialsAvatar({ name }: { name: string }) {
   );
 }
 
-export function DataTable({ children, label }: { children: React.ReactNode; label?: string }) {
+export function DataTable({ children, label, showOnMobile = false }: { children: React.ReactNode; label?: string; showOnMobile?: boolean }) {
   return (
     <div
-      className={`${panelClass} hidden overflow-x-auto sm:block`}
+      className={`${panelClass} overflow-x-auto ${showOnMobile ? "block" : "hidden sm:block"}`}
       role={label ? "region" : undefined}
       aria-label={label}
       tabIndex={label ? 0 : undefined}

@@ -40,7 +40,7 @@ class DmcDownloadTests(unittest.TestCase):
         self.db.expunge_all()
 
     def download(self, layout, session=1):
-        return dmc.bulk_dmc(1, 1, layout, self.db, self.actor, SimpleNamespace(id=session))
+        return dmc.bulk_dmc(1, 1, layout, self.db, self.actor, SimpleNamespace(id=session, name="2026-27"))
 
     def test_both_layouts_use_six_queries_and_preserve_marks_grades_and_ranks(self):
         self.seed_complete_class()
@@ -82,7 +82,7 @@ class DmcDownloadTests(unittest.TestCase):
         app.include_router(dmc.router)
         app.dependency_overrides[dmc.get_db] = lambda: self.db
         app.dependency_overrides[dmc.get_current_user] = lambda: self.actor
-        app.dependency_overrides[dmc.get_active_session] = lambda: SimpleNamespace(id=1)
+        app.dependency_overrides[dmc.get_active_session] = lambda: SimpleNamespace(id=1, name="2026-27")
 
         with TestClient(app) as client:
             for subject_count in (4, 12):

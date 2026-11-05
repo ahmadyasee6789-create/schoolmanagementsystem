@@ -20,6 +20,7 @@ from app.models.exams import Subject
 from app.models.exams import ClassSubject
 from app.models.exams import ExamPaper
 from app.models.exams import ExamResult
+from app.models.exam_reopen_snapshot import ExamReopenSnapshot
 from app.models.staff_salary import StaffSalary
 from app.models.salary_payments import SalaryPayment
 from app.models.employee import Employee

@@ -77,19 +77,6 @@ def _ordinal(value: Any) -> str:
     return f'{n}{suffix}'
 
 
-def _grade(percentage: Any, bands: list[dict] | None = None) -> str:
-    try:
-        p = float(str(percentage).replace('%', '').strip())
-    except (ValueError, TypeError):
-        return '-'
-    if bands:
-        for band in sorted(bands, key=lambda b: float(b['min']), reverse=True):
-            if p >= float(band['min']):
-                return str(band['grade'])
-        return '-'
-    return 'A+' if p >= 80 else 'A' if p >= 70 else 'B' if p >= 60 else 'C' if p >= 50 else 'F'
-
-
 def _number(value: Any, label: str) -> float:
     try:
         n = float(value)
@@ -182,8 +169,12 @@ def _draw_card(c: canvas.Canvas, meta: dict, student: dict, base: float,
     c.drawCentredString(title_x, yy(header_top - 10*mm), 'DETAILED MARKS CERTIFICATE')
     c.setFont('Helvetica', 8.5)
     c.setFillColor(MUTED)
+    exam_session = (
+    f"{meta['exam_name']} | "
+    f"Session: {meta.get('session_name', '—')}"
+)
     c.drawCentredString(title_x, yy(header_top - 14*mm),
-                        _fit(meta['exam_name'], 'Helvetica', 8.5, title_max))
+                        _fit(exam_session, 'Helvetica', 8.5, title_max))
     line_y = CARD_H - 34*mm
     c.setStrokeColor(BORDER)
     c.line(LEFT, yy(line_y), RIGHT, yy(line_y))

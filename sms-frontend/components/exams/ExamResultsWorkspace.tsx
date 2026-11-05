@@ -76,7 +76,7 @@ export default function ExamResultsWorkspace({ scope }: { scope: string }) {
   const currentPaper = papers.find((paper) => paper.id === paperId);
   const classroom = byClass ? classId : currentPaper?.classroom_id ?? 0;
   const classes = new Map(papers.map((paper) => [paper.classroom_id, paper.classroom_name]));
-  const locked = selectedExam?.is_locked ?? false;
+  const locked = Boolean(selectedExam?.is_locked || selectedExam?.is_published);
   const visiblePapers = byClass ? papers.filter((paper) => paper.classroom_id === classId) : currentPaper ? [currentPaper] : [];
 
   const resultsKey = ["exam-entry", scope, "results", examId];
@@ -193,7 +193,7 @@ export default function ExamResultsWorkspace({ scope }: { scope: string }) {
         void queryClient.invalidateQueries({ queryKey: evaluationKey });
       }
       if (saved.size < pending.length) toast.error(`${pending.length - saved.size} unsaved marks kept for review`);
-      if (data.failed.some((row) => /locked/i.test(row.error))) void setupQuery.refetch();
+      if (data.failed.some((row) => /locked|published/i.test(row.error))) void setupQuery.refetch();
     } catch (error) {
       const detail = (error as ApiError).response?.data?.detail;
       toast.error(typeof detail === "string" ? detail : "Could not confirm the save. Your edits are still available.");
@@ -262,7 +262,7 @@ export default function ExamResultsWorkspace({ scope }: { scope: string }) {
                   </LabeledField>
                 )}
               </div>
-              {locked && <p className="mt-4 flex items-center gap-2 text-sm font-semibold text-red-600 dark:text-red-400"><Lock size={14} />Exam locked. Editing is disabled.</p>}
+              {locked && <p className="mt-4 flex items-center gap-2 text-sm font-semibold text-red-600 dark:text-red-400"><Lock size={14} />Exam locked or published. An administrator must reopen it before corrections.</p>}
               {dirtyCount > 0 && <p role="status" className="mt-4 text-xs font-semibold text-amber-700 dark:text-amber-400">{dirtyCount} unsaved {dirtyCount === 1 ? "mark" : "marks"} across your selections</p>}
             </div>
             {!visiblePapers.length ? (

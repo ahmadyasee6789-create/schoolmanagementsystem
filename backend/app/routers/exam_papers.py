@@ -11,6 +11,7 @@ from app.models.exams import Subject, ClassSubject,Term
 from app.routers.auth import get_current_user
 from app.schemas.exam_paper import ExamPaperCreate, ExamPaperUpdate, ExamPaperOut
 from app.dependencies import get_active_session
+from app.services.exam_editing import lock_exam_record, require_editable
 
 router = APIRouter(prefix="/exam-papers", tags=["Exam Papers"])
 
@@ -84,6 +85,7 @@ def create_exam_paper(
     current_user: OrganizationMember = Depends(get_current_user),
     active_session=Depends(get_active_session)
 ):
+    require_editable(lock_exam_record(db, current_user.org_id, paper_in.exam_id))
     # Check if exam exists and belongs to org
     exam = (
         db.query(Exam).join(Term)
@@ -171,6 +173,8 @@ def update_exam_paper(
     ).first()
     if not paper:
         raise HTTPException(status_code=404, detail="Exam paper not found")
+    require_editable(lock_exam_record(db, current_user.org_id, paper.exam_id))
+    db.refresh(paper)
 
     if paper_in.total_marks is not None:
         paper.total_marks = paper_in.total_marks
@@ -196,6 +200,7 @@ def delete_exam_paper(
     ).first()
     if not paper:
         raise HTTPException(status_code=404, detail="Exam paper not found")
+    require_editable(lock_exam_record(db, current_user.org_id, paper.exam_id))
 
     # Prevent deletion if there are results linked
     if paper.results:

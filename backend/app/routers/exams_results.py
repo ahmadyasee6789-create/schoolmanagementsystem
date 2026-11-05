@@ -12,6 +12,7 @@ from app.models.student_enrollment import StudentEnrollment
 from app.models.exams import Exam, ExamPaper, ExamResult, Term, GradeScale
 from app.schemas.exam_result import ExamResultCreate, ExamResultUpdate, ExamResultOut
 from app.dependencies import get_active_session
+from app.services.grade_scales import lock_scale_organization
 
 router = APIRouter(prefix="/exam-results", tags=["Exam Results"])
 
@@ -80,23 +81,25 @@ def results_with_grades(results, db: Session, org_id: int):
 
 def editable_exam_paper(db: Session, paper_id: int, org_id: int, session_id: int) -> ExamPaper:
     # Serialize with the exam lock action so a save cannot cross a committed lock.
-    row = (
-        db.query(ExamPaper, Exam.is_locked)
+    query = (
+        db.query(ExamPaper, Exam.is_locked, Exam.is_published)
         .join(Exam)
         .join(Term)
         .filter(
             ExamPaper.id == paper_id,
             Exam.organization_id == org_id,
-            Term.academic_year_id == session_id,
         )
-        .with_for_update(of=Exam)
-        .first()
     )
+    if session_id is not None:
+        query = query.filter(Term.academic_year_id == session_id)
+    row = query.with_for_update(of=Exam).first()
     if row is None:
         raise HTTPException(status_code=404, detail="Exam paper not found")
-    paper, locked = row
+    paper, locked, published = row
     if locked:
         raise HTTPException(status_code=409, detail="Exam is locked")
+    if published:
+        raise HTTPException(status_code=409, detail="Exam is published; an administrator must reopen it before corrections")
     return paper
 
 
@@ -110,6 +113,7 @@ def create_exam_result(
     current_user: OrganizationMember = Depends(get_current_user),
     active_session=Depends(get_active_session),
 ):
+    lock_scale_organization(db, current_user.org_id)
     exam_paper = editable_exam_paper(db, result_in.exam_paper_id, current_user.org_id, active_session.id)
 
     enrollment = (
@@ -169,6 +173,7 @@ def create_exam_results_bulk(
 ):
     if not results_in:
         raise HTTPException(status_code=400, detail="No results provided")
+    lock_scale_organization(db, current_user.org_id)
 
     exam_paper_cache: dict[int, ExamPaper | HTTPException] = {}
 
@@ -360,6 +365,7 @@ def delete_exam_result(
     db: Session = Depends(get_db),
     current_user: OrganizationMember = Depends(get_current_user),
 ):
+    lock_scale_organization(db, current_user.org_id)
     result = (
         db.query(ExamResult)
         .join(ExamPaper)
@@ -373,5 +379,6 @@ def delete_exam_result(
     if not result:
         raise HTTPException(status_code=404, detail="Result not found")
 
+    editable_exam_paper(db, result.exam_paper_id, current_user.org_id, None)
     db.delete(result)
     db.commit()

@@ -140,6 +140,7 @@ def bulk_dmc(
     meta = {
         "school_name": org.name,
         "exam_name": exam.name,
+        "session_name": active_session.name,
         "class_label": class_label,
         "logo_image": organization_logo(org),
     }

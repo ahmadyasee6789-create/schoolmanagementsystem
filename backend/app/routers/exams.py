@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from typing import List
 from datetime import date
@@ -9,6 +9,13 @@ from app.models.users import OrganizationMember
 from app.db.session import get_db
 from app.routers.auth import get_current_user
 from app.dependencies import get_active_session
+from app.services.grade_scales import require_scale_for_finalization
+from app.services.grade_scales import require_admin
+from app.models.exam_reopen_snapshot import ExamReopenSnapshot
+from app.schemas.exam_reopen import ReopenExamRequest, ReopenExamOut, ExamSnapshotSummary, ExamSnapshotOut
+from app.services.exam_editing import lock_exam_record, require_editable
+from app.services.exam_reopening import reopen_exam as reopen_exam_service, snapshot_hash
+from app.services.exam_snapshot_storage import require_snapshot_storage, snapshot_storage_available, has_reopen_history
 
 router = APIRouter(prefix="/exams", tags=["Exams"])
 
@@ -106,16 +113,8 @@ def update_exam(
     db: Session = Depends(get_db),
     current_user: OrganizationMember = Depends(get_current_user),
 ):
-    exam = db.query(Exam).filter(
-        Exam.id == exam_id,
-        Exam.organization_id == current_user.org_id
-    ).first()
-    if not exam:
-        raise HTTPException(status_code=404, detail="Exam not found")
-
-    # Prevent editing if locked
-    if exam.is_locked:
-        raise HTTPException(status_code=400, detail="Cannot update a locked exam")
+    exam = lock_exam_record(db, current_user.org_id, exam_id)
+    require_editable(exam)
 
     # Validate term if changed
     if exam_in.term_id and exam_in.term_id != exam.term_id:
@@ -164,16 +163,13 @@ def delete_exam(
     db: Session = Depends(get_db),
     current_user: OrganizationMember = Depends(get_current_user),
 ):
-    exam = db.query(Exam).filter(
-        Exam.id == exam_id,
-        Exam.organization_id == current_user.org_id
-    ).first()
-    if not exam:
-        raise HTTPException(status_code=404, detail="Exam not found")
+    exam = lock_exam_record(db, current_user.org_id, exam_id)
 
     # Prevent deletion if published or locked
     if exam.is_published or exam.is_locked:
         raise HTTPException(status_code=400, detail="Cannot delete a published or locked exam")
+    if snapshot_storage_available(db) and db.query(ExamReopenSnapshot.id).filter_by(exam_id=exam.id, organization_id=current_user.org_id).first():
+        raise HTTPException(409, "An exam with preserved correction history cannot be deleted")
 
     db.delete(exam)
     db.commit()
@@ -189,14 +185,12 @@ def publish_exam(
     db: Session = Depends(get_db),
     current_user: OrganizationMember = Depends(get_current_user),
 ):
-    exam = db.query(Exam).filter(
-        Exam.id == exam_id,
-        Exam.organization_id == current_user.org_id
-    ).first()
-    if not exam:
-        raise HTTPException(status_code=404, detail="Exam not found")
+    require_admin(current_user)
+    exam = lock_exam_record(db, current_user.org_id, exam_id)
     if exam.is_published:
         raise HTTPException(status_code=400, detail="Exam is already published")
+    if not exam.is_locked and not has_reopen_history(db, current_user.org_id, exam.id):
+        require_scale_for_finalization(db, current_user.org_id)
     exam.is_published = True
     db.commit()
     db.refresh(exam)
@@ -212,15 +206,38 @@ def lock_exam(
     db: Session = Depends(get_db),
     current_user: OrganizationMember = Depends(get_current_user),
 ):
-    exam = db.query(Exam).filter(
-        Exam.id == exam_id,
-        Exam.organization_id == current_user.org_id
-    ).first()
-    if not exam:
-        raise HTTPException(status_code=404, detail="Exam not found")
+    require_admin(current_user)
+    exam = lock_exam_record(db, current_user.org_id, exam_id)
     if exam.is_locked:
         raise HTTPException(status_code=400, detail="Exam is already locked")
+    if not exam.is_published and not has_reopen_history(db, current_user.org_id, exam.id):
+        require_scale_for_finalization(db, current_user.org_id)
     exam.is_locked = True
     db.commit()
     db.refresh(exam)
     return exam
+
+
+@router.post("/{exam_id}/reopen", response_model=ReopenExamOut)
+def reopen_exam(exam_id: int, payload: ReopenExamRequest, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    return reopen_exam_service(db, current_user, exam_id, payload.reason)
+
+
+@router.get("/{exam_id}/reopen-snapshots", response_model=List[ExamSnapshotSummary])
+def list_reopen_snapshots(exam_id: int, limit: int = Query(50, ge=1, le=100), db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    require_admin(current_user)
+    require_snapshot_storage(db)
+    get_exam(exam_id, db, current_user)
+    return db.query(ExamReopenSnapshot).filter_by(exam_id=exam_id, organization_id=current_user.org_id).order_by(ExamReopenSnapshot.id.desc()).limit(limit).all()
+
+
+@router.get("/{exam_id}/reopen-snapshots/{snapshot_id}", response_model=ExamSnapshotOut)
+def get_reopen_snapshot(exam_id: int, snapshot_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    require_admin(current_user)
+    require_snapshot_storage(db)
+    row = db.query(ExamReopenSnapshot).filter_by(id=snapshot_id, exam_id=exam_id, organization_id=current_user.org_id).first()
+    if row is None:
+        raise HTTPException(404, "Examination snapshot not found")
+    if snapshot_hash(row.snapshot) != row.snapshot_sha256:
+        raise HTTPException(409, "Examination snapshot integrity check failed")
+    return row

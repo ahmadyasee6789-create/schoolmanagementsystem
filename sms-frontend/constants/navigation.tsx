@@ -54,6 +54,7 @@ export const navigation: NavigationItem[] = [
   { label: "Exams", href: "/exams", icon: FileText, section: "Examinations" },
   { label: "Exam Papers", href: "/exams/exam_paper", icon: FileText, section: "Examinations" },
   { label: "Exam Results", href: "/exams/exam_result", icon: ClipboardList, section: "Examinations" },
+  { label: "Grade Scale", href: "/exams/grade-scale", icon: Layers, section: "Examinations" },
   { label: "DMC Generator", href: "/exams/dmc_generator", icon: FileText, section: "Examinations" },
 
   // ── Finance ──────────────────────────────
