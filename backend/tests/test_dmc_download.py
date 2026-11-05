@@ -5,12 +5,13 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-from fastapi import HTTPException
+from fastapi import FastAPI, HTTPException
+from fastapi.testclient import TestClient
 from PIL import Image
 from sqlalchemy import event
 
 import test_exam_result_entry as fixture
-from app.models.exams import ExamResult, GradeScale
+from app.models.exams import ExamPaper, ExamResult, GradeScale, Subject
 from app.models.student_enrollment import StudentEnrollment
 from app.models.users import Organization
 from app.routers import dmc
@@ -74,6 +75,37 @@ class DmcDownloadTests(unittest.TestCase):
         self.assertEqual(raised.exception.status_code, 409)
         self.assertIn("Subject 1", raised.exception.detail)
         render.assert_not_called()
+
+    def test_http_downloads_render_both_layouts_with_up_to_twelve_subjects(self):
+        self.seed_complete_class()
+        app = FastAPI()
+        app.include_router(dmc.router)
+        app.dependency_overrides[dmc.get_db] = lambda: self.db
+        app.dependency_overrides[dmc.get_current_user] = lambda: self.actor
+        app.dependency_overrides[dmc.get_active_session] = lambda: SimpleNamespace(id=1)
+
+        with TestClient(app) as client:
+            for subject_count in (4, 12):
+                if subject_count == 12:
+                    self.db.add_all(Subject(id=i, name=f"Mathematics and General Science {i}",
+                                            organization_id=1, session_id=1) for i in range(5, 13))
+                    self.db.flush()
+                    self.db.add_all(ExamPaper(id=i, exam_id=1, classroom_id=1, subject_id=i,
+                                              total_marks=100, pass_marks=40) for i in range(5, 13))
+                    self.db.flush()
+                    self.db.add_all(ExamResult(exam_paper_id=i, student_enrollment_id=self.enrollments[student],
+                                                obtained_marks=85)
+                                    for student in range(1, 4) for i in range(5, 13))
+                    self.db.commit()
+                    self.db.expunge_all()
+                for layout, pages in ((2, 2), (3, 1)):
+                    with self.subTest(subjects=subject_count, layout=layout):
+                        response = client.get(f"/dmc/exam/1/class/1?layout={layout}")
+                        self.assertEqual(response.status_code, 200)
+                        self.assertEqual(response.headers["content-type"], "application/pdf")
+                        self.assertIn(".pdf", response.headers["content-disposition"])
+                        self.assertTrue(response.content.startswith(b"%PDF-"))
+                        self.assertEqual(len(re.findall(rb"/Type\s*/Page\b", response.content)), pages)
 
     def test_other_session_is_rejected(self):
         with self.assertRaises(HTTPException) as raised:

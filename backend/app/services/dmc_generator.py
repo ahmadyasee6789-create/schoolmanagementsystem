@@ -147,12 +147,12 @@ def _logo_reader(meta: dict) -> ImageReader | None:
 
 def _draw_label_value(c: canvas.Canvas, label: str, value: Any,
                       x: float, y: float, label_width: float, value_width: float):
-    c.setFont('Helvetica-Bold', 7.3)
+    c.setFont('Helvetica-Bold', 8.2)
     c.setFillColor(MUTED)
     c.drawString(x, y, label)
-    c.setFont('Helvetica', 8.3)
+    c.setFont('Helvetica', 9.2)
     c.setFillColor(DARK)
-    c.drawString(x + label_width, y, _fit(value, 'Helvetica', 8.3, value_width))
+    c.drawString(x + label_width, y, _fit(value, 'Helvetica', 9.2, value_width))
 
 
 def _draw_card(c: canvas.Canvas, meta: dict, student: dict, base: float,
@@ -175,15 +175,15 @@ def _draw_card(c: canvas.Canvas, meta: dict, student: dict, base: float,
     title_x = W/2 + (7*mm if logo else 0)
     title_max = INNER_W - (28*mm if logo else 0)
     c.setFillColor(DARK)
-    c.setFont('Helvetica-Bold', 11)
+    c.setFont('Helvetica-Bold', 12.5)
     c.drawCentredString(title_x, yy(header_top - 5*mm),
-                        _fit(meta['school_name'].upper(), 'Helvetica-Bold', 11, title_max))
-    c.setFont('Helvetica-Bold', 8)
+                        _fit(meta['school_name'].upper(), 'Helvetica-Bold', 12.5, title_max))
+    c.setFont('Helvetica-Bold', 9)
     c.drawCentredString(title_x, yy(header_top - 10*mm), 'DETAILED MARKS CERTIFICATE')
-    c.setFont('Helvetica', 7.4)
+    c.setFont('Helvetica', 8.5)
     c.setFillColor(MUTED)
     c.drawCentredString(title_x, yy(header_top - 14*mm),
-                        _fit(meta['exam_name'], 'Helvetica', 7.4, title_max))
+                        _fit(meta['exam_name'], 'Helvetica', 8.5, title_max))
     line_y = CARD_H - 34*mm
     c.setStrokeColor(BORDER)
     c.line(LEFT, yy(line_y), RIGHT, yy(line_y))
@@ -204,17 +204,17 @@ def _draw_card(c: canvas.Canvas, meta: dict, student: dict, base: float,
     widths = [13*mm, INNER_W-13*mm-31*mm-32*mm, 31*mm, 32*mm]
     rows = [['#', 'Subject', 'Total Marks', 'Obtained']]
     for i, sub in enumerate(student['subjects'], 1):
-        rows.append([str(i), _fit(sub['name'], 'Helvetica', 7.2, widths[1]-5*mm),
+        rows.append([str(i), _fit(sub['name'], 'Helvetica', 8.3, widths[1]-5*mm),
                      str(sub['total']), str(sub['obtained'])])
     rows.append(['', 'GRAND TOTAL', str(student['grand_total']), str(student['obtained_total'])])
-    tbl = Table(rows, colWidths=widths, rowHeights=[6*mm]+[4.1*mm]*len(student['subjects'])+[5.5*mm])
+    tbl = Table(rows, colWidths=widths, rowHeights=[6*mm]+[4.3*mm]*len(student['subjects'])+[5.5*mm])
     tbl.setStyle(TableStyle([
         ('BACKGROUND', (0,0),(-1,0), LIGHT),
         ('BACKGROUND', (0,-1),(-1,-1), LIGHT),
         ('FONTNAME',(0,0),(-1,0),'Helvetica-Bold'),
         ('FONTNAME',(0,-1),(-1,-1),'Helvetica-Bold'),
         ('FONTNAME',(0,1),(-1,-2),'Helvetica'),
-        ('FONTSIZE',(0,0),(-1,-1),7.2),
+        ('FONTSIZE',(0,0),(-1,-1),8.3),
         ('TEXTCOLOR',(0,0),(-1,-1),DARK),
         ('ALIGN',(0,0),(0,-1),'CENTER'),
         ('ALIGN',(2,0),(-1,-1),'CENTER'),
@@ -238,7 +238,7 @@ def _draw_card(c: canvas.Canvas, meta: dict, student: dict, base: float,
     c.setFillColor(LIGHT)
     c.roundRect(LEFT, yy(summary_y-2*mm), INNER_W, 8*mm, 1.3*mm, fill=1, stroke=0)
     c.setFillColor(DARK)
-    c.setFont('Helvetica-Bold', 8)
+    c.setFont('Helvetica-Bold', 9)
     pct = str(student['percentage']).strip()
     if not pct.endswith('%'):
         pct += '%'
@@ -246,9 +246,9 @@ def _draw_card(c: canvas.Canvas, meta: dict, student: dict, base: float,
                     (.50, f'Grade: {student["grade"]}'),
                     (.82, f'Result: {student["result"]}')]:
         c.drawCentredString(LEFT+INNER_W*x, yy(summary_y+1*mm),
-                            _fit(text, 'Helvetica-Bold', 8, INNER_W*.28))
+                            _fit(text, 'Helvetica-Bold', 9, INNER_W*.28))
 
-    c.setFont('Helvetica', 7.4)
+    c.setFont('Helvetica', 8.2)
     c.setFillColor(MUTED)
     c.drawString(LEFT, yy(footer_y), 'Principal Signature: _____________________')
     issued = meta.get('issue_date') or date.today()

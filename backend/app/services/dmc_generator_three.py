@@ -53,39 +53,39 @@ def _draw_dmc(c: canvas.Canvas, meta: dict, student: dict, base_y: float, logo) 
     cx = W / 2 + (5 * mm if logo is not None else 0)
     max_title = 140 * mm if logo is not None else WIDTH
     c.setFillColor(BLUE)
-    c.setFont('Helvetica-Bold', 10)
-    c.drawCentredString(cx, y(90.5), _fit(meta['school_name'].upper(), 'Helvetica-Bold', 10, max_title))
+    c.setFont('Helvetica-Bold', 11.5)
+    c.drawCentredString(cx, y(90.5), _fit(meta['school_name'].upper(), 'Helvetica-Bold', 11.5, max_title))
     c.setFillColor(INK)
-    c.setFont('Helvetica-Bold', 7)
+    c.setFont('Helvetica-Bold', 8)
     c.drawCentredString(cx, y(86), 'DETAILED MARKS CERTIFICATE (DMC)')
-    c.setFont('Helvetica', 6.7)
-    c.drawCentredString(cx, y(82), _fit(meta['exam_name'], 'Helvetica', 6.7, max_title))
+    c.setFont('Helvetica', 7.5)
+    c.drawCentredString(cx, y(82), _fit(meta['exam_name'], 'Helvetica', 7.5, max_title))
     c.setStrokeColor(LINE)
     c.line(LEFT, y(77.5), RIGHT, y(77.5))
 
     # Student identity, three compact rows.
     c.setFillColor(INK)
-    c.setFont('Helvetica-Bold', 6.7)
+    c.setFont('Helvetica-Bold', 7.5)
     c.drawString(LEFT, y(73.4), 'Student:')
-    c.setFont('Helvetica', 7)
-    c.drawString(LEFT + 16 * mm, y(73.4), _fit(student['student_name'], 'Helvetica', 7, 87 * mm))
-    c.setFont('Helvetica-Bold', 6.7)
+    c.setFont('Helvetica', 7.8)
+    c.drawString(LEFT + 16 * mm, y(73.4), _fit(student['student_name'], 'Helvetica', 7.8, 87 * mm))
+    c.setFont('Helvetica-Bold', 7.5)
     c.drawString(LEFT + 111 * mm, y(73.4), 'Roll No:')
-    c.setFont('Helvetica', 7)
-    c.drawString(LEFT + 127 * mm, y(73.4), _fit(student['roll_no'], 'Helvetica', 7, 36 * mm))
+    c.setFont('Helvetica', 7.8)
+    c.drawString(LEFT + 127 * mm, y(73.4), _fit(student['roll_no'], 'Helvetica', 7.8, 36 * mm))
 
-    c.setFont('Helvetica-Bold', 6.7)
+    c.setFont('Helvetica-Bold', 7.5)
     c.drawString(LEFT, y(69.2), 'Father:')
-    c.setFont('Helvetica', 7)
-    c.drawString(LEFT + 16 * mm, y(69.2), _fit(student['father_name'], 'Helvetica', 7, 87 * mm))
-    c.setFont('Helvetica-Bold', 6.7)
+    c.setFont('Helvetica', 7.8)
+    c.drawString(LEFT + 16 * mm, y(69.2), _fit(student['father_name'], 'Helvetica', 7.8, 87 * mm))
+    c.setFont('Helvetica-Bold', 7.5)
     c.drawString(LEFT + 111 * mm, y(69.2), 'Class:')
-    c.setFont('Helvetica', 7)
-    c.drawString(LEFT + 127 * mm, y(69.2), _fit(meta['class_label'], 'Helvetica', 7, 36 * mm))
+    c.setFont('Helvetica', 7.8)
+    c.drawString(LEFT + 127 * mm, y(69.2), _fit(meta['class_label'], 'Helvetica', 7.8, 36 * mm))
 
-    c.setFont('Helvetica-Bold', 6.7)
+    c.setFont('Helvetica-Bold', 7.5)
     c.drawString(LEFT, y(65), 'Position:')
-    c.setFont('Helvetica', 7)
+    c.setFont('Helvetica', 7.8)
     c.drawString(LEFT + 16 * mm, y(65), _ordinal(student['position']))
 
     # Subject names run vertically DOWN the page (one subject per row).
@@ -107,7 +107,7 @@ def _draw_dmc(c: canvas.Canvas, meta: dict, student: dict, base_y: float, logo) 
     c.line(LEFT, table_top-head_h, RIGHT, table_top-head_h)
 
     c.setFillColor(INK)
-    c.setFont('Helvetica-Bold', 6.4)
+    c.setFont('Helvetica-Bold', 7.2)
     headers = ['#', 'SUBJECT', 'TOTAL', 'OBTAINED']
     centers = [(col_edges[i]+col_edges[i+1])/2 for i in range(4)]
     head_baseline = table_top - 3.15 * mm
@@ -120,16 +120,16 @@ def _draw_dmc(c: canvas.Canvas, meta: dict, student: dict, base_y: float, logo) 
     for idx, subject in enumerate(subjects):
         row_top = table_top - head_h - idx * row_h
         row_bottom = row_top - row_h
-        baseline = row_bottom + (row_h - 6.4)/2 + 1
+        baseline = row_bottom + (row_h - 7.2)/2 + 1
         if idx:
             c.setStrokeColor(LINE)
             c.setLineWidth(.3)
             c.line(LEFT, row_top, RIGHT, row_top)
         c.setFillColor(INK)
-        c.setFont('Helvetica', 6.35)
+        c.setFont('Helvetica', 7.2)
         c.drawCentredString(centers[0], baseline, str(idx+1))
         c.drawString(col_edges[1] + 2*mm, baseline,
-                     _fit(subject['name'], 'Helvetica', 6.35, 89*mm))
+                     _fit(subject['name'], 'Helvetica', 7.2, 89*mm))
         c.drawCentredString(centers[2], baseline, _str(subject['total']))
         c.drawCentredString(centers[3], baseline, _str(subject['obtained']))
 
@@ -145,15 +145,15 @@ def _draw_dmc(c: canvas.Canvas, meta: dict, student: dict, base_y: float, logo) 
         f"Grade: {_str(student.get('grade', '-'))}",
         f"Result: {_str(student['result'])}",
     ]
-    c.setFont('Helvetica-Bold', 6.4)
+    c.setFont('Helvetica-Bold', 7.2)
     c.setFillColor(BLUE)
     summary = '   |   '.join(summary_parts)
-    c.drawCentredString(W/2, summary_y, _fit(summary, 'Helvetica-Bold', 6.4, WIDTH))
+    c.drawCentredString(W/2, summary_y, _fit(summary, 'Helvetica-Bold', 7.2, WIDTH))
 
     issued = meta.get('issue_date') or date.today()
     if isinstance(issued, (date, datetime)):
         issued = issued.strftime('%d-%m-%Y')
-    c.setFont('Helvetica', 6.2)
+    c.setFont('Helvetica', 7)
     c.setFillColor(MUTED)
     c.drawString(LEFT, y(6.5), 'Class Teacher: __________________')
     c.drawCentredString(W/2, y(6.5), 'Principal: __________________')
