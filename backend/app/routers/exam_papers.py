@@ -9,11 +9,22 @@ from app.models.exams import Exam, ExamPaper
 from app.models.classroom import Classroom
 from app.models.exams import Subject, ClassSubject,Term
 from app.routers.auth import get_current_user
-from app.schemas.exam_paper import ExamPaperCreate, ExamPaperUpdate, ExamPaperOut
+from app.schemas.exam_paper import ExamPaperCreate, ExamPaperUpdate, ExamPaperOut, BulkExamPaperCreate, BulkExamPaperOut
 from app.dependencies import get_active_session
 from app.services.exam_editing import lock_exam_record, require_editable
+from app.services.bulk_exam_papers import create_bulk_exam_papers
 
 router = APIRouter(prefix="/exam-papers", tags=["Exam Papers"])
+
+
+@router.post("/bulk", response_model=BulkExamPaperOut)
+def bulk_create_exam_papers(
+    request: BulkExamPaperCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+    active_session=Depends(get_active_session),
+):
+    return create_bulk_exam_papers(db, current_user, request, active_session)
 
 # -------------------------
 # GET all exam papers for org
@@ -175,6 +186,11 @@ def update_exam_paper(
         raise HTTPException(status_code=404, detail="Exam paper not found")
     require_editable(lock_exam_record(db, current_user.org_id, paper.exam_id))
     db.refresh(paper)
+
+    total = paper_in.total_marks if paper_in.total_marks is not None else paper.total_marks
+    passing = paper_in.pass_marks if paper_in.pass_marks is not None else paper.pass_marks
+    if total is None or passing is None or total <= 0 or not 0 <= passing <= total:
+        raise HTTPException(422, "Marks must satisfy total > 0 and 0 <= pass marks <= total")
 
     if paper_in.total_marks is not None:
         paper.total_marks = paper_in.total_marks

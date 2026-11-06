@@ -2,7 +2,7 @@
 from datetime import date, datetime
 from decimal import Decimal
 from pydantic import BaseModel, BeforeValidator, ConfigDict, EmailStr, Field, field_validator
-from typing import Annotated, Optional
+from typing import Annotated, Literal, Optional
 
 
 def _reject_boolean_discount(value):
@@ -49,6 +49,16 @@ class StudentCreate(StudentBase):
 # --------------------------------------------------
 # UPDATE (PARTIAL)
 # --------------------------------------------------
+class EnrollmentDiscountUpdate(BaseModel):
+    enrollment_id: int = Field(gt=0)
+    session_id: int = Field(gt=0)
+    discount_percent: DiscountPercent
+    expected_discount_percent: DiscountPercent
+    confirmed: Literal[True]
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class StudentUpdate(BaseModel):
     first_name: Optional[str] = Field(default=None, min_length=1, max_length=100)
     last_name: Optional[str] = Field(default=None, max_length=100)
@@ -63,6 +73,7 @@ class StudentUpdate(BaseModel):
     guardian_name: Optional[str] = Field(default=None, max_length=255)
     guardian_phone: Optional[str] = Field(default=None, max_length=20)
     is_active: Optional[bool] = None
+    enrollment_discount: Optional[EnrollmentDiscountUpdate] = None
 
     model_config = ConfigDict(from_attributes=True)
 

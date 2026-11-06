@@ -50,6 +50,6 @@ export default function StudentOverview({ student }: { student: StudentDetails }
         {enrollment?.withdrawal_date && <Detail label="Withdrawal date">{displayDate(enrollment.withdrawal_date)}</Detail>}
       </InformationSection>
     </div>
-    <p className="text-xs text-slate-500 dark:text-slate-400">Class, section, roll number, session and discount are managed through enrollment.</p>
+    <p className="text-xs text-slate-500 dark:text-slate-400">Class, section, roll number and session are managed through enrollment. Administrators can update the tuition discount in Edit Student → Enrollment &amp; Fees for newly generated charges.</p>
   </div>;
 }

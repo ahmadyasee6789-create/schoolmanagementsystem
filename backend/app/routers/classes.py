@@ -1,6 +1,6 @@
 from datetime import date
-from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Annotated, List
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 
 from sqlalchemy.orm import Session,joinedload
@@ -9,6 +9,7 @@ from app.routers.auth import get_current_user
 from app.models.users import User,OrganizationMember
 from app.models.classroom import Classroom, Grade
 from app.models.attendance import Attendance
+from app.models.academic_session import AcademicSession
 from app.schemas.attendence import AttendanceCreate
 from app.schemas.auth import CurrentUser
 from app.schemas.classroom import AssignTeacherRequest, ClassroomCreate
@@ -21,20 +22,27 @@ router=APIRouter(prefix="/classes", tags=["Classes"])
 def get_classes(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
+    session_id: Annotated[int | None, Query(gt=0)] = None,
 ):
     # Authentication already loaded this user's organization membership.
     if current_user.org_id is None:
         raise HTTPException(status_code=403, detail="User not part of any organization")
+    if session_id is not None and db.query(AcademicSession.id).filter_by(
+        id=session_id, organization_id=current_user.org_id,
+    ).first() is None:
+        raise HTTPException(404, "Academic session not found")
 
     # Query classrooms with teacher info
-    classes=(
+    query=(
         db.query(Classroom)
         .options(
             joinedload(Classroom.grade),
             joinedload(Classroom.class_teacher).joinedload(OrganizationMember.user),
         ).filter(Classroom.organization_id==current_user.org_id)
-        .all()
     )
+    if session_id is not None:
+        query = query.filter(Classroom.academic_year_id == session_id)
+    classes = query.all()
     
 
     result = []

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { BookOpen, Plus, Search } from "lucide-react";
 import { api } from "@/app/lib/api";
 import toast from "react-hot-toast";
@@ -8,8 +8,12 @@ import SubjectCard from "@/components/academics/subject/SubjectCard";
 import SubjectsTable from "@/components/academics/subject/SubjectsTable";
 import AddEditSubjectDialog from "@/components/academics/subject/AddEditSubjectDialog";
 import DeleteSubjectDialog from "@/components/academics/subject/DeleteSubjectDialog";
+import { BulkAddSubjectsDialog } from "@/components/academics/subject/BulkSubjectDialogs";
+import { secondaryButtonClass } from "@/components/exams/ExamUi";
+import { useAuthStore } from "@/app/store/authStore";
+import { getAllSubjects, subjectError, type Subject } from "@/app/lib/subjects";
 
-export type Subject = { id: number; name: string };
+export type { Subject } from "@/app/lib/subjects";
 
 export default function SubjectsPage() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -21,22 +25,24 @@ export default function SubjectsPage() {
   const [saving, setSaving] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const isAdmin = useAuthStore((state) => state.user?.org_role === "admin");
 
-  const fetchSubjects = async () => {
+  const fetchSubjects = useCallback(async () => {
     try {
-      const res = await api.get("/subjects");
-      setSubjects(Array.isArray(res.data) ? res.data : []);
-    } catch {
-      toast.error("Failed to load subjects");
-      setSubjects([]);
+      setSubjects(await getAllSubjects());
+      setLoadError("");
+    } catch (error) {
+      setLoadError(subjectError(error, "Failed to load subjects"));
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchSubjects();
-  }, []);
+    void fetchSubjects();
+  }, [fetchSubjects]);
 
   const filteredSubjects = subjects.filter((subject) =>
     subject.name.toLowerCase().includes(search.toLowerCase()),
@@ -77,8 +83,8 @@ export default function SubjectsPage() {
       setDialogOpen(false);
       setEditingSubject(null);
       setSubjectName("");
-    } catch (error: any) {
-      toast.error(error.response?.data?.detail ?? "Failed to save subject");
+    } catch (error: unknown) {
+      toast.error(subjectError(error, "Failed to save subject"));
     } finally {
       setSaving(false);
     }
@@ -93,8 +99,8 @@ export default function SubjectsPage() {
       setSubjects((current) => current.filter((subject) => subject.id !== deleteId));
       setDeleteId(null);
       toast.success("Subject deleted");
-    } catch (error: any) {
-      toast.error(error.response?.data?.detail ?? "Failed to delete subject");
+    } catch (error: unknown) {
+      toast.error(subjectError(error, "Failed to delete subject"));
     } finally {
       setDeleting(false);
     }
@@ -111,14 +117,16 @@ export default function SubjectsPage() {
             Manage academic subjects offered in your school
           </p>
         </div>
-        <button
+        <div className="flex flex-wrap gap-2"><button
           onClick={openAdd}
           className="flex items-center gap-1.5 rounded-lg bg-[#8B6DF2] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-400"
         >
           <Plus size={16} />
           Add Subject
         </button>
+        {isAdmin && <button type="button" onClick={() => setBulkOpen(true)} disabled={loading || !!loadError} className={`${secondaryButtonClass} disabled:opacity-40`}>Add Multiple Subjects</button>}</div>
       </div>
+      {loadError && <p role="alert" className="mb-4 text-sm text-red-600 dark:text-red-400">{loadError} <button type="button" onClick={() => void fetchSubjects()} className="underline">Retry subjects</button></p>}
 
       <div className="relative mb-6 max-w-sm">
         <Search
@@ -188,6 +196,10 @@ export default function SubjectsPage() {
         onConfirm={confirmDelete}
         loading={deleting}
       />
+      {bulkOpen && <BulkAddSubjectsDialog subjects={subjects} onClose={() => setBulkOpen(false)} onSaved={async (result) => {
+        toast.success(`${result.created_count} subjects created, ${result.skipped_count} skipped`);
+        await fetchSubjects();
+      }} />}
     </div>
   );
 }

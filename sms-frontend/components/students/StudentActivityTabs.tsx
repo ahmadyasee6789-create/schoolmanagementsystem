@@ -28,7 +28,7 @@ type Fee = { fee_id: number; billing_period: string; final_amount: string; paid_
 type Payment = { transaction_id: number; receipt_no: string; payment_date: string; amount: string; available_credit: string; status: string; allocations: { billing_period: string; amount: string }[] };
 type History = { items: Fee[]; sessions: { session_id: number; session_name: string; billed: string; paid: string; outstanding: string; available_credit: string }[] };
 
-export function StudentFeesTab({ studentId, studentName, className }: { studentId: number; studentName?: string; className?: string }) {
+export function StudentFeesTab({ studentId, studentName, className, refreshKey = 0 }: { studentId: number; studentName?: string; className?: string; refreshKey?: number }) {
   const [history, setHistory] = useState<History | null>(null);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [sessionId, setSessionId] = useState("");
@@ -61,7 +61,7 @@ export function StudentFeesTab({ studentId, studentName, className }: { studentI
   useEffect(() => {
     void load();
     return () => request.current?.abort();
-  }, [load]);
+  }, [load, refreshKey]);
   if (loading && !history) return <StudentSkeleton />;
   const summaries = history?.sessions.filter((session) => !sessionId || String(session.session_id) === sessionId) ?? [];
   const status = (fee: Fee) => fee.status === "paid" ? "Paid" : fee.future ? "Future" : fee.overdue ? "Overdue" : fee.status === "partial" ? "Partial" : "Unpaid";

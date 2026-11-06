@@ -27,6 +27,7 @@ function StudentDetailsContent({ studentId }: { studentId: number }) {
   const query = useStudentDetails(studentId);
   const [tab, setTab] = useState<Tab>("overview");
   const [editing, setEditing] = useState(false);
+  const [feeRefreshKey, setFeeRefreshKey] = useState(0);
   const tabButtons = useRef<(HTMLButtonElement | null)[]>([]);
   const role = useAuthStore((state) => state.user?.org_role);
   const canEdit = !!role && ["manager", "admin", "teacher"].includes(role);
@@ -76,9 +77,9 @@ function StudentDetailsContent({ studentId }: { studentId: number }) {
         }} className={`flex flex-1 shrink-0 items-center justify-center gap-2 border-b-2 px-2 py-3 text-xs font-semibold sm:text-sm lg:flex-none lg:px-5 ${tab === id ? "border-[#8B6DF2] text-[#8B6DF2]" : "border-transparent text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"}`}><Icon size={16} className="hidden lg:block" />{label}</button>)}
     </div>
     {tabs.map(({ id }) => <div key={id} role="tabpanel" id={`student-panel-${id}`} aria-labelledby={`student-tab-${id}`} hidden={tab !== id} tabIndex={0}>
-      {tab === id && (id === "overview" ? <StudentOverview student={student} /> : id === "fees" ? <StudentFeesTab studentId={studentId} studentName={name} className={enrollment?.class_name ?? undefined} /> : id === "attendance" ? <StudentAttendanceTab /> : student.active_session ? <StudentResultsTab studentId={studentId} /> : <p className="text-sm text-slate-500 dark:text-slate-400">Activate an academic session to view exam results.</p>)}
+      {tab === id && (id === "overview" ? <StudentOverview student={student} /> : id === "fees" ? <StudentFeesTab studentId={studentId} studentName={name} className={enrollment?.class_name ?? undefined} refreshKey={feeRefreshKey} /> : id === "attendance" ? <StudentAttendanceTab /> : student.active_session ? <StudentResultsTab studentId={studentId} /> : <p className="text-sm text-slate-500 dark:text-slate-400">Activate an academic session to view exam results.</p>)}
     </div>)}
-    {editing && <EditStudentDialog studentId={studentId} onClose={() => setEditing(false)} />}
+    {editing && <EditStudentDialog studentId={studentId} onClose={() => setEditing(false)} onSaved={() => setFeeRefreshKey((value) => value + 1)} />}
   </>;
 }
 

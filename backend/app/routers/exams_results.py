@@ -1,6 +1,9 @@
 # app/routers/exam_results.py
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import case, text, tuple_, update
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session, contains_eager
+from sqlalchemy.orm.attributes import set_committed_value
 from typing import List
 from pydantic import BaseModel
 
@@ -173,91 +176,113 @@ def create_exam_results_bulk(
 ):
     if not results_in:
         raise HTTPException(status_code=400, detail="No results provided")
-    lock_scale_organization(db, current_user.org_id)
-
-    exam_paper_cache: dict[int, ExamPaper | HTTPException] = {}
-
-    succeeded_objects: list[tuple[ExamResult, ExamPaper]] = []
-    failed: list[dict] = []
-
-    for i, result_in in enumerate(results_in):
-        try:
-            paper_id = result_in.exam_paper_id
-            if paper_id not in exam_paper_cache:
-                try:
-                    exam_paper_cache[paper_id] = editable_exam_paper(db, paper_id, current_user.org_id, active_session.id)
-                except HTTPException as exc:
-                    exam_paper_cache[paper_id] = exc
-            exam_paper = exam_paper_cache[paper_id]
-            if isinstance(exam_paper, HTTPException):
-                raise exam_paper
-
-            enrollment = (
-                db.query(StudentEnrollment)
-                .join(Student)
-                .filter(
-                    StudentEnrollment.id == result_in.student_enrollment_id,
-                    StudentEnrollment.classroom_id == exam_paper.classroom_id,
-                    StudentEnrollment.session_id == active_session.id,
-                    StudentEnrollment.is_active == True,
-                    Student.organization_id == current_user.org_id,
-                )
-                .first()
-            )
-            if not enrollment:
-                raise HTTPException(
-                    status_code=404,
-                    detail=f"Enrollment {result_in.student_enrollment_id} not found in this classroom",
-                )
-
-            if result_in.obtained_marks > exam_paper.total_marks:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Marks ({result_in.obtained_marks}) exceed total marks ({exam_paper.total_marks})",
-                )
-
-            result = (
-                db.query(ExamResult)
-                .filter(
-                    ExamResult.exam_paper_id == exam_paper.id,
-                    ExamResult.student_enrollment_id == enrollment.id,
-                )
-                .first()
-            )
-
-            if result:
-                result.obtained_marks = result_in.obtained_marks
-            else:
-                result = ExamResult(
-                    exam_paper_id=exam_paper.id,
-                    student_enrollment_id=enrollment.id,
-                    obtained_marks=result_in.obtained_marks,
-                )
-                db.add(result)
-
-            db.flush()
-            succeeded_objects.append((result, exam_paper))
-
-        except HTTPException as e:
-            failed.append({
-                "index": i,
-                "student_enrollment_id": result_in.student_enrollment_id,
-                "exam_paper_id": result_in.exam_paper_id,
-                "error": e.detail,
-            })
-
     try:
+        if db.get_bind().dialect.name == "postgresql":
+            # Keep a save from waiting indefinitely behind another writer. These
+            # limits apply only to this transaction and reset on commit/rollback.
+            db.execute(text("SET LOCAL lock_timeout = '10s'"))
+            db.execute(text("SET LOCAL statement_timeout = '25s'"))
+        lock_scale_organization(db, current_user.org_id)
+        session_id = active_session.id
+        paper_ids = sorted({row.exam_paper_id for row in results_in})
+        enrollment_ids = {row.student_enrollment_id for row in results_in}
+
+        # Match lifecycle writers' organization-then-exam lock order, while
+        # loading all requested paper definitions and statuses in one round trip.
+        paper_rows = db.query(ExamPaper, Exam.is_locked, Exam.is_published).join(Exam).join(Term).filter(
+            ExamPaper.id.in_(paper_ids),
+            Exam.organization_id == current_user.org_id,
+            Term.organization_id == current_user.org_id,
+            Term.academic_year_id == session_id,
+        ).populate_existing().order_by(ExamPaper.exam_id, ExamPaper.id).with_for_update(of=Exam).all()
+        papers = {paper.id: (paper, locked, published) for paper, locked, published in paper_rows}
+        enrollments = {enrollment.id: enrollment for enrollment in db.query(StudentEnrollment).join(Student).filter(
+            StudentEnrollment.id.in_(enrollment_ids),
+            StudentEnrollment.session_id == session_id,
+            StudentEnrollment.is_active == True,
+            Student.organization_id == current_user.org_id,
+        ).populate_existing().all()}
+        keys = {(row.exam_paper_id, row.student_enrollment_id) for row in results_in
+                if row.exam_paper_id in papers and row.student_enrollment_id in enrollments}
+        existing = { (result.exam_paper_id, result.student_enrollment_id): result
+                    for result in db.query(ExamResult).filter(
+                        tuple_(ExamResult.exam_paper_id, ExamResult.student_enrollment_id).in_(keys),
+                    ).populate_existing().with_for_update().all()} if keys else {}
+
+        succeeded_objects: list[tuple[ExamResult, ExamPaper]] = []
+        failed: list[dict] = []
+        updates: dict[int, int] = {}
+        for index, row in enumerate(results_in):
+            state = papers.get(row.exam_paper_id)
+            enrollment = enrollments.get(row.student_enrollment_id)
+            error = None
+            if state is None:
+                error = "Exam paper not found"
+            elif state[1]:
+                error = "Exam is locked"
+            elif state[2]:
+                error = "Exam is published; an administrator must reopen it before corrections"
+            elif enrollment is None or enrollment.classroom_id != state[0].classroom_id:
+                error = f"Enrollment {row.student_enrollment_id} not found in this classroom"
+            elif state[0].total_marks is None or state[0].total_marks <= 0:
+                error = "Exam paper total marks need correction before saving results"
+            elif row.obtained_marks > state[0].total_marks:
+                error = f"Marks ({row.obtained_marks}) exceed total marks ({state[0].total_marks})"
+            if error is not None:
+                failed.append(dict(index=index, student_enrollment_id=row.student_enrollment_id,
+                                   exam_paper_id=row.exam_paper_id, error=error))
+                continue
+            key = (row.exam_paper_id, row.student_enrollment_id)
+            result = existing.get(key)
+            if result is None:
+                result = ExamResult(exam_paper_id=row.exam_paper_id, student_enrollment_id=enrollment.id)
+                db.add(result)
+                existing[key] = result
+            if result.id is None:
+                result.obtained_marks = row.obtained_marks
+            else:
+                updates[result.id] = row.obtained_marks
+            succeeded_objects.append((result, state[0]))
+
+        db.flush()
+        if updates:
+            # A single CASE update also avoids drivers whose executemany still
+            # performs a remote round trip per row. IDs come only from scoped,
+            # validated, locked results above; duplicate input keeps last value.
+            changed = db.execute(update(ExamResult).where(ExamResult.id.in_(updates)).values(
+                obtained_marks=case(updates, value=ExamResult.id),
+            ).execution_options(synchronize_session=False))
+            if changed.rowcount != len(updates):
+                raise HTTPException(409, "Saved marks changed during this request. Read saved marks before retrying.")
+            for result in existing.values():
+                if result.id in updates:
+                    set_committed_value(result, "obtained_marks", updates[result.id])
+        scales = db.query(GradeScale).filter(GradeScale.organization_id == current_user.org_id).order_by(
+            GradeScale.min_percentage.desc(),
+        ).all() if succeeded_objects else []
+        succeeded_out = []
+        for result, paper in succeeded_objects:
+            percentage = mark_percentage(result.obtained_marks, paper.total_marks)
+            scale = next((band for band in scales if band.min_percentage <= percentage <= band.max_percentage), None)
+            succeeded_out.append(result_out(result, scale.grade if scale else None, scale.gpa if scale else None))
+        # Materialize the response before commit expires ORM attributes. Never
+        # refresh every result or query the grading scale once per saved cell.
+        validated = BulkExamResultOut(succeeded=succeeded_out, failed=failed)
+        response = {"succeeded": validated.succeeded, "failed": validated.failed}
         db.commit()
-    except Exception as e:
+        return response
+    except HTTPException:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Bulk commit failed: {str(e)}")
-
-    succeeded_out: list[ExamResultOut] = []
-    for result, exam_paper in succeeded_objects:
-        db.refresh(result)
-        succeeded_out.append(build_result_out(result, exam_paper, db, current_user.org_id))
-
-    return {"succeeded": succeeded_out, "failed": failed}
+        raise
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(409, "Marks conflicted with another request. Read saved marks before retrying.") from exc
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(503, "Could not confirm the save. Read saved marks before retrying; your edits can be retained.") from exc
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(500, "Could not confirm the save. Read saved marks before retrying.") from exc
 
 
 # ─────────────────────────────────────────────

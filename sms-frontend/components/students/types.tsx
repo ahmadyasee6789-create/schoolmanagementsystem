@@ -53,6 +53,16 @@ export type StudentDetails = StudentProfile & {
 
 export type StudentUpdate = Partial<Omit<StudentProfile, "id" | "admission_no">>;
 
+export type StudentSaveChanges = StudentUpdate & {
+  enrollment_discount?: {
+    enrollment_id: number;
+    session_id: number;
+    discount_percent: string;
+    expected_discount_percent: string;
+    confirmed: true;
+  };
+};
+
 export type StudentFormData = {
   id: number;
   first_name: string;

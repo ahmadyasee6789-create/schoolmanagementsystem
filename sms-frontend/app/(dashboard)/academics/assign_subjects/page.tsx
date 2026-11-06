@@ -1,9 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { BookOpen, GraduationCap, Layers, Plus, Search, Trash2, X } from "lucide-react";
 import { api } from "@/app/lib/api";
 import toast from "react-hot-toast";
+import { useAuthStore } from "@/app/store/authStore";
+import { getAllSubjects, subjectError } from "@/app/lib/subjects";
+import { BulkAssignSubjectsDialog } from "@/components/academics/subject/BulkSubjectDialogs";
 
 type Assignment = {
   id: number;
@@ -13,7 +16,7 @@ type Assignment = {
   subject_id: number;
   subject_name: string;
 };
-type ClassItem = { id: number; class_name: string; section: string };
+type ClassItem = { id: number; class_name: string; grade_name?: string; section: string };
 type SubjectItem = { id: number; name: string };
 type AssignForm = { classroom_id: number | ""; subject_id: number | "" };
 type ApiError = { response?: { data?: { detail?: string } } };
@@ -63,8 +66,11 @@ export default function ClassSubjectsPage() {
   const [saving, setSaving] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [dataError, setDataError] = useState("");
+  const isAdmin = useAuthStore((state) => state.user?.org_role === "admin");
 
-  const fetchAssignments = async () => {
+  const fetchAssignments = useCallback(async () => {
     try {
       const res = await api.get("/subjects/assignments");
       setAssignments(res.data);
@@ -73,15 +79,19 @@ export default function ClassSubjectsPage() {
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    Promise.all([
-      api.get("/classes").then((res) => setClasses(res.data)),
-      api.get("/subjects").then((res) => setSubjects(res.data)),
-    ]).catch(() => toast.error("Failed to load data"));
-    fetchAssignments();
   }, []);
+
+  const loadData = useCallback(async () => {
+    try {
+      const [{ data: session }, schoolSubjects, { data: schoolAssignments }] = await Promise.all([
+        api.get<{ id: number }>("/sessions/active"), getAllSubjects(), api.get<Assignment[]>("/subjects/assignments"),
+      ]);
+      const { data: schoolClasses } = await api.get<ClassItem[]>("/classes", { params: { session_id: session.id } });
+      setClasses(schoolClasses); setSubjects(schoolSubjects); setAssignments(schoolAssignments); setDataError("");
+    } catch (error) { setDataError(subjectError(error, "Failed to load assignment data")); }
+    finally { setLoading(false); }
+  }, []);
+  useEffect(() => { void loadData(); }, [loadData]);
 
   const filtered = assignments.filter((assignment) =>
     assignment.subject_name.toLowerCase().includes(search.toLowerCase()) ||
@@ -134,11 +144,13 @@ export default function ClassSubjectsPage() {
             Manage subject assignments across classrooms
           </p>
         </div>
-        <button type="button" onClick={openAssign} className="flex items-center gap-1.5 rounded-lg bg-[#8B6DF2] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-400">
+        <div className="flex flex-wrap gap-2"><button type="button" onClick={openAssign} className="flex items-center gap-1.5 rounded-lg bg-[#8B6DF2] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-400">
           <Plus size={16} />
           Assign Subject
         </button>
+        {isAdmin && <button type="button" onClick={() => setBulkOpen(true)} disabled={loading || !!dataError} className={`${secondaryButtonClass} disabled:opacity-40`}>Assign Multiple Subjects</button>}</div>
       </div>
+      {dataError && <p role="alert" className="mb-4 text-sm text-red-600 dark:text-red-400">{dataError} <button type="button" onClick={() => void loadData()} className="underline">Retry data</button></p>}
 
       <div className="relative mb-6 max-w-xl">
         <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
@@ -189,6 +201,10 @@ export default function ClassSubjectsPage() {
         </div>
       )}
 
+      {bulkOpen && <BulkAssignSubjectsDialog subjects={subjects} classrooms={classes} assignments={assignments} onClose={() => setBulkOpen(false)} onSaved={async (result) => {
+        toast.success(`${result.assigned_count} subjects assigned, ${result.skipped_count} skipped`);
+        await fetchAssignments();
+      }} />}
       {deleteId !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="remove-subject-title">
           <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-5 shadow-xl dark:border-white/10 dark:bg-[#1a2233]">

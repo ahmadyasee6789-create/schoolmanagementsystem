@@ -1,11 +1,11 @@
-// Run with Next on 127.0.0.1:45898 and NEXT_PUBLIC_API_URL=http://127.0.0.1:45899.
+// Run against local Next.js. All API traffic is intercepted with fixtures.
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { after, before, test } from "node:test";
 
 const { chromium } = createRequire(import.meta.url)(process.env.EXAM_TEST_PLAYWRIGHT || "playwright");
-const frontend = "http://127.0.0.1:45898";
-const api = "http://127.0.0.1:45899";
+const frontend = process.env.EXAM_TEST_FRONTEND || "http://127.0.0.1:45898";
+assert.ok(["localhost", "127.0.0.1", "[::1]"].includes(new URL(frontend).hostname));
 const user = { id: 19, org_id: 10, org_role: "admin", full_name: "Fixture Admin", email: "fixture@example.invalid" };
 const students = [
   { id: 1, enrollment_id: 101, first_name: "Ali", last_name: "Khan", admission_no: "A101" },
@@ -41,8 +41,7 @@ async function fixture(t) {
   await context.route("**/*", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
-    if (url.origin === frontend) return route.continue();
-    if (url.origin !== api) return route.abort();
+    if (url.origin === frontend && request.method() === "GET") return route.continue();
     if (request.method() === "OPTIONS") return route.fulfill({ status: 204, headers: cors });
     const reply = (json, status = 200) => route.fulfill({ json, status, headers: cors });
     switch (url.pathname) {

@@ -330,8 +330,10 @@ def update_student(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Update student information."""
+    """Update profile and an explicitly confirmed enrollment discount atomically."""
     require_write_access(current_user)
+    if data.enrollment_discount is not None and current_user.org_role != "admin":
+        raise HTTPException(status_code=403, detail="Only school administrators can change enrollment discounts")
     student = student_crud.update_student(
         db=db, student_id=student_id, student=data, org_id=current_user.org_id
     )

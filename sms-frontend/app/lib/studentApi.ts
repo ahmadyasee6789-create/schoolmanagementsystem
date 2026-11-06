@@ -1,6 +1,6 @@
 import { isAxiosError } from "axios";
 import { api } from "./api";
-import type { Student, StudentDetails, StudentProfile, StudentUpdate } from "@/components/students/types";
+import type { Student, StudentDetails, StudentProfile, StudentSaveChanges } from "@/components/students/types";
 import type { ExamPaper, ExamResult } from "@/components/exams/types";
 
 export type StudentListParams = { page: number; limit: number; search: string; grade_name?: string };
@@ -16,8 +16,8 @@ export async function getStudentDetails(id: number, signal?: AbortSignal) {
   return data;
 }
 
-export async function updateStudent(id: number, changes: StudentUpdate) {
-  // The existing PUT route accepts partial updates. Never send tenant or enrollment fields.
+export async function updateStudent(id: number, changes: StudentSaveChanges) {
+  // Personal fields and an explicitly confirmed enrollment discount save atomically.
   const { data } = await api.put<StudentProfile>(`/students/${id}`, changes);
   return data;
 }

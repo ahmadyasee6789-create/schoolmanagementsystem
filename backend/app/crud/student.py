@@ -12,7 +12,9 @@ from app.models.student_enrollment import StudentEnrollment
 from app.models.classroom import Classroom, Grade
 from app.models.student_fee import StudentFee
 from app.models.fee_transection import FeeTransaction
+from app.models.academic_session import AcademicSession
 from app.schemas.student import DiscountPercent, StudentCreate, StudentUpdate
+from app.services.fee_locks import lock_financial_organization
 from pydantic import TypeAdapter, ValidationError
 
 
@@ -301,16 +303,58 @@ def get_student_details(
 def update_student(
     db: Session, student_id: int, student: StudentUpdate, org_id: int
 ) -> Optional[Student]:
-    db_student = get_student_by_id(db, student_id, org_id)
-    if not db_student:
-        return None
+    discount = student.enrollment_discount
+    try:
+        if discount is not None:
+            # Match fee generation's ordering so new charges see either the old
+            # policy or the confirmed new policy, never a partially saved edit.
+            lock_financial_organization(db, org_id)
+            db_student = db.query(Student).filter(
+                Student.id == student_id, Student.organization_id == org_id,
+            ).populate_existing().with_for_update().first()
+        else:
+            db_student = get_student_by_id(db, student_id, org_id)
+        if not db_student:
+            db.rollback()
+            return None
 
-    for field, value in student.model_dump(exclude_unset=True).items():
-        setattr(db_student, field, value)
+        if discount is not None:
+            session = db.query(AcademicSession).filter(
+                AcademicSession.id == discount.session_id,
+                AcademicSession.organization_id == org_id,
+            ).first()
+            enrollment = db.query(StudentEnrollment).filter(
+                StudentEnrollment.id == discount.enrollment_id,
+                StudentEnrollment.student_id == student_id,
+                StudentEnrollment.session_id == discount.session_id,
+            ).populate_existing().with_for_update().first()
+            if session is None or enrollment is None:
+                raise HTTPException(404, "Student enrollment not found for this academic session")
+            if enrollment.classroom_id is not None:
+                classroom = db.query(Classroom).join(Grade).filter(
+                    Classroom.id == enrollment.classroom_id,
+                    Classroom.organization_id == org_id,
+                    Classroom.academic_year_id == discount.session_id,
+                    Grade.organization_id == org_id,
+                ).first()
+                if classroom is None:
+                    raise HTTPException(409, "Enrollment classroom ownership needs review before changing the discount")
+            current_discount = enrollment.discount_percent or Decimal("0")
+            if current_discount != discount.expected_discount_percent:
+                raise HTTPException(409, "The enrollment discount changed since this form was opened. Reload the profile and confirm the current discount.")
+            # Only the enrollment policy changes. Issued charges, including
+            # pre-generated future months, retain their original snapshots.
+            enrollment.discount_percent = discount.discount_percent
 
-    db.commit()
-    db.refresh(db_student)
-    return db_student
+        for field, value in student.model_dump(exclude_unset=True, exclude={"enrollment_discount"}).items():
+            setattr(db_student, field, value)
+
+        db.commit()
+        db.refresh(db_student)
+        return db_student
+    except Exception:
+        db.rollback()
+        raise
 
 
 # --------------------------------------------------

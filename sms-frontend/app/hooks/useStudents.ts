@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/app/store/authStore";
 import { getStudentDetails, getStudentResults, getStudents, updateStudent } from "@/app/lib/studentApi";
-import type { StudentDetails, StudentUpdate } from "@/components/students/types";
+import type { StudentDetails, StudentSaveChanges } from "@/components/students/types";
 
 export const studentKeys = {
   lists: ["students"] as const,
@@ -42,7 +42,7 @@ export function useStudents({ page, search, grade }: { page: number; search: str
 export function useUpdateStudent(id: number) {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (changes: StudentUpdate) => updateStudent(id, changes),
+    mutationFn: (changes: StudentSaveChanges) => updateStudent(id, changes),
     onSuccess: async (profile) => {
       client.setQueryData<StudentDetails>(studentKeys.detail(id), (previous) => previous ? { ...previous, ...profile } : previous);
       await Promise.all([

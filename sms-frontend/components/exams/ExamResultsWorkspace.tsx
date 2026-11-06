@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { isAxiosError } from "axios";
 import { CheckCircle2, ClipboardList, FileText, GraduationCap, Lock, Save, Search, UserRound } from "lucide-react";
 import toast from "react-hot-toast";
 import { api } from "@/app/lib/api";
@@ -19,6 +20,25 @@ type BulkResponse = {
   failed: { exam_paper_id: number; student_enrollment_id: number; error: string }[];
 };
 type EvaluationResponse = { passed_students: OverallResult[]; failed_students: OverallResult[] };
+
+const SAVE_TIMEOUT_MS = 45_000;
+const CHECK_TIMEOUT_MS = 15_000;
+class MarksRequestTimeout extends Error {}
+
+async function marksRequest<T>(request: (signal: AbortSignal) => Promise<T>, milliseconds: number): Promise<T> {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), milliseconds);
+  try {
+    return await request(controller.signal);
+  } catch (error) {
+    if (controller.signal.aborted || isAxiosError(error) && ["ECONNABORTED", "ETIMEDOUT"].includes(error.code ?? "")) {
+      throw new MarksRequestTimeout();
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
 
 function loadDrafts(key: string): Record<string, string> {
   try {
@@ -41,7 +61,10 @@ export default function ExamResultsWorkspace({ scope }: { scope: string }) {
   const [drafts, setDrafts] = useState<Record<string, string>>(() => loadDrafts(storageKey));
   const [failures, setFailures] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [saveNotice, setSaveNotice] = useState("");
   const inFlight = useRef(false);
+  const busy = saving || checking;
 
   const dirtyCount = Object.keys(drafts).length;
   useEffect(() => {
@@ -163,10 +186,14 @@ export default function ExamResultsWorkspace({ scope }: { scope: string }) {
     }
     inFlight.current = true;
     setSaving(true);
+    setSaveNotice("");
     try {
-      const { data } = await api.post<BulkResponse>("/exam-results/bulk", valid.map(({ paper, enrollment, mark }) => ({
+      const payload = valid.map(({ paper, enrollment, mark }) => ({
         exam_paper_id: paper.id, student_enrollment_id: enrollment, obtained_marks: Number(mark),
-      })));
+      }));
+      const { data } = await marksRequest((signal) => api.post<BulkResponse>("/exam-results/bulk", payload, {
+        signal, timeout: SAVE_TIMEOUT_MS,
+      }), SAVE_TIMEOUT_MS);
       const submitted = new Map(valid.map(({ key, mark }) => [key, mark]));
       const saved = new Map(data.succeeded.map((result) =>
         [resultKey(result.exam_paper_id, result.student_enrollment_id), result]));
@@ -196,10 +223,51 @@ export default function ExamResultsWorkspace({ scope }: { scope: string }) {
       if (data.failed.some((row) => /locked|published/i.test(row.error))) void setupQuery.refetch();
     } catch (error) {
       const detail = (error as ApiError).response?.data?.detail;
-      toast.error(typeof detail === "string" ? detail : "Could not confirm the save. Your edits are still available.");
+      const notice = error instanceof MarksRequestTimeout
+        ? "Saving took too long to confirm. Your unsaved marks are kept. Check saved marks before retrying; the server may have completed the save."
+        : typeof detail === "string" ? `${detail} Your unsaved marks are kept.`
+        : "Could not confirm the save. Your unsaved marks are kept. Check saved marks before retrying.";
+      setSaveNotice(notice);
+      toast.error(notice);
     } finally {
       inFlight.current = false;
       setSaving(false);
+    }
+  }
+
+  async function checkSavedMarks() {
+    if (inFlight.current || !selectedExam) return;
+    inFlight.current = true;
+    setChecking(true);
+    try {
+      await queryClient.cancelQueries({ queryKey: resultsKey, exact: true });
+      const { data } = await marksRequest((signal) => api.get<ExamResult[]>(`/exam-results/exam/${examId}`, {
+        signal, timeout: CHECK_TIMEOUT_MS,
+      }), CHECK_TIMEOUT_MS);
+      queryClient.setQueryData<ExamResult[]>(resultsKey, data);
+      const actual = new Map(data.map((result) => [resultKey(result.exam_paper_id, result.student_enrollment_id), result]));
+      const confirmed = Object.entries(drafts).filter(([key, mark]) => /^\d+$/.test(mark)
+        && Number.isSafeInteger(Number(mark)) && actual.get(key)?.obtained_marks === Number(mark));
+      setDrafts((current) => {
+        const next = { ...current };
+        for (const [key, mark] of confirmed) if (next[key] === mark) delete next[key];
+        return next;
+      });
+      setFailures((current) => {
+        const next = { ...current };
+        for (const [key] of confirmed) delete next[key];
+        return next;
+      });
+      setSaveNotice(confirmed.length
+        ? `${confirmed.length} saved ${confirmed.length === 1 ? "mark" : "marks"} confirmed. Any remaining drafts are kept.`
+        : "Saved marks checked. Your unsaved marks are kept for review.");
+      void queryClient.invalidateQueries({ queryKey: evaluationKey });
+      void setupQuery.refetch();
+    } catch {
+      setSaveNotice("Could not check saved marks. Your unsaved marks are kept. Try checking again when the connection is available.");
+    } finally {
+      inFlight.current = false;
+      setChecking(false);
     }
   }
 
@@ -214,7 +282,7 @@ export default function ExamResultsWorkspace({ scope }: { scope: string }) {
       <div role="tablist" aria-label="Marks entry view" className="mb-6 inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1 dark:border-white/10 dark:bg-white/[0.03]">
         {tabs.map(({ id, label }, index) => (
           <button key={id} id={`entry-tab-${id}`} type="button" role="tab" aria-selected={viewMode === id}
-            aria-controls="marks-entry-panel" tabIndex={viewMode === id ? 0 : -1} disabled={saving}
+            aria-controls="marks-entry-panel" tabIndex={viewMode === id ? 0 : -1} disabled={busy}
             onClick={() => changeView(id)}
             onKeyDown={(event) => {
               if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
@@ -239,14 +307,14 @@ export default function ExamResultsWorkspace({ scope }: { scope: string }) {
               <h2 className="mb-4 text-sm font-bold text-slate-900 dark:text-slate-50">{byClass ? "Select Exam & Class" : "Select Exam & Paper"}</h2>
               <div className="grid gap-4 md:grid-cols-2">
                 <LabeledField label="Exam">
-                  <select aria-label="Exam" value={examId} disabled={saving} onChange={(event) => selectExam(Number(event.target.value))} className={inputClass}>
+                  <select aria-label="Exam" value={examId} disabled={busy} onChange={(event) => selectExam(Number(event.target.value))} className={inputClass}>
                     <option value={0} disabled>Choose an exam</option>
                     {exams.map((exam) => <option key={exam.id} value={exam.id}>{exam.name}{exam.is_locked ? " · Locked" : ""}</option>)}
                   </select>
                 </LabeledField>
                 {byClass ? (
                   <LabeledField label="Classroom">
-                    <select aria-label="Classroom" value={classId} disabled={!examId || saving} className={inputClass}
+                    <select aria-label="Classroom" value={classId} disabled={!examId || busy} className={inputClass}
                       onChange={(event) => { setClassId(Number(event.target.value)); setSearch(""); }}>
                       <option value={0} disabled>{examId ? "Choose a class" : "Choose an exam first"}</option>
                       {[...classes].map(([id, name]) => <option key={id} value={id}>{name}</option>)}
@@ -254,7 +322,7 @@ export default function ExamResultsWorkspace({ scope }: { scope: string }) {
                   </LabeledField>
                 ) : (
                   <LabeledField label="Subject / Class">
-                    <select aria-label="Subject / Class" value={paperId} disabled={!examId || saving} className={inputClass}
+                    <select aria-label="Subject / Class" value={paperId} disabled={!examId || busy} className={inputClass}
                       onChange={(event) => { setPaperId(Number(event.target.value)); setSearch(""); }}>
                       <option value={0} disabled>{examId ? "Choose a subject and class" : "Choose an exam first"}</option>
                       {papers.map((paper) => <option key={paper.id} value={paper.id}>{paper.subject_name} — {paper.classroom_name}</option>)}
@@ -283,14 +351,18 @@ export default function ExamResultsWorkspace({ scope }: { scope: string }) {
                     <input aria-label="Search students" value={search} onChange={(event) => setSearch(event.target.value)}
                       placeholder="Search students…" className={`${inputClass} pl-9`} />
                   </div>
-                  {pending.length > 0 && <button type="button" disabled={saving} onClick={discardEdits} className={secondaryButtonClass}>Discard edits</button>}
+                  {pending.length > 0 && <>
+                    <button type="button" disabled={busy} onClick={() => void checkSavedMarks()} className={secondaryButtonClass}>{checking ? "Checking…" : "Check saved marks"}</button>
+                    <button type="button" disabled={busy} onClick={discardEdits} className={secondaryButtonClass}>Discard edits</button>
+                  </>}
                   {!locked && (
-                    <button type="button" onClick={() => void saveAll()} disabled={saving || !pending.length}
+                    <button type="button" onClick={() => void saveAll()} disabled={busy || !pending.length}
                       className={`${primaryButtonClass} inline-flex items-center gap-2`}>
                       <Save size={16} />{saving ? "Saving…" : `Save All${pending.length ? ` (${pending.length})` : ""}`}
                     </button>
                   )}
                 </div>
+                {saveNotice && <p role="status" aria-label="Marks save status" className="mb-3 rounded-lg border border-amber-300/30 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-300">{saveNotice}</p>}
                 {evaluationQuery.isError && byClass && (
                   <p role="alert" className="mb-3 text-sm text-red-600 dark:text-red-400">
                     Overall results could not load. <button type="button" className="underline" onClick={() => void evaluationQuery.refetch()}>Retry evaluation</button>
@@ -303,9 +375,9 @@ export default function ExamResultsWorkspace({ scope }: { scope: string }) {
                   <EmptyState icon={UserRound} message={searchTerm ? "No students match your search" : "No students found for this class"} />
                 ) : byClass ? (
                   <ClassWiseResultEntry students={filteredStudents} papers={visiblePapers} results={results}
-                    drafts={drafts} failures={failures} evaluations={evaluations} locked={locked} saving={saving} onMarkChange={updateMark} />
+                    drafts={drafts} failures={failures} evaluations={evaluations} locked={locked} saving={busy} onMarkChange={updateMark} />
                 ) : currentPaper && (
-                  <fieldset disabled={saving}>
+                  <fieldset disabled={busy}>
                     <ResultEntryTable students={filteredStudents} paper={currentPaper} results={paperResults}
                       localMarks={subjectDrafts} locked={locked}
                       onMarkChange={(enrollment, mark) => updateMark(currentPaper.id, enrollment, mark)} />

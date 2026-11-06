@@ -8,8 +8,10 @@ from app.models.users import User, OrganizationMember
 from app.models.exams import Subject, ClassSubject
 from app.schemas.subjects import SubjectCreate, SubjectUpdate, SubjectResponse, ClassSubjectCreate, ClassSubjectResponse
 from app.routers.auth import get_current_user
-from app.models.classroom import Classroom
+from app.models.classroom import Classroom, Grade
 from app.dependencies import get_active_session
+from app.schemas.subjects import BulkSubjectsCreate, BulkSubjectsOut, BulkClassSubjectsCreate, BulkClassSubjectsOut
+from app.services.subject_management import mutate_subject, bulk_create_subjects, assign_subjects, remove_subject
 
 router = APIRouter(prefix="/subjects", tags=["Subjects"])
 
@@ -20,37 +22,21 @@ def create_subject(
     current_user: User = Depends(get_current_user),
     active_session=Depends(get_active_session)
 ):
-    """Create a new subject (admin/manager only)"""
-    # Check permission
-    if current_user.org_role not in ["admin", "manager"]:
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
-    
-    # Check for duplicate subject name in the same organization
-    existing = db.query(Subject).filter(
-        and_(
-            Subject.organization_id == current_user.org_id,
-            Subject.name == subject_data.name,
-            Subject.session_id==active_session.id
-        )
-    ).first()
-    
-    if existing:
-        raise HTTPException(status_code=400, detail="Subject with this name already exists")
-    
-    # Create subject
-    subject = Subject(
-        name=subject_data.name,
-        organization_id=current_user.org_id,
-        session_id=active_session.id,
-        
+    return mutate_subject(db, current_user, active_session, subject_data)
 
-    )
-    
-    db.add(subject)
-    db.commit()
-    db.refresh(subject)
-    
-    return subject
+
+@router.post("/bulk", response_model=BulkSubjectsOut)
+def create_multiple_subjects(request: BulkSubjectsCreate, db: Session = Depends(get_db),
+                             current_user=Depends(get_current_user), active_session=Depends(get_active_session)):
+    return bulk_create_subjects(db, current_user, active_session, request)
+
+
+@router.post("/assign-to-class/bulk", response_model=BulkClassSubjectsOut)
+def assign_multiple_subjects(request: BulkClassSubjectsCreate, db: Session = Depends(get_db),
+                             current_user=Depends(get_current_user), active_session=Depends(get_active_session)):
+    return assign_subjects(db, current_user, active_session, request.subject_ids, request.classroom_id, bulk=True)
+
+
 @router.get("/assignments", response_model=List[ClassSubjectResponse])
 def get_all_assignments(
     db: Session = Depends(get_db),
@@ -58,24 +44,23 @@ def get_all_assignments(
     active_session=Depends(get_active_session)
 ):
     
-    membership = (
-    db.query(OrganizationMember)
-    .filter(OrganizationMember.user_id == current_user.id)
-    .first()
-)
-    if not membership:
+    if current_user.org_id is None:
         raise HTTPException(status_code=403, detail="User is not a member of any organization")
     assignments = (
         db.query(ClassSubject)
         .join(Classroom)
+        .join(Grade)
         .join(Subject)
         .options(
             contains_eager(ClassSubject.classroom).joinedload(Classroom.grade),
             contains_eager(ClassSubject.subject),
             joinedload(ClassSubject.teacher).joinedload(OrganizationMember.user),
         )
-        .filter(Classroom.organization_id == membership.organization_id,
-                Subject.session_id==active_session.id)
+        .filter(Classroom.organization_id == current_user.org_id,
+                Classroom.academic_year_id == active_session.id,
+                Grade.organization_id == current_user.org_id,
+                Subject.organization_id == current_user.org_id,
+                Subject.session_id == active_session.id)
         .all()
     )
 
@@ -107,7 +92,7 @@ def get_subjects(
     subjects = db.query(Subject).filter(
         Subject.organization_id == current_user.org_id,
         Subject.session_id==active_session.id
-    ).offset(skip).limit(limit).all()
+    ).order_by(Subject.id).offset(skip).limit(limit).all()
     
     return subjects
 
@@ -140,41 +125,8 @@ def update_subject(
     current_user: User = Depends(get_current_user),
     active_session=Depends(get_active_session)
 ):
-    """Update a subject (admin/manager only)"""
-    if current_user.org_role not in ["admin", "manager"]:
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
-    
-    subject = db.query(Subject).filter(
-        and_(
-            Subject.id == subject_id,
-            Subject.organization_id == current_user.org_id,
-            Subject.session_id==active_session.id
-        )
-    ).first()
-    
-    if not subject:
-        raise HTTPException(status_code=404, detail="Subject not found")
-    
-    # Check for duplicate name if name is being updated
-    if subject_data.name and subject_data.name != subject.name:
-        existing = db.query(Subject).filter(
-            and_(
-                Subject.organization_id == current_user.org_id,
-                Subject.session_id == active_session.id,
-                Subject.name == subject_data.name,
-                Subject.id != subject_id
-            )
-        ).first()
-        
-        if existing:
-            raise HTTPException(status_code=400, detail="Subject with this name already exists")
-        
-        subject.name = subject_data.name
-    
-    db.commit()
-    db.refresh(subject)
-    
-    return subject
+    return mutate_subject(db, current_user, active_session, subject_data, subject_id=subject_id)
+
 
 @router.delete("/{subject_id}")
 def delete_subject(
@@ -183,36 +135,8 @@ def delete_subject(
     current_user: User = Depends(get_current_user),
     active_session=Depends(get_active_session)
 ):
-    """Delete a subject (admin only)"""
-    if current_user.org_role != "admin":
-        raise HTTPException(status_code=403, detail="Only admins can delete subjects")
-    
-    subject = db.query(Subject).filter(
-        and_(
-            Subject.id == subject_id,
-            Subject.organization_id == current_user.org_id,
-            Subject.session_id == active_session.id,
-        )
-    ).first()
-    
-    if not subject:
-        raise HTTPException(status_code=404, detail="Subject not found")
-    
-    # Check if subject is being used in any class
-    class_subjects = db.query(ClassSubject).filter(
-        ClassSubject.subject_id == subject_id
-    ).first()
-    
-    if class_subjects:
-        raise HTTPException(
-            status_code=400, 
-            detail="Cannot delete subject that is assigned to classes. Remove from classes first."
-        )
-    
-    db.delete(subject)
-    db.commit()
-    
-    return {"message": "Subject deleted successfully"}
+    return remove_subject(db, current_user, active_session, subject_id)
+
 
 # ClassSubject endpoints (assign subjects to classes)
 @router.post("/assign-to-class", response_model=ClassSubjectResponse)
@@ -222,66 +146,5 @@ def assign_subject_to_class(
     current_user: User = Depends(get_current_user),
     active_session=Depends(get_active_session)
 ):
-    """Assign a subject to a class with optional teacher (admin/manager only)"""
-    if current_user.org_role not in ["admin", "manager"]:
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
-    
-    # Verify subject belongs to organization
-    subject = db.query(Subject).filter(
-        and_(
-            Subject.id == assignment.subject_id,
-            Subject.organization_id == current_user.org_id,
-            Subject.session_id == active_session.id
-        )
-    ).first()
-    
-    if not subject:
-        raise HTTPException(status_code=404, detail="Subject not found in your organization")
-    
-    # Verify classroom belongs to organization
-    classroom = db.query(Classroom).filter(
-        and_(
-            Classroom.id == assignment.classroom_id,
-            Classroom.organization_id == current_user.org_id
-        )
-    ).first()
-    
-    if not classroom:
-        raise HTTPException(status_code=404, detail="Classroom not found in your organization")
-    
-    # Check if teacher exists (if provided)
-    if assignment.teacher_member_id:
-        teacher = db.query(OrganizationMember).filter(
-            and_(
-                OrganizationMember.id == assignment.teacher_member_id,
-                OrganizationMember.organization_id == current_user.org_id,
-                OrganizationMember.role == "teacher"
-            )
-        ).first()
-        
-        if not teacher:
-            raise HTTPException(status_code=404, detail="Teacher not found")
-    
-    # Check for duplicate assignment
-    existing = db.query(ClassSubject).filter(
-        and_(
-            ClassSubject.classroom_id == assignment.classroom_id,
-            ClassSubject.subject_id == assignment.subject_id
-        )
-    ).first()
-    
-    if existing:
-        raise HTTPException(status_code=400, detail="Subject already assigned to this class")
-    
-    class_subject = ClassSubject(
-        classroom_id=assignment.classroom_id,
-        subject_id=assignment.subject_id,
-        teacher_member_id=assignment.teacher_member_id
-    )
-    
-    db.add(class_subject)
-    db.commit()
-    db.refresh(class_subject)
-    
-    return class_subject
-
+    return assign_subjects(db, current_user, active_session, [assignment.subject_id],
+                           assignment.classroom_id, teacher_member_id=assignment.teacher_member_id)

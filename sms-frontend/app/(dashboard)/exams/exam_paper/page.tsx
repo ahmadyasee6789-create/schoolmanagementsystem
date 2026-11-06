@@ -15,6 +15,7 @@ import { api } from "@/app/lib/api";
 import { useAuthStore } from "@/app/store/authStore";
 import DeleteModal from "@/components/exams/DeleteModal";
 import PaperFormModal from "@/components/exams/PaperFormModal";
+import BulkPaperFormModal from "@/components/exams/BulkPaperFormModal";
 import PapersList from "@/components/exams/PapersList";
 import {
   EmptyState,
@@ -22,6 +23,8 @@ import {
   PageHeader,
   StatGrid,
   inputClass,
+  primaryButtonClass,
+  secondaryButtonClass,
 } from "@/components/exams/ExamUi";
 import type {
   ApiError,
@@ -69,6 +72,7 @@ export default function ExamPapersPage() {
   const [search, setSearch] = useState("");
   const [examFilter, setExamFilter] = useState<number | "all">("all");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<PaperForm>(emptyPaperForm);
   const [saving, setSaving] = useState(false);
@@ -197,9 +201,7 @@ export default function ExamPapersPage() {
       <PageHeader
         title="Exam Papers"
         subtitle="Assign subjects and mark schemes to exams per classroom"
-        actionLabel="Add Exam Paper"
-        onAction={openAdd}
-        disabled={noExams}
+        actions={<div className="flex flex-wrap gap-2"><button type="button" onClick={openAdd} disabled={noExams} className={primaryButtonClass}>Add Exam Paper</button>{user?.org_role === "admin" && <button type="button" onClick={() => setBulkOpen(true)} disabled={noExams || loading} className={secondaryButtonClass}>Add Multiple Papers</button>}</div>}
       />
       {!loading && noExams && (
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300/40 bg-amber-50 px-4 py-3 dark:border-amber-500/20 dark:bg-amber-500/10">
@@ -311,6 +313,11 @@ export default function ExamPapersPage() {
           onSave={savePaper}
         />
       )}
+      {bulkOpen && <BulkPaperFormModal exams={exams} classrooms={classrooms} papers={papers} onClose={() => setBulkOpen(false)} onCreated={async (result) => {
+        toast.success(`${result.created_count} papers created, ${result.skipped_count} skipped`);
+        await reloadPapers();
+        await queryClient.invalidateQueries({ queryKey: ["exam-entry"] });
+      }} />}
       {deleteId !== null && (
         <DeleteModal
           title="Delete Exam Paper?"

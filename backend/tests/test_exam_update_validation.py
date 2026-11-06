@@ -4,6 +4,7 @@ import unittest
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy import text
 
 import test_fee_integrity as fixture
 from app.models.exams import Exam, Term
@@ -23,6 +24,10 @@ class ExamUpdateValidationTests(unittest.TestCase):
         )
         self.db.add(self.exam)
         self.db.commit()
+        if self.engine.dialect.name == "postgresql":
+            # Explicit fixture IDs do not advance PostgreSQL's insert sequence.
+            self.db.execute(text("SELECT setval(pg_get_serial_sequence('exams', 'id'), (SELECT max(id) FROM exams))"))
+            self.db.commit()
         app = FastAPI()
         app.include_router(exams.router)
         app.dependency_overrides[exams.get_db] = lambda: self.db
