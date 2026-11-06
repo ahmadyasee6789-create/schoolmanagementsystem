@@ -39,7 +39,7 @@ export default function AcceptInvitePage() {
       localStorage.setItem("user", JSON.stringify(response.data.user));
       setSuccess(true);
       toast.success("Welcome! Redirecting to dashboard…");
-      window.setTimeout(() => router.push("/app/dashboard"), 1500);
+      window.setTimeout(() => router.push("/dashboard"), 1500);
     } catch (requestError: unknown) { toast.error(inviteError(requestError)); }
     finally { setLoading(false); }
   };

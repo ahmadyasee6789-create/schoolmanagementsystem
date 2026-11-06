@@ -57,7 +57,7 @@ export default function OrganizationTeamPage() {
           window.setTimeout(() => router.replace("/signin"), 2000);
         } else if (status === 403) {
           setError("Access denied.");
-          window.setTimeout(() => router.replace("/"), 2000);
+          window.setTimeout(() => router.replace("/dashboard"), 2000);
         } else setError(errorMessage(requestError, "Failed to load team members"));
       } finally { if (active) setLoading(false); }
     })();

@@ -37,7 +37,7 @@ export const sectionIcons: Record<string, LucideIcon> = {
 
 export const navigation: NavigationItem[] = [
     //overview
-  { label: "Dashboard", href: "/", icon: BarChart3, section: "Overview" },
+  { label: "Dashboard", href: "/dashboard", icon: BarChart3, section: "Overview" },
   // ── Academics ────────────────────────────
   { label: "Academic Years", href: "/academics/sessions", icon: CalendarRange, section: "Academics" },
   { label: "Terms", href: "/academics/terms", icon: CalendarRange, section: "Academics" },

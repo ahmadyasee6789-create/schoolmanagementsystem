@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Eye, EyeOff, GraduationCap, Lock, Mail } from "lucide-react";
 import toast from "react-hot-toast";
 import { useAuthStore } from "../../store/authStore";
+import { authenticatedHome, loginDestination } from "@/app/lib/authRoutes";
 
 type ApiError = { response?: { data?: { detail?: string } } };
 
@@ -25,7 +26,7 @@ export default function SignInPage() {
   useEffect(() => {
     if (!hydrated) return;
     if (user) {
-      router.replace(user.is_superadmin ? "/superadmin" : "/");
+      router.replace(authenticatedHome(user));
     }
   }, [hydrated, user, router]);
 
@@ -43,7 +44,7 @@ export default function SignInPage() {
     setLoading(true);
     try {
       const redirect = await useAuthStore.getState().login(email, password);
-      router.replace(redirect ?? "/");
+      router.replace(loginDestination(redirect, useAuthStore.getState().user));
     } catch (error: unknown) {
       const msg =
         (error as ApiError).response?.data?.detail || "Invalid email or password";

@@ -4,8 +4,8 @@ import React, { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
 import { useRouter } from "next/navigation";
-import { useAuthStore } from "../store/authStore";
-import { api } from "../lib/api";
+import { useAuthStore } from "@/app/store/authStore";
+import { api } from "@/app/lib/api";
 import { Users, TrendingUp, TrendingDown, Wallet, Banknote, Receipt, GraduationCap, UserRound } from "lucide-react";
 
 import StatCard from "@/components/dashboard/StatCard";

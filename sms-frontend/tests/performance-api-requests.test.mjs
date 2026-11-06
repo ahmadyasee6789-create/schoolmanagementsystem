@@ -61,7 +61,7 @@ async function fixturePage(t, { refreshSoon = false, oldCache = false } = {}) {
 
 test("Dashboard fetches once and ignores an unscoped legacy financial cache", async (t) => {
   const { page, counts } = await fixturePage(t, { oldCache: true });
-  await page.goto(frontend);
+  await page.goto(frontend + "/dashboard");
   await page.getByText("Total Students", { exact: true }).waitFor();
   assert.equal(await page.getByText("987654", { exact: true }).count(), 0);
   console.log("Dashboard requests", JSON.stringify(counts));

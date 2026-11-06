@@ -34,7 +34,7 @@ export default function SuperAdminPage() {
   // ── route guard: only superadmins may view this page ──
   useEffect(() => {
     if (user && !user.is_superadmin) {
-      router.replace("/");
+      router.replace("/dashboard");
     }
   }, [user, router]);
 
