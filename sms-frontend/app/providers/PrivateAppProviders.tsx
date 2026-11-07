@@ -6,5 +6,5 @@ import { ThemeProvider } from "../context/ThemeContext";
 import QueryProvider from "./QueryProvider";
 
 export default function PrivateAppProviders({ children }: { children: React.ReactNode }) {
-  return <AuthHydration><ThemeProvider><Toaster /><QueryProvider>{children}</QueryProvider></ThemeProvider></AuthHydration>;
+  return <AuthHydration><ThemeProvider><Toaster toastOptions={{ style: { background: "var(--dialog)", color: "var(--foreground)", border: "1px solid var(--border)", boxShadow: "var(--shadow)" } }} /><QueryProvider>{children}</QueryProvider></ThemeProvider></AuthHydration>;
 }

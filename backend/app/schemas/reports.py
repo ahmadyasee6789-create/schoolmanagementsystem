@@ -34,6 +34,8 @@ class FeeReportResponse(BaseModel):
     total_paid: float
     total_pending: float
     total_overdue: float = 0
+    session_cash_received: float = 0
+    session_advance_credit: float = 0
 
   #for exam_reports
 class ExamReport(BaseModel):

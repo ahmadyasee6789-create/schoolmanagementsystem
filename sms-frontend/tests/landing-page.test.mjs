@@ -100,19 +100,99 @@ test("anonymous dashboard access redirects to signin without requesting dashboar
   const { page, calls } = await fixture(t);
   await page.goto(frontend + "/dashboard");
   await page.waitForURL(frontend + "/signin");
-  await page.getByRole("heading", { name: "Welcome back", exact: true }).waitFor();
+  await page.getByRole("heading", { name: "Sign in to your account", exact: true }).waitFor();
   assert.equal(calls.filter((call) => call.path === "/dashboard/stats").length, 0);
 });
 
 test("signin normalizes the existing API root redirect to dashboard", async (t) => {
   const { page, calls } = await fixture(t);
   await page.goto(frontend + "/signin");
-  await page.getByLabel("Email", { exact: true }).fill("fixture@example.invalid");
+  await page.getByLabel("Email address", { exact: true }).fill("fixture@example.invalid");
   await page.getByLabel("Password", { exact: true }).fill("fixture-password");
-  await page.getByRole("button", { name: "Sign In", exact: true }).click();
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await page.waitForURL(frontend + "/dashboard");
   await page.getByText("Total Students", { exact: true }).waitFor();
   assert.equal(calls.filter((call) => call.path === "/auth/login").length, 1);
+});
+
+test("signin follows the split layout and fits narrow screens without changing the saved theme", async (t) => {
+  for (const width of [1440, 900, 768, 390, 320]) {
+    const { page, calls } = await fixture(t, { width, dark: true, reducedMotion: true });
+    await page.goto(frontend + "/signin");
+    await page.getByRole("heading", { name: "Sign in to your account", exact: true }).waitFor();
+    await page.evaluate(() => document.fonts.ready);
+    const brand = page.getByRole("complementary", { name: "About Schoolix" });
+    assert.equal(await brand.getByRole("link", { name: "Schoolix home" }).locator("svg").count(), 1);
+    const form = page.getByRole("region", { name: "Sign in to your account" });
+    const brandBox = await brand.boundingBox();
+    const formBox = await form.boundingBox();
+    if (width > 900) assert.ok(formBox.x >= brandBox.width);
+    else assert.ok(formBox.y >= brandBox.height);
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${width}px must not overflow`);
+    assert.equal(await page.locator("main").evaluate((element) => getComputedStyle(element).colorScheme), "dark");
+    assert.equal(await page.evaluate(() => localStorage.getItem("theme-mode")), "dark");
+    assert.deepEqual(calls, []);
+    if (process.env.SIGNIN_TEST_SCREENSHOT_DIR && [1440, 390].includes(width)) {
+      await mkdir(process.env.SIGNIN_TEST_SCREENSHOT_DIR, { recursive: true });
+      await page.screenshot({ path: join(process.env.SIGNIN_TEST_SCREENSHOT_DIR, `signin-${width}.png`), fullPage: true });
+    }
+  }
+});
+
+test("signin keeps validation, accessible password controls, and existing account links", async (t) => {
+  const { page, calls } = await fixture(t);
+  await page.goto(frontend + "/signin");
+  const submit = page.getByRole("button", { name: "Sign in", exact: true });
+  const email = page.getByLabel("Email address", { exact: true });
+  const password = page.getByLabel("Password", { exact: true });
+  assert.equal(await submit.isDisabled(), true);
+  await email.fill("invalid-email");
+  await password.fill("fixture-password");
+  await submit.click();
+  assert.equal(await email.evaluate((element) => element.validity.typeMismatch), true);
+  assert.deepEqual(calls, []);
+  assert.equal(await password.getAttribute("type"), "password");
+  await page.getByRole("button", { name: "Show password", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  assert.equal(await password.getAttribute("type"), "text");
+  assert.equal(await page.getByRole("button", { name: "Hide password" }).getAttribute("aria-pressed"), "true");
+  await page.getByRole("button", { name: "Hide password" }).click();
+  assert.equal(await password.getAttribute("type"), "password");
+  assert.equal(await page.getByRole("link", { name: "Forgot password?" }).getAttribute("href"), "/forgot-password");
+  assert.equal(await page.getByRole("link", { name: "Create School Account" }).getAttribute("href"), "/signup");
+  assert.equal(await page.getByRole("link", { name: "Explore product demo" }).getAttribute("href"), "/#product");
+  await page.getByRole("link", { name: "Explore product demo" }).click();
+  await page.waitForURL(frontend + "/#product");
+  assert.deepEqual(calls, []);
+});
+
+test("signin shows a busy state and preserves entered values after a rejected login", async (t) => {
+  const { page } = await fixture(t);
+  let release;
+  const pending = new Promise((resolve) => { release = resolve; });
+  t.after(() => release());
+  let submissions = 0;
+  await page.route("**/auth/login", async (route) => {
+    if (route.request().method() === "OPTIONS") return route.fallback();
+    submissions++;
+    await pending;
+    await route.fulfill({ status: 401, headers: { "access-control-allow-origin": frontend }, json: { detail: "Invalid email or password" } });
+  });
+  await page.goto(frontend + "/signin");
+  await page.getByLabel("Email address", { exact: true }).fill("fixture@example.invalid");
+  await page.getByLabel("Password", { exact: true }).fill("fixture-password");
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  const busy = page.getByRole("button", { name: "Signing in…", exact: true });
+  await busy.waitFor();
+  assert.equal(await busy.isDisabled(), true);
+  assert.equal(await page.locator("form").getAttribute("aria-busy"), "true");
+  release();
+  await page.getByText("Invalid email or password", { exact: true }).waitFor();
+  assert.equal(await page.getByRole("button", { name: "Sign in", exact: true }).isEnabled(), true);
+  assert.equal(await page.getByLabel("Email address", { exact: true }).inputValue(), "fixture@example.invalid");
+  assert.equal(await page.getByLabel("Password", { exact: true }).inputValue(), "fixture-password");
+  assert.equal(submissions, 1);
+  assert.equal(new URL(page.url()).pathname, "/signin");
 });
 
 test("superadmins keep their own home and never load school dashboard statistics", async (t) => {

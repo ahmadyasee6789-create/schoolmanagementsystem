@@ -6,9 +6,9 @@ import { useEffect, useId, useRef } from "react";
 let openModals = 0;
 let originalBodyOverflow = "";
 
-export const inputClass = "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-[#8B6DF2] dark:border-white/10 dark:bg-white/5 dark:text-slate-100 dark:placeholder:text-slate-500 disabled:cursor-not-allowed disabled:opacity-50";
-export const secondaryButtonClass = "rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5";
-export const primaryButtonClass = "rounded-lg bg-[#8B6DF2] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-400 disabled:cursor-not-allowed disabled:opacity-40";
+export const inputClass = "w-full rounded-lg border border-line bg-input px-3 py-2 text-sm text-foreground outline-none transition-colors placeholder:text-subtle focus:border-accent disabled:cursor-not-allowed disabled:opacity-50";
+export const secondaryButtonClass = "rounded-lg border border-line bg-surface px-4 py-2 text-sm font-semibold text-secondary transition-colors hover:bg-hover disabled:cursor-not-allowed disabled:opacity-40";
+export const primaryButtonClass = "rounded-lg bg-action px-4 py-2 text-sm font-semibold text-on-action transition-colors hover:bg-action-hover disabled:cursor-not-allowed disabled:opacity-40";
 
 export function LoadingState() {
   return <div className="flex justify-center py-16"><div className="h-8 w-8 animate-spin rounded-full border-[3px] border-[#8B6DF2]/20 border-t-[#8B6DF2]" /></div>;
@@ -23,7 +23,7 @@ export function PageHeader({ title, subtitle, actionLabel, onAction, disabled = 
 }
 
 export function StatGrid({ stats }: { stats: { label: string; value: string | number; Icon: LucideIcon; tone: string }[] }) {
-  return <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">{stats.map(({ label, value, Icon, tone }) => <div key={label} className="rounded-xl border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-white/[0.03]"><div className="flex items-center justify-between gap-2"><span className={`flex h-9 w-9 items-center justify-center rounded-lg border ${tone}`}><Icon size={18} /></span><span className="text-2xl font-bold text-slate-900 dark:text-slate-50">{value}</span></div><p className="mt-3 text-xs font-medium text-slate-500 dark:text-slate-400">{label}</p></div>)}</div>;
+  return <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">{stats.map(({ label, value, Icon, tone }) => <div key={label} className="rounded-xl border border-line bg-surface p-4"><div className="flex items-center justify-between gap-2"><span className={`flex h-9 w-9 items-center justify-center rounded-lg border ${tone}`}><Icon size={18} /></span><span className="text-2xl font-bold text-slate-900 dark:text-slate-50">{value}</span></div><p className="mt-3 text-xs font-medium text-slate-500 dark:text-slate-400">{label}</p></div>)}</div>;
 }
 
 export function Modal({ title, children, onClose, size = "sm", busy = false }: { title: string; children: React.ReactNode; onClose: () => void; size?: "sm" | "md"; busy?: boolean }) {
@@ -55,7 +55,7 @@ export function Modal({ title, children, onClose, size = "sm", busy = false }: {
     }}
     onCancel={(event) => { event.preventDefault(); event.stopPropagation(); if (!busy) onClose(); }}
     onClick={(event) => { if (event.target === event.currentTarget && !busy) onClose(); }}
-    className={`m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] ${size === "md" ? "max-w-2xl" : "max-w-sm"} overflow-hidden rounded-2xl border border-slate-200 bg-white p-0 text-slate-900 shadow-xl backdrop:bg-black/40 backdrop:backdrop-blur-sm dark:border-white/10 dark:bg-[#1a2233] dark:text-slate-100`}>
+    className={`m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] ${size === "md" ? "max-w-2xl" : "max-w-sm"} overflow-hidden rounded-2xl border border-line bg-dialog p-0 text-foreground shadow-xl backdrop:bg-black/40 backdrop:backdrop-blur-sm`}>
     <div className="flex max-h-[calc(100dvh-2rem)] flex-col">
       <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 p-5 dark:border-white/10">
         <h2 id={titleId} className="text-base font-bold text-slate-900 dark:text-slate-50">{title}</h2>

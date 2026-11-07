@@ -15,15 +15,15 @@ interface YearSummaryCardProps {
 export default function YearSummaryCard({
   year, revenue, expenses, salaries, totalOutflow, netProfit, pendingPayroll = 0,
 }: YearSummaryCardProps) {
-  const netColor = netProfit >= 0 ? "#34D399" : "#F87171";
+  const netColor = netProfit >= 0 ? "var(--success)" : "var(--danger)";
 
   return (
     <ChartCard title="Year Summary" subtitle={`Full ${year} financial breakdown`}>
       <div className="pt-1">
-        <FinSummaryRow label="Fee Revenue" value={revenue} colorHex="#34D399" />
-        <FinSummaryRow label="Operational Expenses" value={expenses} colorHex="#F87171" />
-        <FinSummaryRow label="Salaries Paid" value={salaries} colorHex="#A78BFA" />
-        <FinSummaryRow label="Total Outflow" value={totalOutflow} colorHex="#F87171" />
+        <FinSummaryRow label="Fee Revenue" value={revenue} colorHex="var(--success)" />
+        <FinSummaryRow label="Operational Expenses" value={expenses} colorHex="var(--danger)" />
+        <FinSummaryRow label="Salaries Paid" value={salaries} colorHex="var(--accent)" />
+        <FinSummaryRow label="Total Outflow" value={totalOutflow} colorHex="var(--danger)" />
 
         <div className="mt-4 border-t border-slate-200 pt-4 dark:border-white/10">
           <div className="flex items-center justify-between">
@@ -36,8 +36,8 @@ export default function YearSummaryCard({
           </div>
 
           {pendingPayroll > 0 && (
-            <div className="mt-4 rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/10 p-3">
-              <p className="text-[0.72rem] font-semibold text-[#F59E0B]">
+            <div className="mt-4 rounded-lg border border-warning/25 bg-warning-soft p-3">
+              <p className="text-[0.72rem] font-semibold text-warning">
                 ⚠ Pending payroll: {fmt(pendingPayroll)} not yet disbursed
               </p>
             </div>

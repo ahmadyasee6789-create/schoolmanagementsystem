@@ -10,11 +10,11 @@ export const errorMessage = (error: unknown, fallback: string) =>
     ?.detail ?? fallback;
 
 export const panelClass =
-  "rounded-xl border border-slate-200 bg-white dark:border-white/10 dark:bg-white/[0.03]";
+  "rounded-xl border border-line bg-surface";
 export const tableHeadClass =
-  "px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400";
+  "px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-subtle";
 export const tableCellClass =
-  "px-4 py-3 text-sm text-slate-600 dark:text-slate-300";
+  "px-4 py-3 text-sm text-secondary";
 
 export function SectionLabel({
   icon: Icon,
@@ -24,7 +24,7 @@ export function SectionLabel({
   children: React.ReactNode;
 }) {
   return (
-    <h3 className="mb-3 flex items-center gap-2 border-l-2 border-[#8B6DF2] pl-2 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+    <h3 className="mb-3 flex items-center gap-2 border-l-2 border-[#8B6DF2] pl-2 text-xs font-bold uppercase tracking-wide text-subtle">
       {Icon && <Icon size={14} className="text-[#8B6DF2]" />}
       {children}
     </h3>
@@ -59,11 +59,11 @@ export function Badge({
   tone?: "purple" | "blue" | "green" | "red" | "slate";
 }) {
   const tones = {
-    purple: "border-[#8B6DF2]/20 bg-[#8B6DF2]/10 text-[#8B6DF2]",
-    blue: "border-blue-400/25 bg-blue-50 text-blue-600 dark:border-blue-400/20 dark:bg-blue-500/10 dark:text-blue-400",
+    purple: "border-accent/25 bg-accent-soft text-accent",
+    blue: "border-info/25 bg-info-soft text-info",
     green:
-      "border-emerald-400/25 bg-emerald-50 text-emerald-600 dark:border-emerald-400/20 dark:bg-emerald-500/10 dark:text-emerald-400",
-    red: "border-red-400/25 bg-red-50 text-red-600 dark:border-red-400/20 dark:bg-red-500/10 dark:text-red-400",
+      "border-success/25 bg-success-soft text-success",
+    red: "border-danger/25 bg-danger-soft text-danger",
     slate:
       "border-slate-200 bg-slate-100 text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-400",
   };
@@ -126,7 +126,7 @@ export function Pagination({
       >
         <ChevronLeft size={17} />
       </button>
-      <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+      <span className="text-xs font-semibold text-subtle">
         Page {page} of {totalPages}
       </span>
       <button
@@ -152,7 +152,7 @@ export function LabeledField({
   children: React.ReactNode;
 }) {
   return (
-    <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
+    <label className="block text-xs font-semibold text-secondary">
       {label}
       {required && <span className="ml-1 text-red-500">*</span>}
       <span className="mt-1.5 block">{children}</span>

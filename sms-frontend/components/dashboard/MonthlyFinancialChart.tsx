@@ -12,9 +12,9 @@ interface MonthlyFinancialChartProps {
 
 export default function MonthlyFinancialChart({ data, year }: MonthlyFinancialChartProps) {
   const { mode } = useTheme();
-  const gridColor = mode === "dark" ? "rgba(255,255,255,0.07)" : "#E5E7EB";
+  const gridColor = "var(--border)";
   const axisStyle = {
-    fill: mode === "dark" ? "rgba(249,250,251,0.3)" : "#94A3B8",
+    fill: "var(--text-muted)",
     fontSize: 11,
   };
 

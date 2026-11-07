@@ -18,7 +18,7 @@ export function StatusChip({ status }: { status: OrgStatus }) {
       sx={{
         backgroundColor: config.bg,
         color:           config.color,
-        border:          `1px solid ${config.color}30`,
+        border:          `1px solid color-mix(in srgb, ${config.color} 19%, transparent)`,
         fontFamily:      FONT,
         fontWeight:      700,
         fontSize:        "0.65rem",

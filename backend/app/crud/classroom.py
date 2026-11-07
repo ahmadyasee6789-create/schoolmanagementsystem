@@ -41,4 +41,5 @@ def seed_grades(db: Session, org_id: int):
             )
         )
 
-    db.commit()
+    # The caller owns the transaction; signup must also save its membership.
+    db.flush()

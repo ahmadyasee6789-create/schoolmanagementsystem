@@ -246,8 +246,7 @@ class FeeArchitectureTests(unittest.TestCase):
         self.allocate(payment, self.db.get(StudentFee, 1), "1000.00")
         self.allocate(payment, may, "500.00")
         self.db.commit()
-        with patch.object(dashboard.redis_client, "get", return_value=None), patch.object(dashboard.redis_client, "set"):
-            result = dashboard.get_dashboard_stats(self.db, self.actor, self.session)
+        result = dashboard.get_dashboard_stats(self.db, self.actor, self.session)
         self.assertEqual(result["financials"]["revenue"]["yearTotal"], 2500)
 
     def test_advance_only_student_history_cannot_be_deleted(self):

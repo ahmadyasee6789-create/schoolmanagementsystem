@@ -13,6 +13,7 @@ import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { api } from "@/app/lib/api";
 import { useAuthStore } from "@/app/store/authStore";
+import type { ResultSheet } from "@/components/exams/resultSheet";
 import DmcPreview from "@/components/exams/DmcPreview";
 import {
   EmptyState,
@@ -23,10 +24,8 @@ import {
 import type {
   ApiError,
   Classroom,
-  DmcStudent,
   Exam,
   ExamPaper,
-  ExamResult,
 } from "@/components/exams/types";
 import { classroomLabel } from "@/components/exams/types";
 
@@ -42,7 +41,7 @@ export default function DmcPage() {
   }, [authLoading, router, user]);
 
   const setup = useQuery({
-    queryKey: ["dmc", "setup"],
+    queryKey: ["dmc", "setup", user?.org_id, user?.id],
     enabled: !authLoading && Boolean(user),
     refetchOnWindowFocus: false,
     queryFn: async ({ signal }) => {
@@ -55,23 +54,18 @@ export default function DmcPage() {
     },
   });
   const previewEnabled = setup.isSuccess && selectedExam > 0 && selectedClassroom > 0;
-  const studentQuery = useQuery({
-    queryKey: ["dmc", "students", selectedClassroom],
+  const sheetQuery = useQuery({
+    queryKey: ["dmc", "saved-sheet", user?.org_id, user?.id, selectedExam, selectedClassroom],
     enabled: previewEnabled,
     refetchOnWindowFocus: false,
-    queryFn: async ({ signal }) => (await api.get<DmcStudent[]>(`/students/by-class/${selectedClassroom}`, { signal })).data,
-  });
-  const resultQuery = useQuery({
-    queryKey: ["dmc", "results", selectedExam],
-    enabled: previewEnabled,
-    refetchOnWindowFocus: false,
-    queryFn: async ({ signal }) => (await api.get<ExamResult[]>(`/exam-results/exam/${selectedExam}`, { signal })).data,
+    queryFn: async ({ signal }) => (await api.get<ResultSheet>("/exam-results/sheet", {
+      params: { exam_id: selectedExam, classroom_id: selectedClassroom }, signal,
+    })).data,
   });
   const { exams = [], papers = [], classrooms = [] } = setup.data ?? {};
-  const students = studentQuery.data ?? [];
-  const results = resultQuery.data ?? [];
-  const studentsLoading = previewEnabled && (studentQuery.isPending || resultQuery.isPending);
-  const previewError = studentQuery.isError || resultQuery.isError;
+  const students = sheetQuery.data?.items ?? [];
+  const studentsLoading = previewEnabled && sheetQuery.isPending;
+  const previewError = sheetQuery.isError;
 
   const classroomsForExam = selectedExam
     ? classrooms.filter((classroom) =>
@@ -87,18 +81,7 @@ export default function DmcPage() {
       paper.exam_id === selectedExam &&
       paper.classroom_id === selectedClassroom,
   );
-  const classPaperIds = new Set(papersForClass.map((paper) => paper.id));
-  const classResults = results.filter((result) =>
-    classPaperIds.has(result.exam_paper_id),
-  );
-  const activeEnrollmentIds = new Set(
-    students.map((student) => student.enrollment_id),
-  );
-  const enteredCount = new Set(
-    classResults
-      .filter((result) => activeEnrollmentIds.has(result.student_enrollment_id))
-      .map((result) => result.student_enrollment_id),
-  ).size;
+  const enteredCount = students.filter(student => student.subjects.some(subject => subject.obtained_marks !== null)).length;
   const readyToGenerate =
     previewEnabled && !previewError && enteredCount > 0;
 
@@ -319,8 +302,7 @@ export default function DmcPage() {
             />
           ) : previewError ? (
             <EmptyState icon={FileText} message="Could not load the class preview" actionLabel="Retry" onAction={() => {
-              if (studentQuery.isError) void studentQuery.refetch();
-              if (resultQuery.isError) void resultQuery.refetch();
+              void sheetQuery.refetch();
             }} />
           ) : studentsLoading ? (
             <LoadingState />
@@ -342,9 +324,7 @@ export default function DmcPage() {
                 </div>
               </div>
               <DmcPreview
-                students={students}
-                papers={papersForClass}
-                results={classResults}
+                sheet={sheetQuery.data!}
               />
             </section>
           )}

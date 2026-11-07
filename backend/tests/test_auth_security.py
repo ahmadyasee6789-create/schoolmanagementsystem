@@ -109,7 +109,11 @@ class AuthRouteSecurityTests(unittest.TestCase):
         self.environment = patch.dict(os.environ, {"SECRET_KEY": TEST_KEY})
         self.environment.start()
         self.addCleanup(self.environment.stop)
-        self.engine = create_engine("sqlite://")
+        if os.environ.get('TEST_POSTGRES_URL'):
+            from test_fee_postgres import isolated_postgres_engine
+            self.engine = isolated_postgres_engine(self)
+        else:
+            self.engine = create_engine("sqlite://")
         Base.metadata.create_all(self.engine)
         self.db = Session(self.engine)
         self.addCleanup(self.engine.dispose)

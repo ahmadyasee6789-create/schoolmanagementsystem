@@ -3,15 +3,13 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Eye, EyeOff, GraduationCap, Lock, Mail } from "lucide-react";
+import { Eye, EyeOff, LoaderCircle, Rocket } from "lucide-react";
 import toast from "react-hot-toast";
+import AuthPage, { authStyles as styles } from "@/components/auth/AuthPage";
 import { useAuthStore } from "../../store/authStore";
 import { authenticatedHome, loginDestination } from "@/app/lib/authRoutes";
 
 type ApiError = { response?: { data?: { detail?: string } } };
-
-const inputClass =
-  "w-full rounded-lg border border-slate-200 bg-white py-2.5 pl-9 pr-3 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-[#8B6DF2] dark:border-white/10 dark:bg-white/5 dark:text-slate-100 dark:placeholder:text-slate-500";
 
 export default function SignInPage() {
   const router = useRouter();
@@ -63,99 +61,76 @@ export default function SignInPage() {
   if (!hydrated) return null;
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-white p-4 dark:bg-[#0D1117]">
-      <div className="w-full max-w-[420px]">
-        {/* Brand header */}
-        <div className="mb-7 text-center">
-          <span className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-[#8B6DF2]/20 bg-[#8B6DF2]/10">
-            <GraduationCap size={28} className="text-[#8B6DF2]" />
-          </span>
-          <h1 className="text-[2rem] font-bold leading-tight tracking-tight text-slate-900 dark:text-slate-50">
-            Welcome back
-          </h1>
-          <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">
-            Sign in to your school dashboard
-          </p>
-        </div>
+    <AuthPage headingId="signin-heading">
+          <header className={styles.cardHeader}>
+            <h1 id="signin-heading">Sign in to your account</h1>
+            <p>Welcome back! Please enter your credentials.</p>
+          </header>
 
-        {/* Card */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xl dark:border-white/10 dark:bg-white/[0.03] sm:p-7">
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
-              Email
-              <div className="relative mt-1.5">
-                <Mail
-                  size={16}
-                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500"
-                />
-                <input
-                  type="email"
-                  required
-                  autoFocus
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  placeholder="you@example.com"
-                  className={inputClass}
-                />
+          <form onSubmit={handleSubmit} className={styles.form} aria-busy={loading}>
+            <div className={styles.field}>
+              <label htmlFor="signin-email">Email address</label>
+              <input
+                id="signin-email"
+                name="email"
+                type="email"
+                autoComplete="username"
+                required
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="Enter your email"
+                className={styles.input}
+              />
+            </div>
+
+            <div className={styles.field}>
+              <div className={styles.passwordLabel}>
+                <label htmlFor="signin-password">Password</label>
+                <Link href="/forgot-password">Forgot password?</Link>
               </div>
-            </label>
-
-            <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
-              Password
-              <div className="relative mt-1.5">
-                <Lock
-                  size={16}
-                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500"
-                />
+              <div className={styles.passwordInput}>
                 <input
+                  id="signin-password"
+                  name="password"
                   type={showPassword ? "text" : "password"}
+                  autoComplete="current-password"
                   required
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
-                  placeholder="Your password"
-                  className={`${inputClass} pr-9`}
+                  placeholder="Enter your password"
+                  className={styles.input}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((prev) => !prev)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition-colors hover:text-[#8B6DF2] dark:text-slate-500"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  aria-pressed={showPassword}
+                  aria-controls="signin-password"
+                  className={styles.passwordToggle}
                 >
-                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  {showPassword ? <EyeOff size={21} aria-hidden="true" /> : <Eye size={21} aria-hidden="true" />}
                 </button>
               </div>
-            </label>
-
-            <div className="flex justify-end">
-              <Link
-                href="/forgot-password"
-                className="text-xs font-medium text-slate-500 transition-colors hover:text-[#8B6DF2] dark:text-slate-400"
-              >
-                Forgot password?
-              </Link>
             </div>
 
             <button
               type="submit"
               disabled={loading || !email || !password}
-              className="flex w-full items-center justify-center rounded-lg bg-[#8B6DF2] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-indigo-400 disabled:cursor-not-allowed disabled:opacity-40"
+              className={styles.submit}
             >
-              {loading ? (
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-              ) : (
-                "Sign In"
-              )}
+              {loading && <LoaderCircle size={20} className={styles.spinner} aria-hidden="true" />}
+              <span aria-live="polite">{loading ? "Signing in…" : "Sign in"}</span>
             </button>
           </form>
-        </div>
 
-        {/* Footer */}
-        <p className="mt-5 text-center text-xs text-slate-500 dark:text-slate-400">
-          Don&apos;t have an account?{" "}
-          <Link href="/signup" className="font-semibold text-[#8B6DF2] hover:text-indigo-400">
-            Sign Up
+          <div className={styles.divider}><span>OR</span></div>
+          <Link href="/#product" className={styles.demo}>
+            <Rocket size={20} aria-hidden="true" /> Explore product demo
           </Link>
-        </p>
-      </div>
-    </div>
+          <p className={styles.register}>
+            Don&apos;t have an account?{" "}
+            <Link href="/signup">Create School Account</Link>
+          </p>
+    </AuthPage>
   );
 }

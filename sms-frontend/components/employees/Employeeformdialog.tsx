@@ -110,7 +110,7 @@ export default function EmployeeFormDialog({
             type="button"
             onClick={onSave}
             disabled={saving || !form.full_name || !form.role}
-            className="rounded-lg bg-[#8B6DF2] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-400 disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-lg bg-action px-4 py-2 text-sm font-semibold text-on-action transition-colors hover:bg-action-hover disabled:cursor-not-allowed disabled:opacity-40"
           >
             {saving
               ? "Saving…"

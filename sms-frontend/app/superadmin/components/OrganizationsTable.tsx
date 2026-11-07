@@ -29,7 +29,7 @@ export function OrganizationsTable({
       backgroundColor: C.surface,
       border:          `1px solid ${C.border}`,
       borderRadius:    "14px",
-      overflow:        "hidden",
+      overflowX:       "auto",
     }}>
       <Table>
         <TableHead>
@@ -150,6 +150,7 @@ function OrganizationRow({
           <Tooltip title={org.status === "active" ? "Extend Plan" : "Activate"} arrow>
             <span>
               <IconButton
+                aria-label={org.status === "active" ? "Extend Plan" : "Activate"}
                 size="small"
                 disabled={loading}
                 onClick={() => onActivate(org)}
@@ -164,6 +165,7 @@ function OrganizationRow({
             <Tooltip title="Suspend" arrow>
               <span>
                 <IconButton
+                  aria-label="Suspend"
                   size="small"
                   disabled={loading}
                   onClick={() => onSuspend(org)}
@@ -179,6 +181,7 @@ function OrganizationRow({
             <Tooltip title="Reactivate" arrow>
               <span>
                 <IconButton
+                  aria-label="Reactivate"
                   size="small"
                   disabled={loading}
                   onClick={() => onReactivate(org)}

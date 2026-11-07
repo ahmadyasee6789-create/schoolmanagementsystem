@@ -34,7 +34,7 @@ export default function EmployeeToolbar({
         <button
           type="button"
           onClick={onAdd}
-          className="flex items-center gap-1.5 rounded-lg bg-[#8B6DF2] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-400"
+          className="flex items-center gap-1.5 rounded-lg bg-action px-4 py-2 text-sm font-semibold text-on-action transition-colors hover:bg-action-hover"
         >
           <Plus size={16} />
           Add Employee

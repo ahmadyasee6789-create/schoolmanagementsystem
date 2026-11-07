@@ -52,7 +52,7 @@ export function FilterBar({
             disabled={loading}
             sx={{
               color:        C.accent,
-              border:       `1px solid ${C.accent}30`,
+              border:       `1px solid color-mix(in srgb, ${C.accent} 19%, transparent)`,
               borderRadius: "10px",
               p:            1,
               "&:hover":    { backgroundColor: C.accentDim },

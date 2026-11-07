@@ -44,7 +44,7 @@ export function ConfirmDialog({
         alignItems:   "center",
       }}>
         {title}
-        <IconButton size="small" onClick={onClose} sx={{ color: C.textSecondary }}>
+        <IconButton aria-label="Close" size="small" onClick={onClose} sx={{ color: C.textSecondary }}>
           <CloseOutlined sx={{ fontSize: 16 }} />
         </IconButton>
       </DialogTitle>
@@ -55,7 +55,7 @@ export function ConfirmDialog({
           gap:             1.5,
           alignItems:      "flex-start",
           backgroundColor: colorDim,
-          border:          `1px solid ${color}30`,
+          border:          `1px solid color-mix(in srgb, ${color} 19%, transparent)`,
           borderRadius:    "10px",
           p:               2,
         }}>
@@ -79,15 +79,15 @@ export function ConfirmDialog({
           onClick={onConfirm}
           disabled={loading}
           sx={{
-            backgroundColor: color,
+            backgroundColor: danger ? "#b91c1c" : C.button,
             color:           "#fff",
             fontFamily:      FONT,
             fontWeight:      700,
             textTransform:   "none",
             borderRadius:    "8px",
             fontSize:        "0.82rem",
-            "&:hover":       { backgroundColor: color, filter: "brightness(0.9)" },
-            "&.Mui-disabled": { backgroundColor: `${color}40`, color: "#fff6" },
+            "&:hover":       { backgroundColor: danger ? "#b91c1c" : C.button, filter: "brightness(0.9)" },
+            "&.Mui-disabled": { backgroundColor: `color-mix(in srgb, ${color} 25%, transparent)`, color: "#fff6" },
           }}
         >
           {loading ? "Working…" : confirmLabel}

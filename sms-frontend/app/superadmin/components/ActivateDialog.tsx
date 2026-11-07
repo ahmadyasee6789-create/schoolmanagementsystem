@@ -71,7 +71,7 @@ export function ActivateDialog({
       <DialogContent sx={{ pt: 3 }}>
         <Box sx={{
           backgroundColor: C.accentDim,
-          border:          `1px solid ${C.accent}30`,
+          border:          `1px solid color-mix(in srgb, ${C.accent} 19%, transparent)`,
           borderRadius:    "10px",
           p:               2,
           mb:              2.5,
@@ -134,15 +134,15 @@ export function ActivateDialog({
           onClick={handleActivate}
           disabled={saving || !org}
           sx={{
-            backgroundColor: C.green,
+            backgroundColor: "#047857",
             color:           "#fff",
             fontFamily:      FONT,
             fontWeight:      700,
             textTransform:   "none",
             borderRadius:    "8px",
             fontSize:        "0.82rem",
-            "&:hover":       { backgroundColor: "#0da271" },
-            "&.Mui-disabled": { backgroundColor: `${C.green}40`, color: "#fff6" },
+            "&:hover":       { backgroundColor: "#065f46" },
+            "&.Mui-disabled": { backgroundColor: `color-mix(in srgb, ${C.green} 25%, transparent)`, color: "#fff6" },
           }}
         >
           {saving ? "Activating…" : `Activate — ${plan} / ${days}d`}

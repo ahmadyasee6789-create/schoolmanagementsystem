@@ -38,8 +38,22 @@ async function checkRequests(t, routePath, expected, ready) {
   };
   await context.route("**/*", async (route) => {
     const request = route.request();
-    const { origin, pathname } = new URL(request.url());
+    const { origin, pathname, searchParams } = new URL(request.url());
     if (origin === frontend) return route.continue();
+    if (pathname === '/exam-results/sheet') {
+      if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });
+      const id = Number(searchParams.get('classroom_id'));
+      const person = id === 1 ? student : otherStudent;
+      const mark = id === 1 ? 76 : 81;
+      const key = `/exam-results/sheet?classroom_id=${id}`;
+      counts[key] = (counts[key] || 0) + 1;
+      return route.fulfill({ headers: cors, json: {
+        columns: [{ key: '1:100', subject_name: paper.subject_name, total_marks: 100 }],
+        items: [{ enrollment_id: person.enrollment_id, student_name: `${person.first_name} ${person.last_name}`, roll_number: '1',
+          result: 'PASSED', percentage: mark, grade: 'B', missing_count: 0,
+          subjects: [{ key: '1:100', paper_id: id, subject_name: paper.subject_name, obtained_marks: mark, total_marks: 100, grade: 'B' }] }],
+      } });
+    }
     if (!Object.hasOwn(fixtures, pathname)) return route.abort();
     if (request.method() === "OPTIONS") return route.fulfill({ status: 204, headers: cors });
     assert.equal(request.method(), "GET");
@@ -64,9 +78,9 @@ test("initial Exam Results load makes one request for each data source", async (
     (page) => page.getByLabel("Exam", { exact: true }).getByRole("option", { name: exam.name }).waitFor({ state: "attached" }));
 });
 
-test("DMC loads each setup list once and reuses the exam results across classrooms", async (t) => {
+test("DMC loads each setup list once and fetches only the selected class saved sheet", async (t) => {
   await checkRequests(t, "/exams/dmc_generator", [
-    "/auth/me", "/exams", "/exam-papers", "/classes", "/students/by-class/1", "/students/by-class/2", "/exam-results/exam/1",
+    "/auth/me", "/exams", "/exam-papers", "/classes", "/exam-results/sheet?classroom_id=1", "/exam-results/sheet?classroom_id=2",
   ], async (page) => {
     await page.getByRole("combobox").nth(0).selectOption("1");
     const classroom = page.getByRole("combobox").nth(1);

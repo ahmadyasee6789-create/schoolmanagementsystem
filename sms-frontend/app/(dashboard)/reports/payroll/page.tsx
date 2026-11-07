@@ -1,9 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Banknote, Clock, TrendingUp, Wallet } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '@/app/lib/api';
+import { escapeHtml, printReport } from '@/components/reports/reportExport';
+import { useReportSession } from '@/components/reports/useReportSession';
 import { Badge } from '@/components/finance/FinanceUi';
 import {
   ReportFilterSelect, ReportFilters, ReportPage, ReportPayment, ReportPaymentStatus, ReportPerson, ReportTable,
@@ -18,6 +20,10 @@ type PayrollRow = {
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
 export default function PayrollReport() {
+  const { sessionId, setSessionId, sessions, sessionError } = useReportSession();
+  const [reportError, setReportError] = useState('');
+  const requestId = useRef(0);
+  const cancelRequest = useCallback(() => { requestId.current++; }, []);
   const [rows, setRows]               = useState<PayrollRow[]>([]);
   const [loading, setLoading]         = useState(true);
   const [refreshing, setRefreshing]   = useState(false);
@@ -25,23 +31,25 @@ export default function PayrollReport() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [roleFilter, setRoleFilter]     = useState('all');
 
-
-
   const fetchData = useCallback(async (isRefresh = false) => {
+    if (!sessionId) return;
+    const request = ++requestId.current;
+    setReportError('');
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
     try {
-      const params: Record<string, string> = {};
+      const params: Record<string, string> = { session_id: sessionId };
       if (monthFilter)            params.month  = monthFilter;
       if (statusFilter !== 'all') params.status = statusFilter;
       if (roleFilter !== 'all')   params.role   = roleFilter;
       const res = await api.get('/reports/payroll', { params });
+      if (request !== requestId.current) return;
       setRows(Array.isArray(res.data) ? res.data : res.data?.items ?? []);
-    } catch { toast.error('Failed to load payroll report'); }
-    finally { setLoading(false); setRefreshing(false); }
-  }, [monthFilter, statusFilter, roleFilter]);
+    } catch { if (request !== requestId.current) return; setReportError('Could not load this report. Check your permissions and filters, then press Refresh to retry.'); setRows([]); toast.error('Failed to load payroll report'); }
+    finally { if (request === requestId.current) { setLoading(false); setRefreshing(false); } }
+  }, [sessionId, monthFilter, statusFilter, roleFilter]);
 
-  useEffect(() => { void fetchData(); }, [fetchData]);
+  useEffect(() => { void fetchData(); return cancelRequest; }, [fetchData, cancelRequest]);
 
   const totalPayable = rows.reduce((s, r) => s + r.net_salary,   0);
   const totalPaid    = rows.reduce((s, r) => s + r.paid_amount,  0);
@@ -52,10 +60,8 @@ export default function PayrollReport() {
 
   const exportPDF = () => {
     const style = `<style>body{font-family:sans-serif;padding:24px;color:#111}h1{font-size:20px;margin-bottom:4px}p{font-size:12px;color:#666;margin-bottom:16px}.stats{display:flex;gap:12px;margin-bottom:20px}.stat{background:#f9f9f9;border-radius:8px;padding:12px;flex:1}.stat-label{font-size:10px;text-transform:uppercase;color:#888}.stat-val{font-size:18px;font-weight:700;margin-top:4px}table{width:100%;border-collapse:collapse;font-size:11px}th{background:#f3f4f6;padding:8px;text-align:left;font-size:10px;text-transform:uppercase;color:#666}td{padding:8px;border-bottom:1px solid #e5e7eb}.paid{color:#059669;font-weight:600}.unpaid{color:#dc2626;font-weight:600}.partial{color:#d97706;font-weight:600}</style>`;
-    const body = `<h1>Payroll Report — ${monthFilter}</h1><p>Generated ${new Date().toLocaleDateString()} · ${rows.length} staff members</p><div class="stats"><div class="stat"><div class="stat-label">Total Payable</div><div class="stat-val">₨${totalPayable.toLocaleString()}</div></div><div class="stat"><div class="stat-label">Paid Out</div><div class="stat-val" style="color:#059669">₨${totalPaid.toLocaleString()}</div></div><div class="stat"><div class="stat-label">Pending</div><div class="stat-val" style="color:#dc2626">₨${totalPending.toLocaleString()}</div></div><div class="stat"><div class="stat-label">Disbursed</div><div class="stat-val">${disbursement}%</div></div></div><table><thead><tr><th>#</th><th>Name</th><th>Role</th><th>Basic</th><th>Allowances</th><th>Deductions</th><th>Net Salary</th><th>Paid</th><th>Status</th></tr></thead><tbody>${rows.map((r,i)=>`<tr><td>${i+1}</td><td>${r.member_name}</td><td>${r.role}</td><td>₨${r.basic_salary.toLocaleString()}</td><td style="color:#059669">+₨${r.allowances.toLocaleString()}</td><td style="color:#dc2626">-₨${r.deductions.toLocaleString()}</td><td style="font-weight:700">₨${r.net_salary.toLocaleString()}</td><td>₨${r.paid_amount.toLocaleString()}</td><td class="${r.status}">${r.status.charAt(0).toUpperCase()+r.status.slice(1)}</td></tr>`).join('')}</tbody></table>`;
-    const win = window.open('','_blank'); if (!win) return;
-    win.document.write(`<!DOCTYPE html><html><head><title>Payroll Report</title>${style}</head><body>${body}</body></html>`);
-    win.document.close(); win.print();
+    const body = `<h1>Payroll Report — ${monthFilter}</h1><p>Generated ${new Date().toLocaleDateString()} · ${rows.length} staff members</p><div class="stats"><div class="stat"><div class="stat-label">Total Payable</div><div class="stat-val">₨${totalPayable.toLocaleString()}</div></div><div class="stat"><div class="stat-label">Paid Out</div><div class="stat-val" style="color:#059669">₨${totalPaid.toLocaleString()}</div></div><div class="stat"><div class="stat-label">Pending</div><div class="stat-val" style="color:#dc2626">₨${totalPending.toLocaleString()}</div></div><div class="stat"><div class="stat-label">Disbursed</div><div class="stat-val">${disbursement}%</div></div></div><table><thead><tr><th>#</th><th>Name</th><th>Role</th><th>Basic</th><th>Allowances</th><th>Deductions</th><th>Net Salary</th><th>Paid</th><th>Status</th></tr></thead><tbody>${rows.map((r,i)=>`<tr><td>${i+1}</td><td>${escapeHtml(r.member_name)}</td><td>${escapeHtml(r.role)}</td><td>₨${r.basic_salary.toLocaleString()}</td><td style="color:#059669">+₨${r.allowances.toLocaleString()}</td><td style="color:#dc2626">-₨${r.deductions.toLocaleString()}</td><td style="font-weight:700">₨${r.net_salary.toLocaleString()}</td><td>₨${r.paid_amount.toLocaleString()}</td><td class="${r.status}">${r.status.charAt(0).toUpperCase()+r.status.slice(1)}</td></tr>`).join('')}</tbody></table>`;
+    void printReport('Payroll Report', style, body);
   };
 
   return (
@@ -65,6 +71,8 @@ export default function PayrollReport() {
       onRefresh={() => fetchData(true)}
       onExport={exportPDF}
       refreshing={refreshing}
+      exportDisabled={loading || refreshing || !!sessionError || !!reportError}
+      error={reportError || sessionError}
       stats={[
         { title: 'Total Payable', value: `₨${totalPayable.toLocaleString()}`, icon: Wallet, tone: 'purple', sub: `${rows.length} staff` },
         { title: 'Disbursed', value: `₨${totalPaid.toLocaleString()}`, icon: Banknote, tone: 'green', sub: `${paidCount} paid` },
@@ -73,6 +81,7 @@ export default function PayrollReport() {
       ]}
     >
       <ReportFilters count={rows.length}>
+        <ReportFilterSelect label="Academic session" value={sessionId} onChange={setSessionId} options={sessions.length ? sessions.map(s => ({ value: String(s.id), label: s.name })) : [{ value: '', label: 'Loading sessions…' }]} />
         <ReportFilterSelect label="Month" value={monthFilter} onChange={setMonthFilter} options={MONTHS.map(m => ({ value: m, label: m }))} />
         <ReportFilterSelect label="Role" value={roleFilter} onChange={setRoleFilter}
           options={[{ value: 'all', label: 'All Roles' }, ...roles.map(r => ({ value: r, label: r }))]} />
@@ -82,7 +91,7 @@ export default function PayrollReport() {
 
       <ReportTable label="Payroll records" personColumn="Staff Member"
         columns={['Role', 'Basic', 'Allowances', 'Deductions', 'Net Salary', 'Payment', 'Status']}
-        loading={loading} icon={Wallet} empty="No payroll records found"
+        loading={loading && !sessionError} icon={Wallet} empty="No payroll records found"
         rows={rows.map((row) => ({
           key: row.id,
           person: <ReportPerson name={row.member_name} />,

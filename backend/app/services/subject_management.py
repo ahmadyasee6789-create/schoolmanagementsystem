@@ -5,7 +5,7 @@ uniqueness is enforced by all API writers under the same database row lock;
 assignment uniqueness additionally has the existing uq_class_subject constraint.
 """
 from fastapi import HTTPException
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.models.academic_session import AcademicSession
 from app.models.classroom import Classroom, Grade
@@ -148,6 +148,36 @@ def remove_subject(db, user, active_session, subject_id):
         db.delete(subject)
         db.commit()
         return {"message": "Subject deleted successfully"}
+    except Exception:
+        db.rollback()
+        raise
+
+
+def remove_assignment(db, user, active_session, assignment_id):
+    """Remove only the teaching link, leaving all examination history intact."""
+    try:
+        # Same permissions and serialization as single/bulk assignment writers.
+        lock_subject_scope(db, user, active_session)
+        assignment = db.query(ClassSubject).join(Classroom).join(Grade).join(Subject).filter(
+            ClassSubject.id == assignment_id,
+            Classroom.organization_id == user.org_id,
+            Classroom.academic_year_id == active_session.id,
+            Grade.organization_id == user.org_id,
+            Subject.organization_id == user.org_id,
+            Subject.session_id == active_session.id,
+        ).with_for_update(of=ClassSubject).first()
+        if assignment is None:
+            raise HTTPException(404, "Assignment not found")
+        # ExamPaper has no FK to ClassSubject. Never remove its independent
+        # Subject/Classroom parents, papers, results, or old-session links.
+        db.delete(assignment)
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(409, "This assignment is referenced by another record and cannot be removed") from exc
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(503, "Could not confirm assignment removal. Refresh the list before retrying") from exc
     except Exception:
         db.rollback()
         raise

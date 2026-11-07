@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session, contains_eager, joinedload
 from sqlalchemy import and_
 from typing import List
@@ -11,7 +11,7 @@ from app.routers.auth import get_current_user
 from app.models.classroom import Classroom, Grade
 from app.dependencies import get_active_session
 from app.schemas.subjects import BulkSubjectsCreate, BulkSubjectsOut, BulkClassSubjectsCreate, BulkClassSubjectsOut
-from app.services.subject_management import mutate_subject, bulk_create_subjects, assign_subjects, remove_subject
+from app.services.subject_management import mutate_subject, bulk_create_subjects, assign_subjects, remove_subject, remove_assignment
 
 router = APIRouter(prefix="/subjects", tags=["Subjects"])
 
@@ -79,6 +79,17 @@ def get_all_assignments(
         })
 
     return result
+
+@router.delete("/assignments/{assignment_id}", status_code=204, response_class=Response)
+def delete_assignment(
+    assignment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    active_session=Depends(get_active_session),
+):
+    remove_assignment(db, current_user, active_session, assignment_id)
+    return Response(status_code=204)
+
 
 @router.get("", response_model=List[SubjectResponse])
 def get_subjects(

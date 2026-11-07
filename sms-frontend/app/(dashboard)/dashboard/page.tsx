@@ -6,13 +6,13 @@ import { isAxiosError } from "axios";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/app/store/authStore";
 import { api } from "@/app/lib/api";
-import { Users, TrendingUp, TrendingDown, Wallet, Banknote, Receipt, GraduationCap, UserRound } from "lucide-react";
+import { Users,School, TrendingUp, TrendingDown, Wallet, Banknote, Receipt, GraduationCap, UserRound } from "lucide-react";
 
 import StatCard from "@/components/dashboard/StatCard";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import DashboardLoading from "@/components/dashboard/DashboardLoading";
 import DashboardError from "@/components/dashboard/DashboardError";
-import StudentStatusChart from "@/components/dashboard/StudentsStatusChart";
+import AttendanceChart, { type AttendanceSummary } from "@/components/dashboard/StudentsStatusChart";
 import StudentsPerClassChart from "@/components/dashboard/StudentsPerClassChart";
 import MonthlyFinancialChart from "@/components/dashboard/MonthlyFinancialChart";
 import YearSummaryCard from "@/components/dashboard/YearSummaryCard";
@@ -21,7 +21,7 @@ import { fmt } from "@/components/dashboard/CustomTooltip";
 type DashboardStats = {
   overview: { students: { total: number; active: number; inactive: number }; faculty: number;
     classes: number; studentsPerClass: { class: string; students: number }[] };
-  attendance: { marked: boolean; present: number; absent: number; percentage: number };
+  attendance: AttendanceSummary;
   financials: { year: number; revenue: { yearTotal: number };
     expenses: { yearTotal: number; salaryYearTotal: number; pendingSalaryTotal: number; combinedYearTotal: number };
     net: { yearTotal: number };
@@ -33,7 +33,7 @@ export default function HomePage() {
   const role = user?.org_role;
   const router = useRouter();
   const query = useQuery({
-    queryKey: ["dashboard", "stats"],
+    queryKey: ["dashboard", "stats", user?.org_id, user?.id, role],
     enabled: !authLoading && Boolean(user),
     refetchOnWindowFocus: false,
     queryFn: async ({ signal }) => (await api.get<DashboardStats>("/dashboard/stats", { signal })).data,
@@ -116,7 +116,7 @@ export default function HomePage() {
             title="Teachers" icon={GraduationCap}
             value={stats.overview.faculty}
             colorHex="#60A5FA" dimBgClass="bg-blue-50 dark:bg-[#60A5FA]/10"
-            sub={`${stats.overview.classes} classes`} delay={60}
+            sub="Active teaching staff" delay={60}
           />
         )}
         {can.viewFees && (
@@ -127,15 +127,17 @@ export default function HomePage() {
             sub="Total fee collections" delay={120}
           />
         )}
-        {can.viewFees && (
-          <StatCard
-            title="Net Profit" icon={Wallet}
-            value={fmt(fin.net.yearTotal)}
-            colorHex={netColor}
-            dimBgClass={fin.net.yearTotal >= 0 ? "bg-green-50 dark:bg-[#34D399]/10" : "bg-red-50 dark:bg-[#F87171]/10"}
-            sub="Revenue − expenses − salaries" delay={180}
-          />
-        )}
+        {can.viewStudents && (
+  <StatCard
+    title="Total Classes"
+    icon={School}
+    value={stats.overview.classes}
+    colorHex="#8B5CF6"
+    dimBgClass="bg-violet-50 dark:bg-[#8B5CF6]/10"
+    sub="Classes and sections"
+    delay={180}
+  />
+)}
         {can.viewMyClasses && role === "teacher" && (
           <StatCard
             title="My Classes" icon={GraduationCap}
@@ -161,7 +163,7 @@ export default function HomePage() {
       </div>
 
       {/* Row 2 — financial breakdown */}
-      {can.viewFees && (
+      {role === "admin" && (
         <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
           <StatCard
             title="Operational Expenses" icon={Receipt}
@@ -190,25 +192,31 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* Charts row 1 */}
-      <div className="mb-6 grid grid-cols-1 gap-5 md:grid-cols-12">
-        {can.viewStudents && (
-          <div className="md:col-span-4">
-            <StudentStatusChart
-              active={stats.overview.students.active}
-              inactive={stats.overview.students.inactive}
-            />
-          </div>
-        )}
-        {can.viewMyClasses && (
-          <div className={can.viewStudents ? "md:col-span-8" : "md:col-span-12"}>
-            <StudentsPerClassChart data={classData} />
-          </div>
-        )}
-      </div>
+     
+{/* Charts row 1 */}
+<div className="mb-6 grid grid-cols-1 gap-5 md:grid-cols-12">
+  {can.viewAttendance && (
+    <div className="md:col-span-4">
+      <AttendanceChart summary={stats.attendance} />
+    </div>
+  )}
+
+  {can.viewMyClasses && (
+    <div
+      className={
+        can.viewAttendance
+          ? "md:col-span-8"
+          : "md:col-span-12"
+      }
+    >
+      <StudentsPerClassChart data={classData} />
+    </div>
+  )}
+</div>
+
 
       {/* Charts row 2 — financials */}
-      {can.viewFees && (
+      {role === "admin" && (
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
           <div className="lg:col-span-8">
             <MonthlyFinancialChart data={financialData} year={fin.year} />

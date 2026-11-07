@@ -466,8 +466,7 @@ class MultiFeeTests(unittest.TestCase):
         self.advance("5000.00")
         self.collect(["2026-10", "2026-11", "2026-12"], credit_amount="2100.00")
         self.collect(["2027-01", "2027-02"], key="second-credit-001", credit_amount="1400.00")
-        with patch.object(dashboard.redis_client, "get", return_value=None), patch.object(dashboard.redis_client, "set"):
-            result = dashboard.get_dashboard_stats(self.db, self.actor, self.session)
+        result = dashboard.get_dashboard_stats(self.db, self.actor, self.session)
         self.assertEqual(result["financials"]["revenue"]["yearTotal"], 5000)
 
     def test_report_retains_withdrawn_students_and_marks_future_balances(self):

@@ -26,7 +26,7 @@ const inputClass =
 const secondaryButtonClass =
   "rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5";
 
-function AssignmentCard({ assignment, onDelete }: { assignment: Assignment; onDelete: () => void }) {
+function AssignmentCard({ assignment, onDelete, canRemove, deleting }: { assignment: Assignment; onDelete: () => void; canRemove: boolean; deleting: boolean }) {
   return (
     <article className="rounded-xl border border-slate-200 bg-white p-4 transition-colors hover:border-[#8B6DF2]/40 dark:border-white/10 dark:bg-white/[0.03]">
       <div className="flex items-start justify-between gap-3">
@@ -42,14 +42,16 @@ function AssignmentCard({ assignment, onDelete }: { assignment: Assignment; onDe
             {assignment.classroom_name} <span aria-hidden>·</span> Section {assignment.section}
           </p>
         </div>
-        <button
+        {canRemove && <button
           type="button"
           title="Remove assignment"
+          aria-label={`Remove ${assignment.subject_name} assignment from ${assignment.classroom_name} ${assignment.section}`}
+          disabled={deleting}
           onClick={onDelete}
           className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-red-500/10 hover:text-red-500 dark:text-slate-500"
         >
           <Trash2 size={16} />
-        </button>
+        </button>}
       </div>
     </article>
   );
@@ -66,15 +68,20 @@ export default function ClassSubjectsPage() {
   const [saving, setSaving] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   const [bulkOpen, setBulkOpen] = useState(false);
   const [dataError, setDataError] = useState("");
   const isAdmin = useAuthStore((state) => state.user?.org_role === "admin");
+  const canRemove = useAuthStore((state) => ["admin", "manager"].includes(state.user?.org_role ?? ""));
+  const selectedAssignment = assignments.find((assignment) => assignment.id === deleteId);
 
   const fetchAssignments = useCallback(async () => {
     try {
       const res = await api.get("/subjects/assignments");
       setAssignments(res.data);
-    } catch {
+      setDataError("");
+    } catch (error) {
+      setDataError(subjectError(error, "Could not refresh the assignment list. Retry loading the data."));
       toast.error("Failed to load assignments");
     } finally {
       setLoading(false);
@@ -121,15 +128,20 @@ export default function ClassSubjectsPage() {
   };
 
   const confirmDelete = async () => {
-    if (!deleteId) return;
+    if (deleteId === null || deleting || !canRemove) return;
+    const assignmentId = deleteId;
+    setDeleteError("");
     setDeleting(true);
     try {
-      await api.delete(`/subjects/assignments/${deleteId}`);
+      await api.delete(`/subjects/assignments/${assignmentId}`);
       toast.success("Assignment removed");
-      setAssignments((previous) => previous.filter((assignment) => assignment.id !== deleteId));
+      setAssignments((previous) => previous.filter((assignment) => assignment.id !== assignmentId));
       setDeleteId(null);
+      await fetchAssignments();
     } catch (error: unknown) {
-      toast.error((error as ApiError).response?.data?.detail || "Failed to delete");
+      const message = subjectError(error, "Failed to remove the assignment. Refresh the list before retrying.");
+      setDeleteError(message);
+      toast.error(message);
     } finally {
       setDeleting(false);
     }
@@ -168,7 +180,7 @@ export default function ClassSubjectsPage() {
       ) : (
         <>
           <div className="grid gap-3 sm:hidden">
-            {filtered.map((assignment) => <AssignmentCard key={assignment.id} assignment={assignment} onDelete={() => setDeleteId(assignment.id)} />)}
+            {filtered.map((assignment) => <AssignmentCard key={assignment.id} assignment={assignment} canRemove={canRemove} deleting={deleting} onDelete={() => { setDeleteError(""); setDeleteId(assignment.id); }} />)}
           </div>
           <div className="hidden overflow-x-auto rounded-xl border border-slate-200 dark:border-white/10 sm:block">
             <table className="w-full min-w-[650px] border-collapse text-left">
@@ -179,7 +191,7 @@ export default function ClassSubjectsPage() {
                     <td className="px-4 py-3 text-sm font-semibold text-slate-900 dark:text-slate-100"><span className="flex items-center gap-3"><span className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#8B6DF2]/20 bg-[#8B6DF2]/10"><GraduationCap size={15} className="text-[#8B6DF2]" /></span>{assignment.classroom_name}</span></td>
                     <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300"><span className="rounded-md border border-blue-400/25 bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-600 dark:border-blue-400/20 dark:bg-blue-500/10 dark:text-blue-400">Section {assignment.section}</span></td>
                     <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300"><span className="flex items-center gap-2"><BookOpen size={14} className="text-slate-400 dark:text-slate-500" />{assignment.subject_name}</span></td>
-                    <td className="px-4 py-3"><button type="button" title="Remove assignment" onClick={() => setDeleteId(assignment.id)} className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-red-500/10 hover:text-red-500 dark:text-slate-500"><Trash2 size={16} /></button></td>
+                    <td className="px-4 py-3">{canRemove && <button type="button" title="Remove assignment" aria-label={`Remove ${assignment.subject_name} assignment from ${assignment.classroom_name} ${assignment.section}`} disabled={deleting} onClick={() => { setDeleteError(""); setDeleteId(assignment.id); }} className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-red-500/10 hover:text-red-500 dark:text-slate-500"><Trash2 size={16} /></button>}</td>
                   </tr>
                 ))}
               </tbody>
@@ -208,7 +220,8 @@ export default function ClassSubjectsPage() {
       {deleteId !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="remove-subject-title">
           <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-5 shadow-xl dark:border-white/10 dark:bg-[#1a2233]">
-            <h2 id="remove-subject-title" className="text-base font-bold text-slate-900 dark:text-slate-50">Remove assignment?</h2><p className="mt-2 text-sm text-slate-500 dark:text-slate-400">This will unassign the subject from the class.</p>
+            <h2 id="remove-subject-title" className="text-base font-bold text-slate-900 dark:text-slate-50">Remove assignment?</h2><p className="mt-2 text-sm text-slate-500 dark:text-slate-400">Unassign {selectedAssignment?.subject_name ?? "this subject"} from {selectedAssignment ? `${selectedAssignment.classroom_name} ${selectedAssignment.section}` : "this class"}? Existing exam papers and marks will be preserved.</p>
+            {deleteError && <p role="alert" className="mt-3 text-sm text-red-600 dark:text-red-400">{deleteError}</p>}
             <div className="mt-6 flex justify-end gap-2"><button type="button" onClick={() => setDeleteId(null)} disabled={deleting} className={secondaryButtonClass}>Cancel</button><button type="button" onClick={confirmDelete} disabled={deleting} className="rounded-lg bg-red-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-400 disabled:cursor-not-allowed disabled:opacity-40">{deleting ? "Removing…" : "Remove"}</button></div>
           </div>
         </div>

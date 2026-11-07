@@ -66,48 +66,48 @@ export default function TopbarUserMenu({
         onClick={() => setOpen((v) => !v)}
         className={`flex items-center gap-1 rounded-[10px] border px-[10px] py-[6px] transition-colors duration-200 sm:gap-2 sm:px-3 ${
           open
-            ? "border-[#8B6DF2] bg-[#8B6DF2]/15"
-            : "border-white/10 hover:border-[#8B6DF2]/40 hover:bg-white/5"
+            ? "border-accent bg-accent-soft"
+            : "border-line hover:border-accent hover:bg-hover"
         }`}
       >
         <div className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full bg-[#8B6DF2] text-[0.72rem] font-bold text-white">
           {initials}
         </div>
 
-        <span className="hidden max-w-[120px] truncate text-[0.82rem] font-medium text-slate-50 sm:block">
+        <span className="hidden max-w-[120px] truncate text-[0.82rem] font-medium text-foreground sm:block">
           {fullName ?? "User"}
         </span>
 
         <ChevronDown
           size={18}
-          className={`hidden text-slate-400 transition-transform duration-200 sm:block ${
+          className={`hidden text-subtle transition-transform duration-200 sm:block ${
             open ? "rotate-180" : ""
           }`}
         />
       </button>
 
       {open && (
-        <div className="absolute right-0 top-[calc(100%+8px)] z-50 w-64 max-w-[calc(100vw-16px)] overflow-hidden rounded-xl border border-white/10 bg-[#161B26] shadow-[0_16px_48px_rgba(0,0,0,0.45)]">
+        <div className="absolute right-0 top-[calc(100%+8px)] z-50 w-64 max-w-[calc(100vw-16px)] overflow-hidden rounded-xl border border-line bg-dialog shadow-[var(--shadow)]">
           {/* User information */}
           <div className="px-4 py-3">
-            <p className="truncate text-[0.82rem] font-semibold text-slate-50">
+            <p className="truncate text-[0.82rem] font-semibold text-foreground">
               {fullName ?? "User"}
             </p>
             {email && (
-              <p className="mt-0.5 truncate text-[0.72rem] text-slate-400">
+              <p className="mt-0.5 truncate text-[0.72rem] text-subtle">
                 {email}
               </p>
             )}
           </div>
 
-          <div className="border-t border-white/10" />
+          <div className="border-t border-line" />
 
           {/* Account actions */}
           <div className="py-1">
             <button
               type="button"
               onClick={() => navigate("/profile")}
-              className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-[0.84rem] text-slate-200 transition-colors hover:bg-white/5"
+              className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-[0.84rem] text-secondary transition-colors hover:bg-hover"
             >
               <UserRound size={17} />
               My Profile
@@ -116,7 +116,7 @@ export default function TopbarUserMenu({
             <button
               type="button"
               onClick={() => navigate("/settings")}
-              className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-[0.84rem] text-slate-200 transition-colors hover:bg-white/5"
+              className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-[0.84rem] text-secondary transition-colors hover:bg-hover"
             >
               <Settings size={17} />
               Settings
@@ -125,14 +125,14 @@ export default function TopbarUserMenu({
             <button
               type="button"
               onClick={() => navigate("/settings/security")}
-              className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-[0.84rem] text-slate-200 transition-colors hover:bg-white/5"
+              className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-[0.84rem] text-secondary transition-colors hover:bg-hover"
             >
               <LockKeyhole size={17} />
               Change Password
             </button>
           </div>
 
-          <div className="border-t border-white/10" />
+          <div className="border-t border-line" />
 
           {/* Logout */}
           <div className="py-1">
@@ -142,7 +142,7 @@ export default function TopbarUserMenu({
                 setOpen(false);
                 onLogout();
               }}
-              className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-[0.84rem] text-red-400 transition-colors hover:bg-red-400/10"
+              className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-[0.84rem] text-danger transition-colors hover:bg-danger-soft"
             >
               <LogOut size={17} />
               Logout

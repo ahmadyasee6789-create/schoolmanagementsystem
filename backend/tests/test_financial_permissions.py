@@ -163,8 +163,13 @@ class FinancialValidationTests(unittest.TestCase):
 
 class FinancialRelationshipTests(unittest.TestCase):
     def setUp(self):
-        self.engine = create_engine("sqlite://")
-        event.listen(self.engine, "connect", lambda dbapi, _: dbapi.execute("PRAGMA foreign_keys=ON"))
+        import os
+        if os.environ.get('TEST_POSTGRES_URL'):
+            from test_fee_postgres import isolated_postgres_engine
+            self.engine = isolated_postgres_engine(self)
+        else:
+            self.engine = create_engine("sqlite://")
+            event.listen(self.engine, "connect", lambda dbapi, _: dbapi.execute("PRAGMA foreign_keys=ON"))
         Base.metadata.create_all(self.engine)
         self.db = Session(self.engine)
         self.db.add_all([Organization(id=1, name="School"), Organization(id=2, name="Other"),
@@ -187,6 +192,11 @@ class FinancialRelationshipTests(unittest.TestCase):
             Classroom(id=5, organization_id=1, grade_id=1, section="Bad Session", academic_year_id=3),
         ])
         self.db.commit()
+
+        if self.engine.dialect.name == 'postgresql':
+            from sqlalchemy import text
+            self.db.execute(text("SELECT setval(pg_get_serial_sequence('students', 'id'), (SELECT max(id) FROM students))"))
+            self.db.commit()
 
     def tearDown(self):
         self.db.close()
@@ -363,10 +373,10 @@ class FinancialRelationshipTests(unittest.TestCase):
     def test_dashboard_cache_hit_cannot_leak_financial_amounts(self):
         self.db.add(OrganizationMember(organization_id=1, user_id=1, role="teacher"))
         self.db.commit()
-        with patch.object(dashboard.redis_client, "get", return_value='{"financials":{"year":2026,"revenue":{"yearTotal":999},"monthlyComparison":[]}}') as get:
+        with patch("app.db.redis.redis_client.get", return_value='{"financials":{"year":2026,"revenue":{"yearTotal":999},"monthlyComparison":[]}}') as get:
             result = dashboard.get_dashboard_stats(db=self.db, current_user=actor("teacher"), active_session=self.db.get(AcademicSession, 1))
         self.assertEqual(result["financials"]["revenue"]["yearTotal"], 0)
-        get.assert_called_once_with("dashboard:stats:1:1:teacher")
+        get.assert_not_called()
 
 
 if __name__ == "__main__":

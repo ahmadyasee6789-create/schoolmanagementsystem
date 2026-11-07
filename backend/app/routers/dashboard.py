@@ -1,5 +1,4 @@
 from fastapi import APIRouter, Depends, HTTPException
-from redis import RedisError
 from sqlalchemy.orm import Session
 from sqlalchemy import func, extract, cast, Date, case
 from datetime import date, datetime
@@ -18,8 +17,7 @@ from app.dependencies import get_active_session
 from app.financial_permissions import has_financial_permission
 from app.routers.classes import validate_teacher_class
 from app.models.attendance import Attendance
-from app.db.redis import redis_client
-import json
+from app.services.dashboard_attendance import dashboard_attendance_summary
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
 
@@ -63,14 +61,8 @@ def get_dashboard_stats(
         raise HTTPException(status_code=403, detail="User does not belong to any school")
 
     org_id = membership.organization_id
-    cache_key = f"dashboard:stats:{org_id}:{active_session.id}:{membership.role}"
-    try:
-        cached_data = redis_client.get(cache_key)
-    except RedisError:
-        cached_data = None
-
-    if cached_data:
-        return redact_dashboard_financials(json.loads(cached_data), current_user)
+    # Cache was shared by every teacher and had no writer invalidation.
+    # Read fresh scoped totals until a complete invalidation strategy exists.
     current_year = datetime.utcnow().year
 
     # ── School overview ───────────────────────────────────────────────
@@ -83,12 +75,14 @@ def get_dashboard_stats(
     if membership.role=="teacher":
         teacher_classes=db.query(Classroom).filter(
             Classroom.class_teacher_member_id==membership.id,
-            Classroom.organization_id==org_id
+            Classroom.organization_id==org_id,
+            Classroom.academic_year_id == active_session.id
         ).all()
         class_ids=[c.id for c in teacher_classes]
     else:
         class_ids=db.query(Classroom.id).filter(
-            Classroom.organization_id==org_id
+            Classroom.organization_id==org_id,
+            Classroom.academic_year_id == active_session.id
         ).all()
         class_ids=[c[0] for c in class_ids]
     total_students, active_students = db.query(
@@ -99,19 +93,9 @@ def get_dashboard_stats(
          StudentEnrollment.session_id == active_session.id,
     Student.organization_id == org_id,
     ).one()
-    today=date.today()
-    attendance_exists, present_count, absent_count = db.query(
-        func.count(Attendance.id),
-        func.coalesce(func.sum(case((Attendance.status == "present", 1), else_=0)), 0),
-        func.coalesce(func.sum(case((Attendance.status == "absent", 1), else_=0)), 0),
-    ).filter(
-        Attendance.class_id.in_(class_ids),
-        Attendance.session_id==active_session.id,
-        Attendance.date==today
-    ).one()
-    percentage = 0
-    if total_students > 0:
-        percentage = round((present_count / total_students) * 100, 2)
+    attendance_summary = dashboard_attendance_summary(
+        db, org_id=org_id, active_session=active_session, class_ids=class_ids,
+    )
     total_classes = len(class_ids)
 
     spc_query = (
@@ -122,7 +106,7 @@ def get_dashboard_stats(
     )
     .join(Classroom, Classroom.grade_id == Grade.id)
     .join(StudentEnrollment, StudentEnrollment.classroom_id == Classroom.id)
-    .filter(Classroom.organization_id == org_id)
+    .filter(Classroom.organization_id == org_id, Classroom.academic_year_id == active_session.id, StudentEnrollment.session_id == active_session.id)
 )
 
     if membership.role == "teacher":
@@ -163,6 +147,7 @@ def get_dashboard_stats(
         )
         .filter(
             Expense.organization_id == org_id,
+            Expense.academic_year_id == active_session.id,
             extract("year", cast(Expense.expense_date, Date)) == current_year
         )
         .group_by("month")
@@ -179,6 +164,7 @@ def get_dashboard_stats(
         )
         .filter(
             SalaryPayment.organization_id == org_id,
+            SalaryPayment.session_id == active_session.id,
             SalaryPayment.status == "paid",
             SalaryPayment.year == current_year
         )
@@ -196,6 +182,7 @@ def get_dashboard_stats(
         func.coalesce(func.sum(SalaryPayment.net_amount), 0)
     ).filter(
         SalaryPayment.organization_id == org_id,
+            SalaryPayment.session_id == active_session.id,
         SalaryPayment.status == "pending",
         SalaryPayment.year == current_year
     ).scalar() or 0
@@ -244,13 +231,7 @@ def get_dashboard_stats(
 for row in students_per_class
             ],
      },
-        "attendance":{
-               "total":total_students,
-               "present":present_count,
-            "absent":absent_count,
-            "percentage":percentage,
-               "marked":True if attendance_exists else False
-         },
+        "attendance": attendance_summary,
 
         "financials": {
             "year": current_year,
@@ -274,8 +255,4 @@ for row in students_per_class
         },
     }
     response = redact_dashboard_financials(response, current_user)
-    try:
-        redis_client.set(cache_key,json.dumps(response),ex=30)
-    except RedisError:
-        pass
     return response

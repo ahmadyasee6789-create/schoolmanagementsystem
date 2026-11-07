@@ -1,6 +1,6 @@
 "use client";
 
-import type { Key, ReactNode } from "react";
+import { useState, type Key, type ReactNode } from "react";
 import { Download, ListFilter, RefreshCw, type LucideIcon } from "lucide-react";
 import StatCard from "@/components/dashboard/StatCard";
 import {
@@ -27,13 +27,16 @@ type Stat = {
 };
 
 export function ReportPage({
-  title, subtitle, onRefresh, onExport, refreshing, stats, children,
+  title, subtitle, onRefresh, onExport, refreshing, exportDisabled = false, exportActions, error, stats, children,
 }: {
   title: string;
   subtitle: string;
   onRefresh: () => void;
-  onExport: () => void;
+  onExport?: () => void;
   refreshing: boolean;
+  exportDisabled?: boolean;
+  exportActions?: ReactNode;
+  error?: string;
   stats: Stat[];
   children: ReactNode;
 }) {
@@ -45,11 +48,12 @@ export function ReportPage({
             <RefreshCw size={16} aria-hidden="true" className={refreshing ? "motion-safe:animate-spin" : ""} />
             {refreshing ? "Refreshing…" : "Refresh"}
           </button>
-          <button type="button" onClick={onExport} className={`${primaryButtonClass} inline-flex items-center gap-2`}>
+          {exportActions ?? <button type="button" onClick={onExport} disabled={exportDisabled} className={`${primaryButtonClass} inline-flex items-center gap-2`}>
             <Download size={16} aria-hidden="true" />Export PDF
-          </button>
+          </button>}
         </div>
       } />
+      {error && <p role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">{error}</p>}
       <div className={`mb-6 grid grid-cols-2 gap-3 [overflow-wrap:anywhere] sm:gap-4 ${stats.length > 4 ? "md:grid-cols-3 xl:grid-cols-6" : "lg:grid-cols-4"}`}>
         {stats.map(({ tone, ...stat }) => <StatCard key={stat.title} {...stat} {...statTones[tone]} />)}
       </div>
@@ -80,7 +84,7 @@ export function ReportFilterSelect({ label, value, onChange, options }: {
 }) {
   return (
     <LabeledField label={label}>
-      <select className={inputClass} value={value} onChange={(event) => onChange(event.target.value)}>
+      <select aria-label={label} className={inputClass} value={value} onChange={(event) => onChange(event.target.value)}>
         {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
       </select>
     </LabeledField>
@@ -96,17 +100,27 @@ export function ReportTable({ label, personColumn = "Student", columns, rows, lo
   icon: LucideIcon;
   empty: string;
 }) {
+  const [page, setPage] = useState(1);
+  const pages = Math.max(1, Math.ceil(rows.length / 50));
+  const current = Math.min(page, pages);
+  const offset = (current - 1) * 50;
+  const visibleRows = rows.slice(offset, offset + 50);
   if (loading) return <div role="status"><span className="sr-only">Loading report</span><LoadingState /></div>;
   if (!rows.length) return <EmptyState icon={icon} message={empty} />;
 
   return (
     <>
+      {pages > 1 && <nav aria-label="Report pagination" className="mb-4 flex items-center justify-end gap-3 text-sm text-slate-600 dark:text-slate-300">
+        <button type="button" disabled={current === 1} onClick={() => setPage(current - 1)} className={secondaryButtonClass}>Previous</button>
+        <span>Page {current} of {pages} · {rows.length} records</span>
+        <button type="button" disabled={current === pages} onClick={() => setPage(current + 1)} className={secondaryButtonClass}>Next</button>
+      </nav>}
       <ul aria-label={label} className="grid gap-3 sm:hidden">
-        {rows.map(({ key, person, values }, index) => (
+        {visibleRows.map(({ key, person, values }, index) => (
           <li key={key} className={`${panelClass} min-w-0 p-4`}>
             <div className="flex items-start justify-between gap-3">
               {person}
-              <span className="shrink-0 text-xs text-slate-500 dark:text-slate-400">#{index + 1}</span>
+              <span className="shrink-0 text-xs text-slate-500 dark:text-slate-400">#{offset + index + 1}</span>
             </div>
             <dl className="mt-4 grid grid-cols-2 gap-3 border-t border-slate-100 pt-3 dark:border-white/5">
               {values.map((value, cell) => (
@@ -125,9 +139,9 @@ export function ReportTable({ label, personColumn = "Student", columns, rows, lo
             <th key={column} scope="col" className={tableHeadClass}>{column}</th>
           ))}</tr>
         </thead>
-        <tbody>{rows.map(({ key, person, values }, index) => (
+        <tbody>{visibleRows.map(({ key, person, values }, index) => (
           <tr key={key} className="border-t border-slate-100 transition-colors hover:bg-slate-50 dark:border-white/5 dark:hover:bg-white/[0.02]">
-            <td className={tableCellClass}>{index + 1}</td>
+            <td className={tableCellClass}>{offset + index + 1}</td>
             <th scope="row" className={`${tableCellClass} text-left`}>{person}</th>
             {values.map((value, cell) => <td key={columns[cell]} className={tableCellClass}>{value}</td>)}
           </tr>

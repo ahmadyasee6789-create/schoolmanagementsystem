@@ -2,10 +2,16 @@
 
 def evaluate_result(subjects):
     total_marks = sum(s["total"] for s in subjects)
-    obtained_marks = sum(s["obtained"] for s in subjects)
 
     if not subjects or total_marks <= 0:
         raise ValueError("Valid exam marks are required")
+
+    # Preserve existing complete-result calculations; missing marks have no
+    # confirmed percentage and must never count as a passing zero.
+    if any(s["obtained"] is None for s in subjects):
+        return {"percentage": None, "failed_count": sum(s["obtained"] is not None and s["obtained"] < s["pass"] for s in subjects), "result": "INCOMPLETE"}
+
+    obtained_marks = sum(s["obtained"] for s in subjects)
 
     percentage = (obtained_marks / total_marks) * 100
 

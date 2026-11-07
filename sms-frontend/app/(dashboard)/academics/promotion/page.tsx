@@ -9,24 +9,7 @@ import {
 import { ArrowForward, CheckCircle, Cancel, Visibility, School, HelpOutline } from '@mui/icons-material';
 import { api } from '@/app/lib/api';
 
-const C = {
-  bg:            "#0D1117",
-  surface:       "#161B27",
-  surfaceHover:  "#1C2333",
-  border:        "rgba(255,255,255,0.07)",
-  accent:        "#F59E0B",
-  accentDim:     "rgba(245,158,11,0.12)",
-  textPrimary:   "#F9FAFB",
-  textSecondary: "rgba(249,250,251,0.45)",
-  green:         "#34D399",
-  greenDim:      "rgba(52,211,153,0.1)",
-  red:           "#F87171",
-  redDim:        "rgba(248,113,113,0.1)",
-  yellow:        "#FBBF24",
-  yellowDim:     "rgba(251,191,36,0.1)",
-  inputBg:       "#1C2333",
-};
-const FONT = "'DM Sans', sans-serif";
+import { C, FONT } from "@/app/lib/themeTokens";
 const EASE = "260ms cubic-bezier(0.4,0,0.2,1)";
 
 const inputSx = {
@@ -34,7 +17,7 @@ const inputSx = {
     backgroundColor: C.inputBg, borderRadius: "10px", fontFamily: FONT,
     color: C.textPrimary, fontSize: "0.875rem",
     "& fieldset": { borderColor: C.border },
-    "&:hover fieldset": { borderColor: "rgba(245,158,11,0.35)" },
+    "&:hover fieldset": { borderColor: C.accent },
     "&.Mui-focused fieldset": { borderColor: C.accent },
   },
   "& .MuiInputLabel-root": { color: C.textSecondary, fontFamily: FONT, fontSize: "0.875rem" },
@@ -110,8 +93,8 @@ export default function PromotionPage() {
     try {
       const res = await api.get(`/promotion/preview/${selectedClass}`);
       setPreview(res.data);
-    } catch (e: any) {
-      setError(e?.response?.data?.detail || 'Failed to load preview');
+    } catch (e) {
+      setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail || 'Failed to load preview');
     } finally {
       setLoadingPreview(false);
     }
@@ -128,8 +111,8 @@ export default function PromotionPage() {
       });
       setResult(res.data);
       setPreview(null);
-    } catch (e: any) {
-      setError(e?.response?.data?.detail || 'Promotion failed');
+    } catch (e) {
+      setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail || 'Promotion failed');
     } finally {
       setPromoting(false);
     }
@@ -213,11 +196,11 @@ export default function PromotionPage() {
                     ? <CircularProgress size={15} sx={{ color: "#111" }} />
                     : <ArrowForward sx={{ fontSize: 17 }} />}
                   sx={{
-                    backgroundColor: C.accent, color: "#111827", fontFamily: FONT,
+                    backgroundColor: C.button, color: C.onButton, fontFamily: FONT,
                     fontWeight: 600, fontSize: "0.82rem", borderRadius: "10px",
                     textTransform: "none", py: 1,
-                    "&:hover": { backgroundColor: "#FBBF24" },
-                    "&.Mui-disabled": { backgroundColor: "rgba(245,158,11,0.2)", color: "rgba(17,24,39,0.4)" },
+                    "&:hover": { backgroundColor: C.buttonHover },
+                    "&.Mui-disabled": { backgroundColor: C.accentDim, color: C.textMuted },
                   }}>
                   Promote
                 </Button>
@@ -228,7 +211,7 @@ export default function PromotionPage() {
 
         {/* Error */}
         {error && (
-          <Card sx={{ backgroundColor: C.redDim, border: `1px solid ${C.red}44`, borderRadius: "12px", p: 2, mb: 3 }}>
+          <Card sx={{ backgroundColor: C.redDim, border: `1px solid color-mix(in srgb, ${C.red} 27%, transparent)`, borderRadius: "12px", p: 2, mb: 3 }}>
             <Typography sx={{ color: C.red, fontFamily: FONT, fontSize: "0.875rem", fontWeight: 500 }}>
               ⚠ {error}
             </Typography>
@@ -237,7 +220,7 @@ export default function PromotionPage() {
 
         {/* Success */}
         {result && (
-          <Card sx={{ backgroundColor: C.greenDim, border: `1px solid ${C.green}44`, borderRadius: "14px", p: 3, mb: 3 }}>
+          <Card sx={{ backgroundColor: C.greenDim, border: `1px solid color-mix(in srgb, ${C.green} 27%, transparent)`, borderRadius: "14px", p: 3, mb: 3 }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 2.5 }}>
               <CheckCircle sx={{ color: C.green, fontSize: 20 }} />
               <Typography sx={{ color: C.green, fontFamily: FONT, fontWeight: 700, fontSize: "0.95rem" }}>
@@ -279,7 +262,7 @@ export default function PromotionPage() {
                 { label: "No Results Yet",    value: preview.no_result_students.length,color: C.yellow, dim: C.yellowDim },
               ].map(({ label, value, color, dim }) => (
                 <Grid item xs={6} md={3} key={label}>
-                  <Card sx={{ backgroundColor: dim, border: `1px solid ${color}22`, borderRadius: "12px", p: 2, textAlign: "center" }}>
+                  <Card sx={{ backgroundColor: dim, border: `1px solid color-mix(in srgb, ${color} 13%, transparent)`, borderRadius: "12px", p: 2, textAlign: "center" }}>
                     <Typography sx={{ fontSize: "1.8rem", fontWeight: 700, color, fontFamily: FONT, lineHeight: 1 }}>{value}</Typography>
                     <Typography sx={{ fontSize: "0.72rem", color: C.textSecondary, fontFamily: FONT, mt: 0.75 }}>{label}</Typography>
                   </Card>
@@ -306,24 +289,24 @@ export default function PromotionPage() {
                 <TableBody>
                   {allRows.map((row) => (
                     <TableRow key={row.student_id}
-                      sx={{ "&:hover": { backgroundColor: "rgba(255,255,255,0.02)" }, transition: `background ${EASE}` }}>
+                      sx={{ "&:hover": { backgroundColor: C.surfaceHover }, transition: `background ${EASE}` }}>
                       <TableCell sx={{ ...tdSx, color: C.accent, fontWeight: 600 }}>{row.admission_no}</TableCell>
                       <TableCell sx={{ ...tdSx, fontWeight: 600 }}>{row.name}</TableCell>
                       <TableCell sx={tdSx}>
                         {row.status === 'pass' && (
                           <Chip icon={<CheckCircle sx={{ fontSize: "14px !important", color: `${C.green} !important` }} />}
                             label="Will be Promoted" size="small"
-                            sx={{ backgroundColor: C.greenDim, color: C.green, fontFamily: FONT, fontWeight: 600, fontSize: "0.72rem", border: `1px solid ${C.green}33`, height: 24 }} />
+                            sx={{ backgroundColor: C.greenDim, color: C.green, fontFamily: FONT, fontWeight: 600, fontSize: "0.72rem", border: `1px solid color-mix(in srgb, ${C.green} 20%, transparent)`, height: 24 }} />
                         )}
                         {row.status === 'fail' && (
                           <Chip icon={<Cancel sx={{ fontSize: "14px !important", color: `${C.red} !important` }} />}
                             label="Will be Held Back" size="small"
-                            sx={{ backgroundColor: C.redDim, color: C.red, fontFamily: FONT, fontWeight: 600, fontSize: "0.72rem", border: `1px solid ${C.red}33`, height: 24 }} />
+                            sx={{ backgroundColor: C.redDim, color: C.red, fontFamily: FONT, fontWeight: 600, fontSize: "0.72rem", border: `1px solid color-mix(in srgb, ${C.red} 20%, transparent)`, height: 24 }} />
                         )}
                         {row.status === 'none' && (
                           <Chip icon={<HelpOutline sx={{ fontSize: "14px !important", color: `${C.yellow} !important` }} />}
                             label="No Results" size="small"
-                            sx={{ backgroundColor: C.yellowDim, color: C.yellow, fontFamily: FONT, fontWeight: 600, fontSize: "0.72rem", border: `1px solid ${C.yellow}33`, height: 24 }} />
+                            sx={{ backgroundColor: C.yellowDim, color: C.yellow, fontFamily: FONT, fontWeight: 600, fontSize: "0.72rem", border: `1px solid color-mix(in srgb, ${C.yellow} 20%, transparent)`, height: 24 }} />
                         )}
                       </TableCell>
                     </TableRow>
@@ -361,9 +344,9 @@ export default function PromotionPage() {
             </Button>
             <Button onClick={handlePromote} variant="contained"
               sx={{
-                backgroundColor: C.accent, color: "#111827", fontFamily: FONT, fontWeight: 600,
+                backgroundColor: C.button, color: C.onButton, fontFamily: FONT, fontWeight: 600,
                 textTransform: "none", borderRadius: "10px", px: 3,
-                "&:hover": { backgroundColor: "#FBBF24" },
+                "&:hover": { backgroundColor: C.buttonHover },
               }}>
               Yes, Promote
             </Button>

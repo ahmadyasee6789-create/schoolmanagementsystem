@@ -24,7 +24,7 @@ export const inputSx = {
 // Used by fields inside dialogs (slightly darker background than the card)
 export const dialogInputSx = {
   "& .MuiOutlinedInput-root": {
-    backgroundColor: "#0a0f1a",
+    backgroundColor: C.inputBg,
     borderRadius:    "8px",
     fontFamily:      FONT,
     color:           C.textPrimary,
@@ -55,7 +55,7 @@ export const thSx = {
 };
 
 export const tdSx = {
-  borderBottom: `1px solid ${C.border}10`,
+  borderBottom: `1px solid ${C.border}`,
   color:        C.textPrimary,
   fontSize:     "0.8rem",
   fontFamily:   FONT,
@@ -64,10 +64,10 @@ export const tdSx = {
 
 export const actionBtnSx = (color: string) => ({
   color,
-  border:        `1px solid ${color}30`,
+  border:        `1px solid color-mix(in srgb, ${color} 19%, transparent)`,
   borderRadius:  "7px",
   p:             0.75,
-  "&:hover":     { backgroundColor: `${color}15`, borderColor: color },
+  "&:hover":     { backgroundColor: `color-mix(in srgb, ${color} 8%, transparent)`, borderColor: color },
   "&.Mui-disabled": { opacity: 0.4 },
   transition:    "all 0.15s",
 });

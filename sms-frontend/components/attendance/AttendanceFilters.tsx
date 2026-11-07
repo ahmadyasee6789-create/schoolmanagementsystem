@@ -16,7 +16,7 @@ type AttendanceFiltersProps = {
   generating?: boolean;
 };
 
-const inputClass = "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition-colors focus:border-[#8B6DF2] dark:border-white/10 dark:bg-white/5 dark:text-slate-100";
+import { inputClass } from "@/components/exams/ExamUi";
 
 export default function AttendanceFilters({
   classes,
@@ -45,7 +45,7 @@ export default function AttendanceFilters({
         <input type="date" value={date} onChange={(event) => onDateChange(event.target.value)} className={inputClass} />
       </label>
       {isReport ? (
-        <div className="flex items-end"><button type="button" onClick={onGenerate} disabled={generating || !classId} className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#8B6DF2] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-400 disabled:cursor-not-allowed disabled:opacity-40"><ChartBar size={16} />{generating ? "Loading…" : "Generate Report"}</button></div>
+        <div className="flex items-end"><button type="button" onClick={onGenerate} disabled={generating || !classId} className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-action px-4 py-2 text-sm font-semibold text-on-action transition-colors hover:bg-action-hover disabled:cursor-not-allowed disabled:opacity-40"><ChartBar size={16} />{generating ? "Loading…" : "Generate Report"}</button></div>
       ) : (
         <label className="relative block sm:col-span-3">
           <span className="mb-1.5 block text-xs font-semibold text-slate-600 dark:text-slate-300">Search</span>

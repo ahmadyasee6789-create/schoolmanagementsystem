@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Box, Button, Typography } from "@mui/material";
 import { BusinessOutlined } from "@mui/icons-material";
 import LogoutIcon from "@mui/icons-material/Logout";
+import ThemeToggle from "@/components/topbar/ThemeToggle";
 
 import { useAuthStore } from "@/app/store/authStore";
 import { C, DISPLAY, FONT } from "./constants";
@@ -56,7 +57,7 @@ export default function SuperAdminPage() {
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 0.5 }}>
           <Box sx={{
             width: 36, height: 36, borderRadius: "10px",
-            backgroundColor: C.accentDim, border: `1px solid ${C.accent}30`,
+            backgroundColor: C.accentDim, border: `1px solid color-mix(in srgb, ${C.accent} 19%, transparent)`,
             display: "flex", alignItems: "center", justifyContent: "center",
           }}>
             <BusinessOutlined sx={{ fontSize: 18, color: C.accent }} />
@@ -71,9 +72,12 @@ export default function SuperAdminPage() {
         <Typography sx={{ fontFamily: FONT, fontSize: "0.75rem", color: C.textSecondary, ml: 6.5 }}>
           Manage all organizations · approve · suspend · extend plans
         </Typography>
-        <Button onClick={handleLogout} startIcon={<LogoutIcon />}>
-          Logout
-        </Button>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 2 }}>
+          <ThemeToggle />
+          <Button onClick={handleLogout} startIcon={<LogoutIcon />}>
+            Logout
+          </Button>
+        </Box>
       </Box>
 
       {/* ── STATS ── */}

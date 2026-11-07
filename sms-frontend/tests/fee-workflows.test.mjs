@@ -1,13 +1,12 @@
-// Run against Next on 127.0.0.1:45898 with NEXT_PUBLIC_API_URL=http://127.0.0.1:45899.
-// The second address is intercepted by Playwright. No test reaches a real backend.
+// Run against a local frontend; every non-frontend request is intercepted.
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { after, before, test } from "node:test";
 
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.FEE_TEST_PLAYWRIGHT || "playwright");
-const frontend = "http://127.0.0.1:45898";
-const mockApi = "http://127.0.0.1:45899";
+const frontend = process.env.EXAM_TEST_FRONTEND || "http://127.0.0.1:45898";
+assert.ok(["localhost", "127.0.0.1"].includes(new URL(frontend).hostname));
 const user = { id: 15, org_id: 23, org_role: "admin", full_name: "Test Admin", email: "fixture@example.invalid" };
 const session = { id: 42, name: "2026–27", start_date: "2026-04-01", end_date: "2027-03-31", is_active: true };
 const student = {
@@ -41,7 +40,6 @@ async function fixture(t, { theme = "light", width = 1200, responses = [], histo
     const request = route.request();
     const url = new URL(request.url());
     if (url.origin === frontend) return route.continue();
-    if (url.origin !== mockApi) return route.abort();
     if (request.method() === "OPTIONS") return route.fulfill({ status: 204, headers });
     const call = { path: url.pathname, method: request.method(), headers: request.headers() };
     if (request.postData()) call.body = request.postDataJSON();
@@ -150,7 +148,7 @@ test("profile confirmation submits the reviewed request, refreshes history and a
   await page.getByText("TEST-31", { exact: false }).waitFor();
   await page.getByText("Paid", { exact: true }).last().waitFor();
   assert.equal(calls.filter((call) => call.path.endsWith("/receipt")).length, 0);
-  const receipt = page.waitForRequest((request) => request.url() === mockApi + "/fees/payments/31/receipt" && request.method() === "GET");
+  const receipt = page.waitForRequest((request) => new URL(request.url()).pathname === "/fees/payments/31/receipt" && request.method() === "GET");
   await page.getByRole("button", { name: "Print receipt" }).click();
   assert.equal((await receipt).headers().authorization, "Bearer fixture-token");
   assert.equal(calls.filter((call) => call.path === "/fees/collection/multi").length, 4);

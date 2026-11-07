@@ -11,14 +11,17 @@ let browser;
 before(async () => { browser = await chromium.launch({ executablePath: process.env.EXAM_TEST_CHROMIUM }); });
 after(async () => { await browser?.close(); });
 
-async function fixture(t, { assignmentPage = false, role = "admin", initialNames = [], existingAssignments = 0, fail = false, mobile = false } = {}) {
+async function fixture(t, { assignmentPage = false, role = "admin", initialNames = [], existingAssignments = 0, fail = false, mobile = false, removeFailure = false, holdRemove = false } = {}) {
   const context = await browser.newContext({ viewport: { width: mobile ? 390 : 1200, height: 900 }, serviceWorkers: "block" });
   t.after(() => context.close());
   const user = { id: 1, org_id: 1, org_role: role, full_name: "Fixture User", email: "fixture@example.invalid" };
   const subjects = initialNames.map((name, index) => ({ id: index + 1, name }));
-  const assignments = subjects.slice(0, existingAssignments).map((subject) => ({ id: subject.id, classroom_id: 5,
+  const assignments = subjects.slice(0, existingAssignments).map((subject, index) => ({ id: 32 + index, classroom_id: 5,
     subject_id: subject.id, subject_name: subject.name, classroom_name: "Grade 5", section: "A", teacher_member_id: 9 }));
   const writes = [], reads = [];
+  let releaseRemove;
+  const removeGate = new Promise(resolve => { releaseRemove = resolve; });
+  t.after(() => releaseRemove());
   await context.addInitScript((actor) => localStorage.setItem("auth-storage", JSON.stringify({ state: {
     user: actor, token: "fixture-only", expiresAt: Date.now() + 3_600_000,
   }, version: 0 })), user);
@@ -48,6 +51,15 @@ async function fixture(t, { assignmentPage = false, role = "admin", initialNames
     const body = request.postData() ? request.postDataJSON() : undefined;
     writes.push({ path: url.pathname, method: request.method(), body });
     if (fail) return json({ detail: [{ msg: "Fixture validation failure" }] }, 422);
+    if (/^\/subjects\/assignments\/\d+$/.test(url.pathname) && request.method() === 'DELETE') {
+      if (holdRemove) await removeGate;
+      if (removeFailure) return json({ detail: 'Assignment not found' }, 404);
+      const id = Number(url.pathname.split('/').at(-1));
+      const index = assignments.findIndex(item => item.id === id);
+      if (index === -1) return json({ detail: 'Assignment not found' }, 404);
+      assignments.splice(index, 1);
+      return route.fulfill({ status: 204, headers });
+    }
     if (url.pathname === "/subjects/bulk") {
       const created = [], skipped = [], seen = new Set();
       for (const raw of body.names) {
@@ -93,7 +105,7 @@ async function fixture(t, { assignmentPage = false, role = "admin", initialNames
   t.after(() => assert.deepEqual(errors, []));
   await page.goto(frontend + (assignmentPage ? "/academics/assign_subjects" : "/academics/add_subjects"));
   await page.getByRole("heading", { name: assignmentPage ? "Class Subjects" : "Subjects", exact: true }).waitFor();
-  return { page, subjects, assignments, writes, reads };
+  return { page, subjects, assignments, writes, reads, releaseRemove };
 }
 
 test("seven subjects are previewed and created with one request", async (t) => {
@@ -197,6 +209,55 @@ test("existing single subject creation and editing still work", async (t) => {
   await edit.getByRole("button", { name: "Update Subject", exact: true }).click();
   await edit.waitFor({ state: "hidden" });
   assert.deepEqual(writes.map((item) => item.method), ["POST", "PUT"]);
+});
+
+test('removal confirms and sends assignment ID 32 rather than subject ID 1, then refreshes', async t => {
+  const { page, subjects, assignments, writes, reads, releaseRemove } = await fixture(t, {
+    assignmentPage: true, initialNames: ['Mathematics'], existingAssignments: 1, holdRemove: true,
+  });
+  const remove = page.getByRole('button', { name: 'Remove Mathematics assignment from Grade 5 A', exact: true }).filter({ visible: true });
+  await remove.click();
+  const dialog = page.getByRole('dialog', { name: 'Remove assignment?', exact: true });
+  await dialog.waitFor();
+  assert.equal(writes.length, 0);
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+  assert.equal(writes.length, 0);
+  await remove.click();
+  const requested = page.waitForRequest(request => request.method() === 'DELETE');
+  await dialog.getByRole('button', { name: 'Remove', exact: true }).click();
+  await requested;
+  assert.equal(await dialog.getByRole('button', { name: 'Removing…', exact: true }).isDisabled(), true);
+  const refreshed = page.waitForResponse(response => new URL(response.url()).pathname === '/subjects/assignments' && response.request().method() === 'GET');
+  releaseRemove();
+  await refreshed;
+  await dialog.waitFor({ state: 'hidden' });
+  await page.getByText('Assignment removed', { exact: true }).waitFor();
+  assert.deepEqual(writes, [{ path: '/subjects/assignments/32', method: 'DELETE', body: undefined }]);
+  assert.equal(assignments.length, 0);
+  assert.deepEqual(subjects, [{ id: 1, name: 'Mathematics' }]);
+  assert.ok(reads.filter(path => path === '/subjects/assignments').length >= 2);
+});
+
+test('failed removal keeps the assignment and confirmation open without claiming success', async t => {
+  const { page, assignments, writes } = await fixture(t, { assignmentPage: true, initialNames: ['English'], existingAssignments: 1, removeFailure: true });
+  await page.getByRole('button', { name: 'Remove English assignment from Grade 5 A', exact: true }).filter({ visible: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Remove assignment?', exact: true });
+  await dialog.getByRole('button', { name: 'Remove', exact: true }).click();
+  await dialog.getByRole('alert').filter({ hasText: 'Assignment not found' }).waitFor();
+  assert.equal(await dialog.getByRole('button', { name: 'Remove', exact: true }).isEnabled(), true);
+  assert.equal(assignments.length, 1);
+  assert.equal(writes[0].path, '/subjects/assignments/32');
+  assert.equal(await page.getByText('Assignment removed', { exact: true }).count(), 0);
+});
+
+test('managers can remove on mobile while teachers have no removal controls', async t => {
+  const { page } = await fixture(t, { assignmentPage: true, role: 'manager', initialNames: ['English'], existingAssignments: 1, mobile: true });
+  await page.getByRole('button', { name: 'Remove English assignment from Grade 5 A', exact: true }).filter({ visible: true }).click();
+  await page.getByRole('dialog', { name: 'Remove assignment?', exact: true }).getByRole('button', { name: 'Remove', exact: true }).click();
+  await page.getByText('Assignment removed', { exact: true }).waitFor();
+  const teacher = await fixture(t, { assignmentPage: true, role: 'teacher', initialNames: ['English'], existingAssignments: 1 });
+  await teacher.page.getByText('English', { exact: true }).filter({ visible: true }).waitFor();
+  assert.equal(await teacher.page.getByRole('button', { name: /^Remove .* assignment from/ }).count(), 0);
 });
 
 test("existing single assignment still works", async (t) => {

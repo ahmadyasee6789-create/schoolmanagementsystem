@@ -18,7 +18,7 @@ export function PlanChip({ plan }: { plan: string }) {
       sx={{
         backgroundColor: c.bg,
         color:           c.color,
-        border:          `1px solid ${c.color}30`,
+        border:          `1px solid color-mix(in srgb, ${c.color} 19%, transparent)`,
         fontFamily:      FONT,
         fontWeight:      700,
         fontSize:        "0.6rem",

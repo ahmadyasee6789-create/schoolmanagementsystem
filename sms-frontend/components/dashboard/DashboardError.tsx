@@ -7,7 +7,7 @@ interface DashboardErrorProps {
 
 export default function DashboardError({ error, role, onGoToSessions, onRetry }: DashboardErrorProps) {
   return (
-    <div className="flex min-h-[60vh] items-center justify-center bg-white p-6 dark:bg-[#111827]">
+    <div className="flex min-h-[60vh] items-center justify-center bg-background p-6">
       <div className="w-full max-w-[500px] rounded-2xl border border-red-300/40 bg-white p-8 text-center dark:border-red-400/25 dark:bg-[#161D2B]">
         <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-red-300/30 bg-red-50 dark:border-red-400/20 dark:bg-red-400/10">
           <span className="text-[28px]">⚠️</span>
@@ -22,7 +22,7 @@ export default function DashboardError({ error, role, onGoToSessions, onRetry }:
         {role === "admin" ? (
           <button
             onClick={onGoToSessions}
-            className="rounded-lg bg-[#F59E0B] px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#E68A00]"
+            className="rounded-lg bg-action px-6 py-2.5 text-sm font-semibold text-on-action transition-colors hover:bg-action-hover"
           >
             Go to Academic Sessions
           </button>

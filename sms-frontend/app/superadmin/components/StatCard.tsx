@@ -1,3 +1,4 @@
+import type { ElementType } from "react";
 // app/superadmin/components/StatCard.tsx
 import { Box, Typography } from "@mui/material";
 import { C, FONT } from "../constants";
@@ -9,7 +10,7 @@ export function StatCard({
   label: string;
   value: number;
   color: string;
-  icon: any;
+  icon: ElementType;
   delay?: number;
 }) {
   return (
@@ -30,7 +31,7 @@ export function StatCard({
         background:   color,
         opacity:      0.6,
       },
-      "&:hover": { borderColor: `${color}40` },
+      "&:hover": { borderColor: `color-mix(in srgb, ${color} 25%, transparent)` },
       transition: "border-color 0.2s",
     }}>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
@@ -59,8 +60,8 @@ export function StatCard({
           width:           40,
           height:          40,
           borderRadius:    "10px",
-          backgroundColor: `${color}15`,
-          border:          `1px solid ${color}25`,
+          backgroundColor: `color-mix(in srgb, ${color} 8%, transparent)`,
+          border:          `1px solid color-mix(in srgb, ${color} 15%, transparent)`,
           display:         "flex",
           alignItems:      "center",
           justifyContent:  "center",

@@ -1,5 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status,Body
 from sqlalchemy.orm import Session
+from sqlalchemy import func, text
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+import hashlib
 from jose import JWTError, ExpiredSignatureError
 
 from datetime import datetime, timedelta
@@ -9,7 +12,7 @@ from  app.models.users import User, OrganizationMember, Organization
 from app.schemas.user import UserCreate, UserLogin, UserOut
 from fastapi.security import OAuth2PasswordBearer 
 from  app.utils.hash import create_refresh_token, hash_password, verify_password, create_access_token
-from fastapi_limiter.depends import RateLimiter
+from app.services.school_registration import AuthValidationRoute, require_signup_access, signup_policy
 import logging
 from  app.schemas.auth import RefreshTokenIn, CurrentUser
 from app.security import (
@@ -19,7 +22,7 @@ from app.security import (
 )
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/auth", tags=["Auth"])
+router = APIRouter(prefix="/auth", tags=["Auth"], route_class=AuthValidationRoute)
 
 # ---------------- CONFIG ----------------
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
@@ -214,18 +217,30 @@ def me(db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
 
 
 
-@router.post("/signup")
+@router.get("/signup-policy")
+def get_signup_policy():
+    from fastapi.responses import JSONResponse
+    return JSONResponse(signup_policy(), headers={'Cache-Control': 'no-store'})
+
+
+@router.post("/signup", dependencies=[Depends(require_signup_access)])
 def signup(payload: UserCreate, db: Session = Depends(get_db)):
     try:
+        # Serialize equivalent email registrations without a schema change.
+        # The existing users.email unique constraint remains the backstop.
+        canonical_email = str(payload.email).lower()
+        email_lock = int.from_bytes(hashlib.sha256(('school-signup:' + canonical_email).encode()).digest()[:8], 'big', signed=True)
+        db.execute(text('SELECT pg_advisory_xact_lock(:key)'), {'key': email_lock})
         # Check existing email
-        if db.query(User).filter(User.email == payload.email).first():
+        if db.query(User).filter(func.lower(User.email) == canonical_email).first():
             raise HTTPException(status_code=400, detail="Email already registered")
 
         # Create user
         new_user = User(
             full_name=payload.full_name,
             email=payload.email,
-            hashed_password=hash_password(payload.password),
+            hashed_password=hash_password(payload.password.get_secret_value()),
+            is_superadmin=False,
         )
         db.add(new_user)
         db.flush()  # 👈 no commit yet
@@ -252,15 +267,22 @@ def signup(payload: UserCreate, db: Session = Depends(get_db)):
         db.add(org_member)
 
         # ✅ One commit only
-        db.commit()
-
-        return {
+        db.flush()
+        response = {
             "message": "Organization created",
             "user_id": new_user.id,
             "organization_id": new_org.id,
             "role": "admin"
         }
+        db.commit()
+        return response
 
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(409, 'Registration conflicted with an existing account. Please sign in or retry with a different email.') from None
+    except SQLAlchemyError:
+        db.rollback()
+        raise HTTPException(503, 'Could not confirm registration. Try signing in before submitting again.') from None
     except Exception:
         db.rollback()
         raise
