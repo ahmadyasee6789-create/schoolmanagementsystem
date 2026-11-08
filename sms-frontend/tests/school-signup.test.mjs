@@ -139,7 +139,9 @@ test('signup shares the sign-in design, fits all widths, and preserves the dashb
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${width}px must not overflow`);
     assert.equal(await page.locator('main').evaluate(element => getComputedStyle(element).colorScheme), 'dark');
     assert.equal(await page.evaluate(() => localStorage.getItem('theme-mode')), 'dark');
-    assert.equal(await page.getByRole('link', { name: 'Schoolix home' }).locator('svg').count(), 1);
+    const home = page.getByRole('link', { name: 'Schoolix home' });
+    assert.equal(await home.innerText(), 'Schoolix');
+    assert.equal(await home.locator('img[alt=""][src*="%2Flogo.png"]').count(), 1);
     assert.equal(await page.getByRole('link', { name: 'Sign In', exact: true }).getAttribute('href'), '/signin');
     assert.deepEqual(calls, ['/auth/signup-policy']);
     if (process.env.SIGNUP_TEST_SCREENSHOT_DIR && [1440, 390].includes(width)) {

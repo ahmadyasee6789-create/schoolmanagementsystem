@@ -4,12 +4,13 @@ import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/app/store/authStore";
 import TopbarMobileToggle from "./TopbarMobileToggle";
 import TopbarGreeting from "./TopbarGreeting";
+import SchoolixLogo from "@/components/brand/SchoolixLogo";
 import TopbarUserMenu from "./TopbarUserMenu";
 import ThemeToggle from "@/components/topbar/ThemeToggle";
 
 const SIDEBAR_WIDTH = 272;
 const COLLAPSED_WIDTH = 64;
-const EASE = "300ms cubic-bezier(0.4, 0, 0.2, 1)";
+const EASE = "200ms cubic-bezier(0.4, 0, 0.2, 1)";
 
 interface TopbarProps {
   mobileOpen?: boolean;
@@ -48,6 +49,9 @@ export default function Topbar({
         onToggle={() => setMobileOpen?.(!mobileOpen)}
       />
 
+      <span className="inline-flex md:hidden">
+        <SchoolixLogo variant="icon" size={28} />
+      </span>
       <TopbarGreeting fullName={user?.full_name} />
 
       <div className="ml-auto flex items-center gap-2 sm:gap-3">

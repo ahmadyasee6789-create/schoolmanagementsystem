@@ -122,7 +122,9 @@ test("signin follows the split layout and fits narrow screens without changing t
     await page.getByRole("heading", { name: "Sign in to your account", exact: true }).waitFor();
     await page.evaluate(() => document.fonts.ready);
     const brand = page.getByRole("complementary", { name: "About Schoolix" });
-    assert.equal(await brand.getByRole("link", { name: "Schoolix home" }).locator("svg").count(), 1);
+    const home = brand.getByRole("link", { name: "Schoolix home" });
+    assert.equal(await home.innerText(), "Schoolix");
+    assert.equal(await home.locator('img[alt=""][src*="%2Flogo.png"]').count(), 1);
     const form = page.getByRole("region", { name: "Sign in to your account" });
     const brandBox = await brand.boundingBox();
     const formBox = await form.boundingBox();

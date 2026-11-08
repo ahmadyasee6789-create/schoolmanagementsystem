@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Box, Button, Typography } from "@mui/material";
-import { BusinessOutlined } from "@mui/icons-material";
+import SchoolixLogo from "@/components/brand/SchoolixLogo";
 import LogoutIcon from "@mui/icons-material/Logout";
 import ThemeToggle from "@/components/topbar/ThemeToggle";
 
@@ -55,13 +55,7 @@ export default function SuperAdminPage() {
       {/* ── HEADER ── */}
       <Box sx={{ mb: 4, animation: "fadeUp 0.3s ease both", ...fadeUp }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 0.5 }}>
-          <Box sx={{
-            width: 36, height: 36, borderRadius: "10px",
-            backgroundColor: C.accentDim, border: `1px solid color-mix(in srgb, ${C.accent} 19%, transparent)`,
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}>
-            <BusinessOutlined sx={{ fontSize: 18, color: C.accent }} />
-          </Box>
+          <SchoolixLogo variant="icon" size={36} />
           <Typography sx={{
             fontFamily: DISPLAY, fontSize: "1.8rem", color: C.textPrimary,
             lineHeight: 1, letterSpacing: "-0.02em",

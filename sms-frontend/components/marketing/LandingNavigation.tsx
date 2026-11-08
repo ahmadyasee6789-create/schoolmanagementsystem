@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRef, useState } from "react";
 import { ArrowUpRight, Menu, X } from "lucide-react";
-import SchoolixMark from "@/components/brand/SchoolixMark";
+import SchoolixLogo from "@/components/brand/SchoolixLogo";
 import styles from "./LandingPage.module.css";
 
 const links = [
@@ -33,10 +33,7 @@ export default function LandingNavigation() {
           className={styles.brand}
           aria-label="Schoolix home"
         >
-          <SchoolixMark size={31} />
-          <span>
-            School<span className={styles.brandAccent}>ix</span>
-          </span>
+          <SchoolixLogo variant="full" size={32} />
         </Link>
         <div className={styles.desktopLinks}>
           {links.map((link) => (

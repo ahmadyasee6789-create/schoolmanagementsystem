@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, GraduationCap, Mail } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Mail } from "lucide-react";
+import SchoolixLogo from "@/components/brand/SchoolixLogo";
 import toast from "react-hot-toast";
 import { api } from "../../lib/api";
 
@@ -42,19 +43,15 @@ export default function ForgotPasswordPage() {
       <div className="w-full max-w-[420px]">
         {/* Brand header */}
         <div className="mb-7 text-center">
-          <span
-            className={`mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border transition-colors ${
-              sent
-                ? "border-emerald-400/25 bg-emerald-50 dark:border-emerald-400/20 dark:bg-emerald-500/10"
-                : "border-[#8B6DF2]/20 bg-[#8B6DF2]/10"
-            }`}
-          >
+          <div className="mb-4 flex h-14 items-center justify-center">
             {sent ? (
-              <CheckCircle2 size={28} className="text-emerald-500" />
+              <span className="flex h-14 w-14 items-center justify-center rounded-2xl border border-emerald-400/25 bg-emerald-50 dark:border-emerald-400/20 dark:bg-emerald-500/10">
+                <CheckCircle2 size={28} className="text-emerald-500" />
+              </span>
             ) : (
-              <GraduationCap size={28} className="text-[#8B6DF2]" />
+              <SchoolixLogo variant="icon" size={40} />
             )}
-          </span>
+          </div>
           <h1 className="text-[2rem] font-bold leading-tight tracking-tight text-slate-900 dark:text-slate-50">
             {sent ? "Check your inbox" : "Forgot password?"}
           </h1>

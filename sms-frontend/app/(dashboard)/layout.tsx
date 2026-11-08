@@ -28,7 +28,7 @@ export default function DashboardLayout({
       />
 
      <main
-  className="box-border bg-white transition-[margin-left] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] dark:bg-[#0D1117]
+  className="box-border bg-white transition-[margin-left] duration-200 ease-[cubic-bezier(0.4,0,0.2,1)] dark:bg-[#0D1117]
     ml-0 md:ml-[var(--sidebar-offset)]"
   style={{
     ["--sidebar-offset" as string]: `${collapsed ? COLLAPSED_WIDTH : SIDEBAR_WIDTH}px`,

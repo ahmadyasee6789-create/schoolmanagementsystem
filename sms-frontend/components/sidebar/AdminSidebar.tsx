@@ -41,7 +41,7 @@ export default function AdminSidebar({
           border-r border-slate-200 bg-white text-slate-900
           dark:border-white/10 dark:bg-[#0D1117] dark:text-slate-100
           z-30"
-        style={{ width, transition: "width 300ms cubic-bezier(0.4,0,0.2,1)" }}
+        style={{ width, transition: "width 200ms cubic-bezier(0.4,0,0.2,1)" }}
       >
         <SidebarHeader collapsed={collapsed} onToggle={() => setCollapsed((v) => !v)} />
         <SidebarNav pathname={pathname} collapsed={collapsed} />

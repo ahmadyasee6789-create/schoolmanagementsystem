@@ -2,55 +2,45 @@
 
 import { ChevronLeft } from "lucide-react";
 import { useAuthStore } from "@/app/store/authStore";
-import SchoolixMark from "@/components/brand/SchoolixMark";
+import SchoolixLogo from "@/components/brand/SchoolixLogo";
 
 interface SidebarHeaderProps {
   collapsed: boolean;
   onToggle: () => void;
 }
 
+const LOGO_SIZE = 28;
+
 export default function SidebarHeader({ collapsed, onToggle }: SidebarHeaderProps) {
   const orgName = useAuthStore((s) => s.user?.org_name);
+  const toggleLabel = collapsed ? "Expand sidebar" : "Collapse sidebar";
 
   return (
-    <div
-      className={`relative flex h-16 items-center border-b border-slate-200 dark:border-white/10 ${
-        collapsed ? "justify-center px-0" : "px-4"
-      }`}
-    >
-      {collapsed && <SchoolixMark size={28} />}
-
+    <div className="relative flex h-16 shrink-0 items-center justify-center overflow-hidden border-b border-slate-200 dark:border-white/10">
       {!collapsed && (
-        <div className="absolute left-0 right-0 flex justify-center">
-          <div className="flex min-w-0 items-center gap-2">
-            <SchoolixMark size={22} />
-            <div className="flex min-w-0 flex-col items-center gap-0.5">
-              <span className="whitespace-nowrap text-[18px] font-extrabold tracking-tight">
-                <span className="text-slate-900 dark:text-slate-50">School</span>
-                <span className="text-[#8B6DF2]">ix</span>
-              </span>
-
-              {orgName && (
-                <span
-                  title={orgName}
-                  className="max-w-[140px] truncate text-[11px] font-medium tracking-wide text-slate-500 dark:text-slate-400"
-                >
-                  {orgName}
-                </span>
-              )}
-            </div>
-          </div>
+        <div className="flex min-w-0 flex-col items-center text-[18px] font-extrabold tracking-tight text-slate-900 dark:text-slate-50">
+          <SchoolixLogo variant="full" size={LOGO_SIZE} />
+          {orgName && (
+            <span title={orgName} className="max-w-[140px] truncate text-[11px] font-medium tracking-wide text-slate-500 dark:text-slate-400">
+              {orgName}
+            </span>
+          )}
         </div>
       )}
 
       <button
+        type="button"
         onClick={onToggle}
-        aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        className={`relative z-10 ml-auto flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition-all duration-300 hover:border-[#8B6DF2] hover:text-[#8B6DF2] dark:border-white/10 dark:text-slate-400 ${
-          collapsed ? "rotate-180" : "rotate-0"
+        aria-label={toggleLabel}
+        aria-expanded={!collapsed}
+        title={toggleLabel}
+        className={`flex shrink-0 cursor-pointer items-center justify-center rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+          collapsed
+            ? "size-11"
+            : "absolute right-4 size-8 border border-slate-200 text-slate-500 transition-colors hover:border-[#8B6DF2] hover:text-[#8B6DF2] dark:border-white/10 dark:text-slate-400"
         }`}
       >
-        <ChevronLeft size={16} />
+        {collapsed ? <SchoolixLogo variant="icon" size={LOGO_SIZE} /> : <ChevronLeft size={16} aria-hidden="true" />}
       </button>
     </div>
   );

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowDown, ArrowRight, ArrowUpRight, BarChart3, CalendarCheck, Check, FileText, GraduationCap, Layers, Plus, ShieldCheck, UsersRound, Wallet } from "lucide-react";
-import SchoolixMark from "@/components/brand/SchoolixMark";
+import SchoolixLogo from "@/components/brand/SchoolixLogo";
 import LandingNavigation from "@/components/marketing/LandingNavigation";
 import ProductPreview from "@/components/marketing/ProductPreview";
 import ProductShowcase from "@/components/marketing/ProductShowcase";
@@ -69,6 +69,6 @@ export default function LandingPage() {
 
       <section id="contact" className={`${styles.container} ${styles.contactSection}`} aria-labelledby="contact-title"><div className={styles.contactCard}><div><p className={styles.contactEyebrow}>LET’S TALK ABOUT YOUR SCHOOL</p><h2 id="contact-title">Make room for<br />a simpler school day.</h2><p>A walkthrough centered on your school, your team and the way you work.</p></div><div className={styles.contactAction}>{demoHref ? <a href={demoHref} target={demoUrl ? "_blank" : undefined} rel={demoUrl ? "noopener noreferrer" : undefined} className={styles.whiteButton}>Request a Demo <ArrowUpRight size={19} aria-hidden="true" /></a> : <><button type="button" disabled className={styles.whiteButton} aria-describedby="demo-booking-status">Demo booking coming soon</button><p id="demo-booking-status">Demo bookings will open here soon. Please check back for a guided walkthrough.</p></>}{contactEmail && <a className={styles.contactEmail} href={`mailto:${encodeURIComponent(contactEmail)}`}>{contactEmail}</a>}<span>Already using Schoolix? <Link href="/signin" prefetch={false}>Login <ArrowRight size={13} aria-hidden="true" /></Link></span></div></div></section>
     </main>
-    <footer className={`${styles.container} ${styles.footer}`}><div className={styles.footerTop}><div><Link href="/" prefetch={false} className={styles.brand} aria-label="Schoolix home"><SchoolixMark size={29} /><span>School<span className={styles.brandAccent}>ix</span></span></Link><p>A clearer way to run your school.</p></div><nav aria-label="Footer navigation"><a href="#features">Features</a><a href="#how-it-works">How It Works</a><a href="#faq">FAQ</a><a href="#contact">Contact</a><Link href="/signin" prefetch={false}>Login</Link></nav></div><div className={styles.footerBottom}><span>© {new Date().getFullYear()} Schoolix. All rights reserved.</span><span>Thoughtfully connected. Purposefully simple.</span></div></footer>
+    <footer className={`${styles.container} ${styles.footer}`}><div className={styles.footerTop}><div><Link href="/" prefetch={false} className={styles.brand} aria-label="Schoolix home"><SchoolixLogo variant="full" size={30} /></Link><p>A clearer way to run your school.</p></div><nav aria-label="Footer navigation"><a href="#features">Features</a><a href="#how-it-works">How It Works</a><a href="#faq">FAQ</a><a href="#contact">Contact</a><Link href="/signin" prefetch={false}>Login</Link></nav></div><div className={styles.footerBottom}><span>© {new Date().getFullYear()} Schoolix. All rights reserved.</span><span>Thoughtfully connected. Purposefully simple.</span></div></footer>
   </div>;
 }

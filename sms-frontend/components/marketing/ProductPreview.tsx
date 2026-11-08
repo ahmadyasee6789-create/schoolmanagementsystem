@@ -12,7 +12,7 @@ import {
   UsersRound,
   Wallet,
 } from "lucide-react";
-import SchoolixMark from "@/components/brand/SchoolixMark";
+import SchoolixLogo from "@/components/brand/SchoolixLogo";
 import styles from "./LandingPage.module.css";
 
 export type PreviewScreen = "dashboard" | "fees" | "exams";
@@ -68,8 +68,7 @@ export default function ProductPreview({
       <div className={styles.previewWorkspace} aria-hidden="true">
         <aside className={styles.previewSidebar}>
           <div className={styles.previewBrand}>
-            <SchoolixMark size={18} />
-            <b>Schoolix</b>
+            <SchoolixLogo variant="full" size={18} />
           </div>
           <span className={styles.previewMenuLabel}>WORKSPACE</span>
           {menu.map((Icon, index) => (

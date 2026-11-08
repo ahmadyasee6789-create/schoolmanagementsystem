@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { Check } from 'lucide-react';
 import type { ReactNode } from 'react';
-import SchoolixMark from '@/components/brand/SchoolixMark';
+import SchoolixLogo from '@/components/brand/SchoolixLogo';
 import styles from './AuthPage.module.css';
 
 export { default as authStyles } from './AuthPage.module.css';
@@ -16,8 +16,7 @@ export default function AuthPage({ headingId, signup = false, children }: { head
   return <main className={`${styles.page}${signup ? ` ${styles.signupPage}` : ''}`}>
     <aside className={styles.brandPanel} aria-label="About Schoolix">
       <Link href="/" className={styles.brand} aria-label="Schoolix home">
-        <SchoolixMark size={46} />
-        <span>School<span className={styles.brandAccent}>ix</span></span>
+        <SchoolixLogo variant="full" size={46} />
       </Link>
       <div className={styles.introduction}>
         <h2>Run your school on <span>one platform</span></h2>

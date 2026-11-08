@@ -29,21 +29,13 @@
   display: inline-flex;
   align-items: center;
   align-self: flex-start;
-  gap: 13px;
+  --schoolix-wordmark-accent: #d1c5ff;
   border-radius: 8px;
   color: #fff;
   font-size: 34px;
   font-weight: 750;
   letter-spacing: -1.5px;
   text-decoration: none;
-}
-
-.brand > svg {
-  flex-shrink: 0;
-}
-
-.brandAccent {
-  color: #d1c5ff;
 }
 
 .introduction {
@@ -351,7 +343,6 @@
   .page { grid-template-columns: 1fr; }
   .brandPanel { gap: 32px; padding: 32px 32px 36px; }
   .brand { font-size: 28px; }
-  .brand > svg { width: 38px; height: 38px; }
   .introduction { max-width: 580px; }
   .introduction h2 { font-size: 34px; letter-spacing: -1px; }
   .description { margin-top: 16px; font-size: 16px; line-height: 1.6; }

@@ -52,15 +52,10 @@
 .brand {
   display:inline-flex;
   align-items:center;
-  gap:10px;
   font-size:26px;
   font-weight:850;
   letter-spacing:-1.2px;
   color:var(--ink)
-}
-
-.brandAccent {
-  color:#8b6df2
 }
 
 .desktopLinks,.desktopActions {
@@ -329,7 +324,7 @@
 .previewBrand {
   display:flex;
   align-items:center;
-  gap:6px;
+  font-weight:700;
   color:#382b4f;
   font-size:13px;
   margin:0 4px 26px
