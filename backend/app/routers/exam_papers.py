@@ -9,10 +9,13 @@ from app.models.exams import Exam, ExamPaper
 from app.models.classroom import Classroom
 from app.models.exams import Subject, ClassSubject,Term
 from app.routers.auth import get_current_user
-from app.schemas.exam_paper import ExamPaperCreate, ExamPaperUpdate, ExamPaperOut, BulkExamPaperCreate, BulkExamPaperOut
+from app.schemas.exam_paper import (BulkExamPaperCreate, BulkExamPaperOut, ExamPaperCreate,
+                                    ExamPaperDeletionOut, ExamPaperDeletionPreview, ExamPaperOut,
+                                    ExamPaperUpdate)
 from app.dependencies import get_active_session
 from app.services.exam_editing import lock_exam_record, require_editable
 from app.services.bulk_exam_papers import create_bulk_exam_papers
+from app.services.exam_paper_management import delete_paper_with_results, deletion_preview
 
 router = APIRouter(prefix="/exam-papers", tags=["Exam Papers"])
 
@@ -204,27 +207,21 @@ def update_exam_paper(
 # -------------------------
 # DELETE exam paper
 # -------------------------
-@router.delete("/{paper_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.get("/{paper_id}/deletion-preview", response_model=ExamPaperDeletionPreview)
+def get_exam_paper_deletion_preview(
+    paper_id: int,
+    db: Session = Depends(get_db),
+    current_user: OrganizationMember = Depends(get_current_user),
+    active_session=Depends(get_active_session),
+):
+    return deletion_preview(db, current_user, active_session, paper_id)
+
+
+@router.delete("/{paper_id}", response_model=ExamPaperDeletionOut)
 def delete_exam_paper(
     paper_id: int,
     db: Session = Depends(get_db),
-    current_user: OrganizationMember = Depends(get_current_user)
+    current_user: OrganizationMember = Depends(get_current_user),
+    active_session=Depends(get_active_session),
 ):
-    paper = db.query(ExamPaper).join(Exam).filter(
-        ExamPaper.id == paper_id,
-        Exam.organization_id == current_user.org_id
-    ).first()
-    if not paper:
-        raise HTTPException(status_code=404, detail="Exam paper not found")
-    require_editable(lock_exam_record(db, current_user.org_id, paper.exam_id))
-
-    # Prevent deletion if there are results linked
-    if paper.results:
-        raise HTTPException(
-            status_code=400,
-            detail="Cannot delete exam paper with existing results"
-        )
-
-    db.delete(paper)
-    db.commit()
-    return None
+    return delete_paper_with_results(db, current_user, active_session, paper_id)

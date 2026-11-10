@@ -87,3 +87,17 @@ class BulkExamPaperOut(BaseModel):
     skipped_count: int
     created: list[ExamPaperOut]
     skipped: list[ExamPaperOut]
+
+
+class ExamPaperDeletionPreview(BaseModel):
+    paper_id: int
+    exam_name: str
+    classroom_name: str
+    subject_name: str
+    total_marks: int
+    result_count: int
+
+
+class ExamPaperDeletionOut(BaseModel):
+    paper_id: int
+    deleted_marks: int

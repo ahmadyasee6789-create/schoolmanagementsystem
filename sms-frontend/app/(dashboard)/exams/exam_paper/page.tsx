@@ -43,6 +43,15 @@ type ExamPapersData = {
   subjects: Subject[];
 };
 
+type ExamPaperDeletionPreview = {
+  paper_id: number;
+  exam_name: string;
+  classroom_name: string;
+  subject_name: string;
+  total_marks: number;
+  result_count: number;
+};
+
 export default function ExamPapersPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -76,7 +85,8 @@ export default function ExamPapersPage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<PaperForm>(emptyPaperForm);
   const [saving, setSaving] = useState(false);
-  const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [deletionPreview, setDeletionPreview] = useState<ExamPaperDeletionPreview | null>(null);
+  const [loadingDeletionPreview, setLoadingDeletionPreview] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   const reloadPapers = async () => {
@@ -129,7 +139,7 @@ export default function ExamPapersPage() {
       : 0,
   };
   const noExams = exams.length === 0;
-  const selectedPaper = papers.find((paper) => paper.id === deleteId);
+  const canDeletePapers = user?.org_role === "admin";
 
   const openAdd = () => {
     setForm({ ...emptyPaperForm, exam_id: exams[0]?.id ?? 0 });
@@ -178,14 +188,34 @@ export default function ExamPapersPage() {
       setSaving(false);
     }
   };
+  const openDelete = async (paper: ExamPaper) => {
+    if (!canDeletePapers || loadingDeletionPreview) return;
+    setLoadingDeletionPreview(true);
+    try {
+      const { data } = await api.get<ExamPaperDeletionPreview>(`/exam-papers/${paper.id}/deletion-preview`);
+      setDeletionPreview(data);
+    } catch (error: unknown) {
+      toast.error(
+        (error as ApiError).response?.data?.detail ??
+          "Could not prepare exam paper deletion",
+      );
+    } finally {
+      setLoadingDeletionPreview(false);
+    }
+  };
   const confirmDelete = async () => {
-    if (!deleteId) return;
+    if (!deletionPreview || deleting) return;
     setDeleting(true);
     try {
-      await api.delete(`/exam-papers/${deleteId}`);
-      toast.success("Exam paper deleted");
-      setDeleteId(null);
-      await reloadPapers();
+      const { data } = await api.delete<{ deleted_marks: number }>(`/exam-papers/${deletionPreview.paper_id}`);
+      toast.success(`Exam paper deleted with ${data.deleted_marks} ${data.deleted_marks === 1 ? "student mark" : "student marks"}`);
+      setDeletionPreview(null);
+      await Promise.all([
+        reloadPapers(),
+        queryClient.invalidateQueries({ queryKey: ["exam-entry"] }),
+        queryClient.invalidateQueries({ queryKey: ["dmc"] }),
+        queryClient.invalidateQueries({ queryKey: ["reports"] }),
+      ]);
     } catch (error: unknown) {
       toast.error(
         (error as ApiError).response?.data?.detail ??
@@ -297,7 +327,8 @@ export default function ExamPapersPage() {
         <PapersList
           grouped={grouped}
           onEdit={openEdit}
-          onDelete={(paper) => setDeleteId(paper.id)}
+          onDelete={openDelete}
+          canDelete={canDeletePapers}
         />
       )}
       {dialogOpen && (
@@ -318,14 +349,24 @@ export default function ExamPapersPage() {
         await reloadPapers();
         await queryClient.invalidateQueries({ queryKey: ["exam-entry"] });
       }} />}
-      {deleteId !== null && (
+      {deletionPreview && (
         <DeleteModal
           title="Delete Exam Paper?"
-          description={`This will permanently delete${selectedPaper ? ` the ${selectedPaper.subject_name} paper` : " the paper"}. Deletion is blocked if student results are already linked to it.`}
           loading={deleting}
-          onClose={() => setDeleteId(null)}
+          onClose={() => setDeletionPreview(null)}
           onConfirm={confirmDelete}
-        />
+        >
+          <div className="min-w-0 text-sm text-slate-600 dark:text-slate-300">
+            <dl className="grid gap-1.5">
+              <div><dt className="inline font-semibold">Examination: </dt><dd className="inline">{deletionPreview.exam_name}</dd></div>
+              <div><dt className="inline font-semibold">Class: </dt><dd className="inline">{deletionPreview.classroom_name}</dd></div>
+              <div><dt className="inline font-semibold">Subject: </dt><dd className="inline">{deletionPreview.subject_name}</dd></div>
+              <div><dt className="inline font-semibold">Total marks: </dt><dd className="inline">{deletionPreview.total_marks}</dd></div>
+              <div><dt className="inline font-semibold">Student marks to delete: </dt><dd className="inline">{deletionPreview.result_count}</dd></div>
+            </dl>
+            <p className="mt-4 font-semibold text-red-600 dark:text-red-400">Deleting this exam paper will permanently remove its associated student marks. This action cannot be undone.</p>
+          </div>
+        </DeleteModal>
       )}
     </div>
   );
