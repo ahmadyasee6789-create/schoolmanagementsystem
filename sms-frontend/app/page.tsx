@@ -48,7 +48,7 @@ export default function LandingPage() {
         <div className={styles.heroCopy}><p className={styles.heroEyebrow}><span />School management, thoughtfully connected</p>
           <h1 id="hero-title">School days,<br /><span>made simpler.</span></h1>
           <p className={styles.heroDescription}>Student records, fees, attendance and exams. One connected workspace for the people who run your school.</p>
-          <div className={styles.heroActions}><a href="#contact" className={styles.primaryButton}>Request a Demo <ArrowUpRight size={19} aria-hidden="true" /></a><a href="#product" className={styles.textButton}>Take a closer look <ArrowDown size={16} aria-hidden="true" /></a></div>
+          <div className={styles.heroActions}><Link href="/signup" prefetch={false} className={styles.primaryButton}>Register Your School <ArrowUpRight size={19} aria-hidden="true" /></Link><a href="#contact" className={styles.textButton}>Request a Demo <ArrowUpRight size={16} aria-hidden="true" /></a><a href="#product" className={styles.textButton}>Take a closer look <ArrowDown size={16} aria-hidden="true" /></a></div>
           <p className={styles.heroFootnote}><ShieldCheck size={17} aria-hidden="true" />A dedicated workspace. The right access for your team.</p>
         </div>
         <div className={styles.heroVisual}><div className={styles.previewHalo} /><ProductPreview /><div className={styles.heroAnnotation}><span><Check size={15} aria-hidden="true" /></span>Everything, in its place.</div></div>

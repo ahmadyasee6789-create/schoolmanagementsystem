@@ -43,6 +43,9 @@ export default function LandingNavigation() {
           ))}
         </div>
         <div className={styles.desktopActions}>
+          <Link prefetch={false} href="/signup" className={styles.login}>
+            Register Your School
+          </Link>
           <Link prefetch={false} href="/signin" className={styles.login}>
             Login
           </Link>
@@ -72,6 +75,9 @@ export default function LandingNavigation() {
                 {link.label}
               </a>
             ))}
+            <Link href="/signup" prefetch={false}>
+              Register Your School
+            </Link>
             <Link href="/signin" prefetch={false}>
               Login
             </Link>

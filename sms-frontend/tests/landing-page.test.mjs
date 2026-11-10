@@ -73,7 +73,8 @@ test("anonymous visitors see all public sections without school API requests", a
   await page.getByRole("heading", { level: 1, name: /School days,/ }).waitFor();
   assert.equal(await page.getByRole("heading", { level: 1 }).count(), 1);
   for (const id of ["features", "product", "how-it-works", "faq", "contact"]) assert.equal(await page.locator(`#${id}`).count(), 1);
-  assert.equal(await page.locator('a[href="/signup"]').count(), 0);
+  assert.equal(await page.locator('a[href="/signup"]').count(), 2);
+  assert.equal(await page.getByRole("link", { name: "Register Your School" }).first().getAttribute("href"), "/signup");
   assert.deepEqual(calls, []);
   const booking = page.getByRole("button", { name: "Demo booking coming soon", exact: true });
   if (await booking.count()) assert.equal(await booking.isDisabled(), true);
