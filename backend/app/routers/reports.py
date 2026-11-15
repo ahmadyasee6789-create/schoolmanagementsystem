@@ -26,7 +26,7 @@ from app.services.billing_periods import resolve_legacy_month
 from app.services.reports import academic_access, enrollments, identity, exam_rows
 from app.financial_permissions import require_financial_permission
 from app.services.exam_result_sheets import saved_result_groups, scoped_exam, result_sheet
-from app.services.exam_result_exports import export_sheet
+from app.services.exam_result_exports import export_pdf
 from app.models.users import Organization
 from sqlalchemy.orm import undefer
 
@@ -71,14 +71,20 @@ def exam_summary(exam_id: int = Query(..., gt=0), grade_name: Optional[str] = No
 
 
 @router.get('/exam-summary/export')
-def export_exam_summary(exam_id: int = Query(..., gt=0), format: Literal['xlsx', 'csv', 'pdf'] = 'xlsx',
+def export_exam_summary(exam_id: int = Query(..., gt=0), format: Literal['pdf'] = 'pdf',
                         grade_name: Optional[str] = None, classroom_id: Optional[int] = None,
                         result: Optional[str] = Query(None, pattern='^(pass|fail|incomplete)$'), db: Session = Depends(get_db),
                         current_user=Depends(get_current_user), active_session=Depends(report_session)):
     sheet = exam_summary(exam_id, grade_name, classroom_id, result, db, current_user, active_session)
+    # A result filter changes the visible rows, but must not change class ranks.
+    # Keep the complete scoped cohort for PDF ranking only.
+    if format == 'pdf' and result:
+        cohort = saved_result_groups(db, current_user.org_id, active_session.id, exam_id=exam_id,
+                                     grade_name=grade_name, classroom_id=classroom_id)
+        sheet['ranking_items'] = cohort
     organization = db.query(Organization).options(undefer(Organization.logo)).filter_by(id=current_user.org_id).first() if format == 'pdf' else None
-    return export_sheet(sheet, format, summary=True, organization=organization,
-                        filters=f"Grade: {grade_name or 'All'} | Classroom: {classroom_id or 'All'} | Result: {result or 'All'}")
+    return export_pdf(sheet, organization=organization,
+                      filters=f"Grade: {grade_name or 'All'} | Classroom: {classroom_id or 'All'} | Result: {result or 'All'}")
 
 
 @router.get("/class/{classroom_id}")

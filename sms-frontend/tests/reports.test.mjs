@@ -162,7 +162,7 @@ test('large report tables paginate while exports retain every filtered row', asy
   await popup.close();
 });
 
-test('exam report has one student row and exports Excel, CSV and PDF with the selected filters', async t => {
+test('exam report has one student row and exports PDF only with the selected filters', async t => {
   const exports = [];
   const { page } = await fixture(t, async (url, route) => {
     if (url.pathname !== '/reports/exam-summary/export') return false;
@@ -176,13 +176,10 @@ test('exam report has one student row and exports Excel, CSV and PDF with the se
   assert.equal(await page.locator('tbody tr').count(), 1);
   await page.getByRole('columnheader', { name: 'English (100)', exact: true }).waitFor();
   await page.getByLabel('Result', { exact: true }).selectOption('incomplete');
-  await page.getByRole('button', { name: 'Export Results' }).waitFor();
-  for (const format of ['xlsx', 'csv', 'pdf']) {
-    await page.getByLabel('Report export format').selectOption(format);
-    const download = page.waitForEvent('download');
-    await page.getByRole('button', { name: 'Export Results' }).click();
-    assert.equal((await download).suggestedFilename(), `Exam_1_Results.${format}`);
-  }
-  assert.deepEqual(exports.map(row => row.format), ['xlsx', 'csv', 'pdf']);
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export PDF' }).click();
+  assert.equal((await download).suggestedFilename(), 'Exam_1_Results.pdf');
+  assert.equal(await page.getByLabel('Report export format').count(), 0);
+  assert.deepEqual(exports.map(row => row.format), ['pdf']);
   for (const row of exports) assert.deepEqual({ ...row, format: undefined }, { session_id: '1', exam_id: '1', result: 'incomplete', format: undefined });
 });

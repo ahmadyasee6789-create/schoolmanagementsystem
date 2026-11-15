@@ -4,7 +4,7 @@ import { CircleCheck, CircleX, ClipboardList, Target, TrendingUp, Trophy } from 
 import toast from 'react-hot-toast';
 import { api } from '@/app/lib/api';
 import { Badge } from '@/components/finance/FinanceUi';
-import MarksSheetExport from '@/components/exams/MarksSheetExport';
+import ExamReportPdfExport from '@/components/exams/ExamReportPdfExport';
 import type { ResultSheet } from '@/components/exams/resultSheet';
 import { useReportSession } from '@/components/reports/useReportSession';
 import { ReportClass, ReportFilterSelect, ReportFilters, ReportPage, ReportPerson, ReportTable } from '@/components/reports/ReportUi';
@@ -69,7 +69,7 @@ export default function ExamReport() {
   const unavailable = loading || refreshing || !examFilter || !!error || !!sessionError;
   return <ReportPage title="Exam Report" subtitle="Saved student results · subject marks · overall evaluation"
     onRefresh={() => void fetchData(true)} refreshing={refreshing} error={error || sessionError}
-    exportActions={<MarksSheetExport endpoint="/reports/exam-summary/export" params={params} report disabled={unavailable} />}
+    exportActions={<ExamReportPdfExport params={params} disabled={unavailable} />}
     stats={[
       { title: 'Student Evaluations', value: rows.length, icon: ClipboardList, tone: 'purple' },
       { title: 'Passed', value: passed, icon: CircleCheck, tone: 'green' },

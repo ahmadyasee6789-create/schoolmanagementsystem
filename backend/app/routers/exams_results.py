@@ -1,6 +1,5 @@
 # app/routers/exam_results.py
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from typing import Literal
 from sqlalchemy import case, text, tuple_, update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session, contains_eager
@@ -18,7 +17,6 @@ from app.schemas.exam_result import ExamResultCreate, ExamResultUpdate, ExamResu
 from app.dependencies import get_active_session
 from app.services.grade_scales import lock_scale_organization
 from app.services.exam_result_sheets import require_class_result_access, scoped_exam, saved_result_groups, result_sheet
-from app.services.exam_result_exports import export_sheet
 
 router = APIRouter(prefix="/exam-results", tags=["Exam Results"])
 
@@ -361,7 +359,7 @@ def get_student_results(
 
 
 # ─────────────────────────────────────────────
-# Saved sheet and exports are separate read-only requests, never local drafts.
+# Saved sheets are read-only requests, never local drafts.
 # ─────────────────────────────────────────────
 @router.get('/sheet')
 def get_saved_sheet(exam_id: int = Query(..., gt=0), classroom_id: int = Query(..., gt=0),
@@ -370,13 +368,6 @@ def get_saved_sheet(exam_id: int = Query(..., gt=0), classroom_id: int = Query(.
     exam = scoped_exam(db, current_user, exam_id, active_session.id)
     return result_sheet(saved_result_groups(db, current_user.org_id, active_session.id, exam_id=exam_id,
                         classroom_id=classroom_id, active_only=True), exam, active_session)
-
-
-@router.get('/sheet/export')
-def export_marks_sheet(exam_id: int = Query(..., gt=0), classroom_id: int = Query(..., gt=0), format: Literal['xlsx', 'csv'] = 'xlsx',
-                       db: Session = Depends(get_db), current_user=Depends(get_current_user), active_session=Depends(get_active_session)):
-    sheet = get_saved_sheet(exam_id, classroom_id, db, current_user, active_session)
-    return export_sheet(sheet, format, filters=f'Classroom {classroom_id}')
 
 
 # GET /{result_id} - must stay LAST

@@ -37,7 +37,7 @@ async function fixture(t, studentRows = students) {
     }));
   }, user);
   const results = [result(11, 101, 30), result(11, 102, 42), result(12, 102, 42)];
-  const saves = [], exports = [];
+  const saves = [];
   await context.route("**/*", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -51,9 +51,6 @@ async function fixture(t, studentRows = students) {
       case "/students/by-class/5": return reply(studentRows);
       case "/exam-results/exam/1": return reply(results);
       case "/exam-results/exam/2": return reply([result(21, 101, 63)]);
-      case '/exam-results/sheet/export':
-        exports.push({ method: request.method(), params: Object.fromEntries(url.searchParams), body: request.postData() });
-        return route.fulfill({ headers: { ...cors, 'content-type': 'text/csv' }, body: 'Roll number,Student name,Math (100)\n1,Ali Khan,30\n2,Sara Khan,42\n' });
       case "/promotion/preview/5":
         if (url.searchParams.get("exam_id") === "2") {
           return reply({ passed_students: [{ student_id: 1, result: "PASSED", percentage: 63, failed_count: 0 }], failed_students: [] });
@@ -94,7 +91,7 @@ async function fixture(t, studentRows = students) {
   page.on("pageerror", (error) => errors.push(error.message));
   t.after(() => assert.deepEqual(errors, []));
   page.on("dialog", (dialog) => void dialog.accept());
-  return { page, saves, exports };
+  return { page, saves };
 }
 
 async function selectClass(page, examId) {
@@ -158,25 +155,12 @@ test("a locked exam shows saved and missing marks without edit controls", async 
   assert.deepEqual(saves, []);
 });
 
-test('marks export warns about unsaved changes, supports cancelling and never submits drafts', async t => {
-  const { page, saves, exports } = await fixture(t);
+test('marks entry no longer displays export controls', async t => {
+  const { page, saves } = await fixture(t);
   await page.goto(frontend + '/exams/exam_result');
   await selectClass(page, '1');
-  await page.getByRole('textbox', { name: 'Ali Khan: Math' }).fill('99');
-  await page.getByRole('textbox', { name: 'Search students' }).fill('Ali');
-  await page.getByLabel('Marks sheet format').selectOption('csv');
-  page.removeAllListeners('dialog');
-  page.once('dialog', dialog => { assert.match(dialog.message(), /unsaved.*NOT be included/i); void dialog.dismiss(); });
-  await page.getByRole('button', { name: 'Export Marks Sheet' }).click();
-  assert.equal(exports.length, 0);
-  page.once('dialog', dialog => void dialog.accept());
-  const pending = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Export Marks Sheet' }).click();
-  const download = await pending;
-  assert.equal(download.suggestedFilename(), 'Exam_1_Class_5_Marks.csv');
-  assert.deepEqual(exports, [{ method: 'GET', params: { exam_id: '1', classroom_id: '5', format: 'csv' }, body: null }]);
+  assert.equal(await page.getByRole('button', { name: /export/i }).count(), 0);
   assert.deepEqual(saves, []);
-  assert.equal(await page.getByRole('textbox', { name: 'Ali Khan: Math' }).inputValue(), '99');
 });
 
 test('roll numbers use numeric order in both views and marks stay with their enrollment', async t => {

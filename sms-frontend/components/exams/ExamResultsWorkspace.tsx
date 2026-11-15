@@ -8,7 +8,6 @@ import toast from "react-hot-toast";
 import { api } from "@/app/lib/api";
 import { LabeledField, panelClass } from "@/components/finance/FinanceUi";
 import ClassWiseResultEntry from "./ClassWiseResultEntry";
-import MarksSheetExport from "./MarksSheetExport";
 import ResultEntryTable from "./ResultEntryTable";
 import { EmptyState, LoadingState, PageHeader, StatGrid, inputClass, primaryButtonClass, secondaryButtonClass } from "./ExamUi";
 import { compareStudentRoll, resultKey, validMark, type OverallResult } from "./resultEntry";
@@ -364,8 +363,6 @@ export default function ExamResultsWorkspace({ scope }: { scope: string }) {
                       <Save size={16} />{saving ? "Saving…" : `Save All${pending.length ? ` (${pending.length})` : ""}`}
                     </button>
                   )}
-                  {byClass && <MarksSheetExport endpoint="/exam-results/sheet/export" params={{ exam_id: examId, classroom_id: classId }}
-                    disabled={busy || !classId} unsaved={dirtyCount > 0} />}
                 </div>
                 {saveNotice && <p role="status" aria-label="Marks save status" className="mb-3 rounded-lg border border-amber-300/30 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-300">{saveNotice}</p>}
                 {evaluationQuery.isError && byClass && (

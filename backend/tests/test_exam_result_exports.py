@@ -1,13 +1,11 @@
 """Saved result exports: disposable PostgreSQL only, never application DB writes."""
-import csv
-from io import BytesIO, StringIO
+from io import BytesIO
 import os
 from pathlib import Path
 import shutil
 import subprocess
 import tempfile
 import unittest
-from openpyxl import load_workbook
 from sqlalchemy import event
 
 import test_reports as fixture
@@ -52,58 +50,37 @@ class ExamExportTests(unittest.TestCase):
         report = self.client.get('/reports/exam-summary', params=dict(exam_id=1)).json()
         self.assertEqual(report['items'], sheet['items'])
 
-    def test_csv_and_excel_are_identical_saved_matrices_and_keep_roll_ids(self):
-        csv_response, excel_response = self.export('csv'), self.export('xlsx')
-        self.assertEqual(csv_response.status_code, 200, csv_response.text)
-        self.assertEqual(excel_response.status_code, 200, excel_response.text)
-        csv_rows = list(csv.reader(StringIO(csv_response.content.decode('utf-8-sig'))))
-        workbook = load_workbook(BytesIO(excel_response.content))
-        excel_rows = list(workbook.active.values)
-        self.assertEqual(csv_rows, [[str(v) if v is not None else '' for v in row] for row in excel_rows])
-        self.assertEqual(csv_rows[0][3:], [f'Subject {i} (100)' for i in range(1, 5)])
-        self.assertEqual(csv_rows[1][0], '007')
-        self.assertEqual(csv_rows[1][3:], ['0', '40', '100', 'Missing'])
-        self.assertEqual(excel_response.headers['cache-control'], 'private, no-store')
+    def test_exam_result_sheet_export_route_is_removed(self):
+        self.assertEqual(self.export('pdf').status_code, 404)
 
     def test_exports_ignore_unsaved_session_state_and_include_all_students(self):
         self.db.add_all([Student(id=i, organization_id=1, first_name=f'Fixture {i}', admission_no=f'F-{i}') for i in range(2, 54)])
         self.db.flush()
         self.db.add_all([StudentEnrollment(student_id=i, session_id=1, classroom_id=1, is_active=True) for i in range(2, 54)])
         self.db.commit()
-        csv_rows = list(csv.reader(StringIO(self.export('csv').content.decode('utf-8-sig'))))
-        self.assertEqual(len(csv_rows), 54)  # Header + 53 students, not a visible page.
-        self.assertEqual(csv_rows[1][3], '0')
-
-    def test_formula_strings_are_literal_in_excel_and_escaped_in_csv(self):
-        self.db.get(Student, 1).first_name = '=HYPERLINK("bad")'
-        self.db.commit()
-        worksheet = load_workbook(BytesIO(self.export('xlsx').content)).active
-        self.assertEqual(worksheet['B2'].data_type, 's')
-        self.assertTrue(worksheet['B2'].value.startswith('='))
-        row = list(csv.reader(StringIO(self.export('csv').content.decode('utf-8-sig'))))[1]
-        self.assertTrue(row[1].startswith("'="))
+        self.assertEqual(len(self.sheet()['items']), 53)
 
     def test_only_assigned_class_teacher_can_export_and_cannot_read_schoolwide_reports(self):
         self.actor.org_role = 'teacher'
-        self.assertEqual(self.export('csv').status_code, 403)
+        self.assertEqual(self.export('pdf', summary=True).status_code, 403)
         self.db.add(OrganizationMember(id=10, organization_id=1, user_id=1, role='teacher'))
         self.db.flush()
         self.db.get(Classroom, 1).class_teacher_member_id = 10
         self.db.commit()
-        self.assertEqual(self.export('xlsx').status_code, 200)
-        self.assertEqual(self.export('csv', summary=True).status_code, 403)
+        self.assertEqual(self.export('pdf', summary=True).status_code, 200)
         for role in ('parent', 'student', 'accountant', None):
             self.actor.org_role = role
-            self.assertEqual(self.export('csv').status_code, 403)
+            self.assertEqual(self.export('pdf', summary=True).status_code, 403)
 
     def test_tenant_session_filters_and_formats_are_enforced(self):
-        self.assertEqual(self.export('csv', classroom_id=2).status_code, 404)
-        self.assertEqual(self.export('csv', summary=True, session_id=2).status_code, 404)
-        self.assertEqual(self.export('csv', summary=True, session_id=3).status_code, 404)
-        self.assertEqual(self.export('exe').status_code, 422)
-        response = self.export('csv', summary=True, result='pass')
-        self.assertEqual(len(list(csv.reader(StringIO(response.content.decode('utf-8-sig'))))), 1)
-        self.assertEqual(len(list(csv.reader(StringIO(self.export('csv', summary=True, grade_name='Other').content.decode('utf-8-sig'))))), 1)
+        self.assertEqual(self.export('pdf', summary=True, classroom_id=2).status_code, 404)
+        self.assertEqual(self.export('pdf', summary=True, session_id=2).status_code, 404)
+        self.assertEqual(self.export('pdf', summary=True, session_id=3).status_code, 404)
+        self.assertEqual(self.export('csv', summary=True).status_code, 422)
+        self.assertEqual(self.export('xlsx', summary=True).status_code, 422)
+        self.assertEqual(self.export('exe', summary=True).status_code, 422)
+        self.assertEqual(self.export('pdf', summary=True, result='pass').status_code, 200)
+        self.assertEqual(self.export('pdf', summary=True, grade_name='Other').status_code, 200)
 
     def test_exports_are_read_only_and_allowed_for_locked_or_published_exam(self):
         from app.models.exams import Exam
@@ -114,8 +91,7 @@ class ExamExportTests(unittest.TestCase):
         def record(_conn, _cursor, statement, *_args): statements.append(statement)
         event.listen(self.engine, 'before_cursor_execute', record)
         try:
-            for format in ('csv', 'xlsx', 'pdf'):
-                self.assertEqual(self.export(format, summary=True).status_code, 200)
+            self.assertEqual(self.export('pdf', summary=True).status_code, 200)
         finally:
             event.remove(self.engine, 'before_cursor_execute', record)
         self.assertFalse(any(s.lstrip().upper().startswith(('INSERT', 'UPDATE', 'DELETE')) for s in statements))
@@ -147,10 +123,10 @@ class ExamExportTests(unittest.TestCase):
     def test_exports_require_authentication(self):
         from app.routers.reports import get_current_user
         self.client.app.dependency_overrides.pop(get_current_user)
-        self.assertIn(self.export('csv').status_code, (401, 403))
+        self.assertIn(self.export('pdf', summary=True).status_code, (401, 403))
 
     @unittest.skipUnless(shutil.which('pdftotext') or os.environ.get('PDF_TEST_PYTHON'), 'PDF text extraction runtime required')
-    def test_report_pdf_csv_excel_share_totals_and_missing_status(self):
+    def test_report_pdf_contains_totals_and_missing_status(self):
         pdf = self.export('pdf', summary=True)
         self.assertEqual(pdf.status_code, 200, pdf.text)
         with tempfile.TemporaryDirectory() as directory:
@@ -164,10 +140,7 @@ class ExamExportTests(unittest.TestCase):
                 text = subprocess.check_output([shutil.which('pdftotext'), '-layout', str(path), '-']).decode('utf-8')
         for value in ('140 / 400', 'INCOMPLETE', 'Missing', 'Subject 1', 'Synthetic School', '2026-27'):
             self.assertIn(value, text)
-        csv_rows = list(csv.reader(StringIO(self.export('csv', summary=True).content.decode('utf-8-sig'))))
-        excel_rows = list(load_workbook(BytesIO(self.export('xlsx', summary=True).content)).active.values)
-        self.assertEqual(csv_rows, [[str(v) if v is not None else '' for v in row] for row in excel_rows])
-        self.assertEqual(csv_rows[1][-5:], ['140 / 400', 'Incomplete', 'Unassigned', '1', 'INCOMPLETE'])
+        self.assertEqual(pdf.headers['content-type'], 'application/pdf')
         if os.environ.get('EXAM_EXPORT_QA_DIR'):
             target = Path(os.environ['EXAM_EXPORT_QA_DIR'])
             target.mkdir(parents=True, exist_ok=True)
